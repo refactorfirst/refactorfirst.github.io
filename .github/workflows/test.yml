@@ -10,7 +10,7 @@ jobs:
         with:
           bun-version: latest
       - run: bun install
-      - run: bun test
+      - run: bun test tests/unit tests/integration
       - run: bunx eslint "js/**/*.js" "tests/**/*.js"
 
   e2e-tests:
