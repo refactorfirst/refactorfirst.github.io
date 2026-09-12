@@ -89,7 +89,7 @@ validates submissions and commits new entries to `repositories.txt`.
 
 "Add Your Repo" sign-in requires a GitHub OAuth App registered under your account
 or organization — see [Registering the GitHub OAuth App](#registering-the-github-oauth-app).
-Then set `OAUTH_CLIENT_ID` in `js/main.js` to your app's Client ID.
+Then set your app's Client ID in the `<meta name="oauth-client-id">` tag in `index.html`.
 
 ### 5. (Optional) Custom domain
 
@@ -262,10 +262,11 @@ Required for the "Add Your Repo" flow, regardless of where the static files live
    - **Application name**: `RefactorFirst GitHub Pages`
    - **Homepage URL**: `https://<owner>.github.io` (or your Pages host)
    - **Authorization callback URL**: `https://<owner>.github.io/add-repo/callback`
-3. Note the **Client ID** and set it in `js/main.js`:
+3. Note the **Client ID** and set it in the `<meta name="oauth-client-id">` tag in
+   `index.html`:
 
-   ```js
-   const OAUTH_CLIENT_ID = 'YOUR_GITHUB_OAUTH_CLIENT_ID';
+   ```html
+   <meta name="oauth-client-id" content="YOUR_GITHUB_OAUTH_CLIENT_ID">
    ```
 
 The app uses the authorization-code flow **with PKCE**, scoped to `public_repo` and

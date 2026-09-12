@@ -3,6 +3,12 @@ on:
   repository_dispatch:
     types: [add-repository]
 
+# Serialize listing updates: concurrent dispatches would otherwise race at
+# git push and reject valid submissions with non-fast-forward errors.
+concurrency:
+  group: add-repository
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -71,7 +77,7 @@ jobs:
           REPO="${{ steps.validate.outputs.repository }}"
           SUBMITTED_BY="${{ steps.validate.outputs.submitted_by }}"
 
-          if grep -q "^$REPO$" repositories.txt; then
+          if grep -Fxq -- "$REPO" repositories.txt; then
             echo "Repository already in listing"
             exit 0
           fi

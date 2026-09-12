@@ -87,6 +87,12 @@ describe('paginate', () => {
     expect(result.items).toEqual([]);
     expect(result.totalPages).toBe(1);
   });
+
+  it('rejects non-positive and non-integer perPage values', () => {
+    for (const invalid of [0, -1, 2.5, NaN, Infinity]) {
+      expect(() => paginate(items, 1, invalid)).toThrow(RangeError);
+    }
+  });
 });
 
 describe('detectHostingEnvironment', () => {

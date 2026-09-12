@@ -123,7 +123,7 @@ See README.md for detailed deployment instructions for each platform.
 
 ## Important Notes
 
-- OAuth Client ID must be set in `js/main.js` for "Add Your Repo" functionality
+- OAuth Client ID must be set in the `<meta name="oauth-client-id">` tag in `index.html` for "Add Your Repo" functionality
 - For GitHub Enterprise Server, update API/raw endpoints in `js/repo-submission.js`, `js/fetcher.js`, and `js/oauth-handler.js`
 - Deep links require `404.html` copy of `index.html` for proper client-side routing on some platforms
 - Reports are fetched client-side — end users' browsers must reach GitHub/raw endpoints

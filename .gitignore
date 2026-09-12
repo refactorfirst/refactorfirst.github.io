@@ -41,7 +41,6 @@ yarn-error.log*
 bun-debug.log*
 
 # OS files
-.DS_Store
 Thumbs.db
 *.swp
 *.swo

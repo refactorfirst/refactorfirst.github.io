@@ -15,10 +15,13 @@ export async function fetchJson(username, repository, branch) {
   });
 
   if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error('Repository not found');
-    }
-    throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+    const error = new Error(
+      response.status === 404
+        ? 'Repository not found'
+        : `Failed to fetch: ${response.status} ${response.statusText}`
+    );
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();
@@ -65,12 +68,14 @@ export async function fetchWithRetry(url, options = {}, { retries = 3, baseDelay
 }
 
 // Branch fallback: try the requested branch; when the default branch (main)
-// fails, fall back to master. Returns { data, branch }.
+// returns 404, fall back to master. Other failures (network, rate limits,
+// 5xx) are propagated unchanged so they are not masked as "not found".
+// Returns { data, branch }.
 export async function fetchJsonWithFallback(username, repository, branch = getDefaultBranchName()) {
   try {
     return { data: await fetchJson(username, repository, branch), branch };
   } catch (error) {
-    if (branch === getDefaultBranchName()) {
+    if (branch === getDefaultBranchName() && error.status === 404) {
       const data = await fetchJson(username, repository, 'master');
       return { data, branch: 'master' };
     }

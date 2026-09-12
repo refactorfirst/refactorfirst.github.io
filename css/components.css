@@ -249,6 +249,15 @@
 
 /* ---- Responsive ---- */
 @media (max-width: 700px) {
+  #top-menu {
+    max-height: none;
+  }
+
+  .menu-bar {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
   .menu-toggle {
     display: block;
     margin-left: auto;

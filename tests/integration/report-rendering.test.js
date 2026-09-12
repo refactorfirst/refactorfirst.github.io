@@ -51,7 +51,8 @@ describe('Report rendering integration', () => {
       if (requested.includes('/master/.refactorfirst/refactor-first.json')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(sampleJson) });
       }
-      if (requested.endsWith('.mustache')) {
+      // The template must be fetched from the resolved branch (master), not main.
+      if (requested.includes('/master/.refactorfirst/refactor-first-report.mustache')) {
         return Promise.resolve({ ok: true, text: () => Promise.resolve(sampleTemplate) });
       }
       return Promise.resolve({ ok: false, status: 404 });

@@ -81,6 +81,17 @@ describe('parseCallback', () => {
       .toThrow('OAuth state mismatch');
   });
 
+  it('throws when no state was stored (session lost)', () => {
+    expect(() => parseCallback('?code=abc&state=some-state'))
+      .toThrow('OAuth state mismatch');
+  });
+
+  it('throws when the callback omits the state parameter', () => {
+    sessionStorage.setItem('oauth_state', 'expected-state');
+    expect(() => parseCallback('?code=abc'))
+      .toThrow('OAuth state mismatch');
+  });
+
   it('throws when the user denied access', () => {
     sessionStorage.setItem('oauth_state', 's');
     expect(() => parseCallback('?error=access_denied&state=s'))
@@ -134,7 +145,11 @@ describe('exchangeCodeForToken', () => {
     expect(url).toBe('https://github.com/login/oauth/access_token');
     expect(options.method).toBe('POST');
     expect(options.headers.Accept).toBe('application/json');
-    expect(options.body).toContain('code=abc');
+    const body = new URLSearchParams(options.body);
+    expect(body.get('code')).toBe('abc');
+    expect(body.get('code_verifier')).toBe('verifier');
+    expect(body.get('client_id')).toBe('test-client-id');
+    expect(body.get('redirect_uri')).toBe(CLIENT_CONFIG.redirectUri);
   });
 
   it('throws when the exchange fails', async () => {

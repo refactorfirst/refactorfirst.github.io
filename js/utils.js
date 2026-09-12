@@ -28,14 +28,18 @@ export function reposForUser(repositories, username) {
 
 // Slice a list into pages. Returns the requested page clamped to a valid range.
 export function paginate(items, page = 1, perPage = REPOSITORIES_PER_PAGE) {
-  const totalPages = Math.max(1, Math.ceil(items.length / perPage));
+  const numericPerPage = Number(perPage);
+  if (!Number.isInteger(numericPerPage) || numericPerPage < 1) {
+    throw new RangeError('perPage must be a positive integer');
+  }
+  const totalPages = Math.max(1, Math.ceil(items.length / numericPerPage));
   const numericPage = Number.isFinite(Number(page)) ? Number(page) : 1;
   const clamped = Math.min(Math.max(1, Math.trunc(numericPage)), totalPages);
-  const start = (clamped - 1) * perPage;
+  const start = (clamped - 1) * numericPerPage;
   return {
-    items: items.slice(start, start + perPage),
+    items: items.slice(start, start + numericPerPage),
     page: clamped,
-    perPage,
+    perPage: numericPerPage,
     totalPages,
     totalItems: items.length
   };

@@ -6,6 +6,7 @@ describe('OAuth flow integration', () => {
   let mockFetch, app, root, navigations;
 
   beforeEach(() => {
+    document.head.innerHTML = '<meta name="oauth-client-id" content="test-client-id">';
     document.body.innerHTML = '<main id="app"></main>';
     root = document.getElementById('app');
     navigations = [];
@@ -61,8 +62,9 @@ describe('OAuth flow integration', () => {
     root.querySelector('#login-github').click();
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(navigations.length).toBe(1);
-    expect(navigations[0]).toContain('https://github.com/login/oauth/authorize');
-    expect(navigations[0]).toContain('client_id=');
-    expect(navigations[0]).toContain('code_challenge=');
+    const authUrl = new URL(navigations[0]);
+    expect(authUrl.origin + authUrl.pathname).toBe('https://github.com/login/oauth/authorize');
+    expect(authUrl.searchParams.get('client_id')).toBeTruthy();
+    expect(authUrl.searchParams.get('code_challenge')).toBeTruthy();
   });
 });

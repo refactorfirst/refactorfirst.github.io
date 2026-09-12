@@ -30,7 +30,11 @@ import {
 } from './oauth-handler.js';
 import { submitRepository, validateRepositoryInput } from './repo-submission.js';
 
-const OAUTH_CLIENT_ID = 'YOUR_GITHUB_OAUTH_CLIENT_ID';
+// The GitHub OAuth Client ID is deployment-specific and configured via the
+// <meta name="oauth-client-id"> tag in index.html.
+function getOAuthClientId() {
+  return document.querySelector('meta[name="oauth-client-id"]')?.content?.trim() || '';
+}
 const OAUTH_SCOPES = ['public_repo', 'read:user'];
 const FEATURED_COUNT = 6;
 
@@ -168,7 +172,7 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
     root.querySelector('#login-github').addEventListener('click', () => {
       track(
         buildAuthorizationUrl({
-          clientId: OAUTH_CLIENT_ID,
+          clientId: getOAuthClientId(),
           redirectUri: `${location.origin}/add-repo/callback`,
           scopes: OAUTH_SCOPES
         }).then(url => externalRedirect(url))
@@ -256,7 +260,7 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
       await exchangeCodeForToken({
         code,
         codeVerifier,
-        clientId: OAUTH_CLIENT_ID,
+        clientId: getOAuthClientId(),
         redirectUri: `${location.origin}/add-repo/callback`
       });
       navigate('/add-repo');

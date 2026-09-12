@@ -54,13 +54,23 @@ describe('Landing page and search flow integration', () => {
   });
 
   it('lists a user\'s repositories alphabetically on the user page', async () => {
+    // Supply multiple repositories in reverse alphabetical order so the test
+    // fails unless the user page actually sorts them.
+    const repos = 'alice/zebra\nalice/mango\nalice/apple\nbob/other\n';
+    mockFetch.mockImplementation(requested => {
+      if (requested.endsWith('/repositories.txt')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(repos) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+
     app = createApp({ root });
-    history.replaceState(null, '', '/spring-projects');
+    history.replaceState(null, '', '/alice');
     await app.handleRoute();
 
-    const cards = root.querySelectorAll('.repo-card');
-    expect(cards.length).toBe(1);
-    expect(root.textContent).toContain('spring-framework');
+    const cards = [...root.querySelectorAll('.repo-card')];
+    expect(cards.map(card => card.querySelector('.repo-name').textContent))
+      .toEqual(['apple', 'mango', 'zebra']);
   });
 
   it('paginates large listings with ?page=N', async () => {

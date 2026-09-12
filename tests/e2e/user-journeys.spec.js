@@ -118,5 +118,5 @@ test('top menu height stays within 140px', async ({ page }) => {
   await page.goto('/');
   await page.waitForLoadState('networkidle');
   const box = await page.locator('#top-menu').boundingBox();
-  expect(box.height).toBeLessThanOrEqual(200);
+  expect(box.height).toBeLessThanOrEqual(140);
 });
