@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' https://avatars.githubusercontent.com data:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; frame-ancestors 'none'; base-uri 'self';">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>RefactorFirst - Know Where to Refactor First</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mvp.css@1.15.0/mvp.css">
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/components.css">
+</head>
+<body>
+  <a class="skip-link" href="#app">Skip to content</a>
+  <header id="top-menu">
+    <nav class="menu-bar" aria-label="Main navigation">
+      <a href="/" class="brand" data-link>
+        <img src="/assets/logo.png" alt="RefactorFirst logo" class="logo" width="32" height="32">
+        <span>RefactorFirst</span>
+      </a>
+      <div class="menu-search" role="search">
+        <input type="search" id="menu-search-input" placeholder="Search repositories..."
+               aria-label="Search repositories" autocomplete="off"
+               aria-expanded="false" aria-controls="menu-search-results" role="combobox">
+        <ul id="menu-search-results" class="search-results" role="listbox" hidden></ul>
+      </div>
+      <button id="menu-toggle" class="menu-toggle" aria-label="Toggle navigation menu"
+              aria-expanded="false" aria-controls="menu-links">&#9776;</button>
+      <ul id="menu-links" class="menu-links">
+        <li><a href="/" data-link>Home</a></li>
+        <li><a href="/add-repo" data-link>Add Your Repo</a></li>
+        <li><a href="/getting-started" data-link>Getting Started</a></li>
+        <li><a href="/documentation" data-link>Documentation</a></li>
+        <li><a href="/faq" data-link>FAQ</a></li>
+        <li><a href="/examples" data-link>Examples</a></li>
+        <li><a href="/api" data-link>API</a></li>
+        <li><a href="/about" data-link>About</a></li>
+        <li><a href="/feedback" data-link>Feedback</a></li>
+        <li><a href="https://github.com/refactorfirst/refactorfirst" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main id="app" tabindex="-1">
+    <p class="loading" role="status">Loading&hellip;</p>
+  </main>
+  <footer class="site-footer">
+    <p>
+      <a href="/privacy-policy" data-link>Privacy Policy</a> &middot;
+      <a href="/terms-of-service" data-link>Terms of Service</a> &middot;
+      Powered by <a href="https://github.com/refactorfirst/refactorfirst" target="_blank" rel="noopener noreferrer">RefactorFirst</a>
+    </p>
+  </footer>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

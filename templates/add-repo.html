@@ -1,0 +1,22 @@
+<section class="add-repo-page">
+  <h1>Add Your Repository</h1>
+  <p class="info">Only repositories with a <code>.refactorfirst/refactor-first.json</code>
+     file will be added. The RefactorFirst GitHub Page redeploys every 10 minutes.</p>
+
+  <div class="login-required" hidden>
+    <p>Sign in with GitHub to add your repository to the listing.</p>
+    <button id="login-github" type="button">Login with GitHub</button>
+  </div>
+
+  <div class="submission" hidden>
+    <div class="user-info"></div>
+    <form id="repo-form" novalidate>
+      <label for="repo-owner">User/Organization Name</label>
+      <input id="repo-owner" name="owner" type="text" required autocomplete="off">
+      <label for="repo-name">Repository Name</label>
+      <input id="repo-name" name="repository" type="text" required autocomplete="off">
+      <button type="submit">Submit Repository</button>
+    </form>
+    <p class="form-status" role="status" aria-live="polite"></p>
+  </div>
+</section>

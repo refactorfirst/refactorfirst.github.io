@@ -1,0 +1,65 @@
+# User-provided pipeline template (Bitbucket).
+# Copy this file to bitbucket-pipelines.yml in YOUR repository root to generate a
+# RefactorFirst JSON report on every push to main/master and commit it to
+# .refactorfirst/refactor-first.json, where the RefactorFirst site can render it.
+#
+# Prerequisites:
+#   - Your project builds with Maven
+#   - The RefactorFirst Maven plugin (org.hjug:refactorfirst-maven-plugin) is
+#     configured in your pom.xml
+#
+# Pipelines can push back to the same repository using the default origin;
+# no extra credentials are required.
+
+image: maven:3.9-eclipse-temurin-17
+
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Generate RefactorFirst report
+          caches:
+            - maven
+          script:
+            - mvn -B refactorfirst:jsonReport
+            - |
+              if [ -f .refactorfirst/refactor-first.json ]; then
+                git config user.email "bitbucket-pipelines@localhost"
+                git config user.name "Bitbucket Pipelines"
+                git add .refactorfirst/refactor-first.json
+                git commit -m "Update RefactorFirst report" || echo "Report unchanged"
+                git push
+              fi
+    master:
+      - step:
+          name: Generate RefactorFirst report
+          caches:
+            - maven
+          script:
+            - mvn -B refactorfirst:jsonReport
+            - |
+              if [ -f .refactorfirst/refactor-first.json ]; then
+                git config user.email "bitbucket-pipelines@localhost"
+                git config user.name "Bitbucket Pipelines"
+                git add .refactorfirst/refactor-first.json
+                git commit -m "Update RefactorFirst report" || echo "Report unchanged"
+                git push
+              fi
+
+  # Allow manual runs from the Bitbucket UI.
+  custom:
+    generate-report:
+      - step:
+          name: Generate RefactorFirst report
+          caches:
+            - maven
+          script:
+            - mvn -B refactorfirst:jsonReport
+            - |
+              if [ -f .refactorfirst/refactor-first.json ]; then
+                git config user.email "bitbucket-pipelines@localhost"
+                git config user.name "Bitbucket Pipelines"
+                git add .refactorfirst/refactor-first.json
+                git commit -m "Update RefactorFirst report" || echo "Report unchanged"
+                git push
+              fi

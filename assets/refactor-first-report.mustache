@@ -1,0 +1,29 @@
+<section class="report">
+  <h1>RefactorFirst Report: {{projectName}}</h1>
+  <p class="report-meta">Version {{version}} &middot; Generated {{generatedAt}}</p>
+  <p>Classes analyzed: <strong>{{totalClasses}}</strong> &middot;
+     Classes to refactor: <strong>{{classesToRefactor}}</strong></p>
+  <table class="priorities">
+    <thead>
+      <tr>
+        <th>Rank</th><th>Class</th><th>Priority</th><th>Effort</th>
+        <th>Disharmonies</th><th>Recommendation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#priorities}}
+      <tr class="priority-{{priority}}">
+        <td>{{rank}}</td>
+        <td><code>{{className}}</code></td>
+        <td>{{priority}}</td>
+        <td>{{effort}}</td>
+        <td>{{disharmonies}}</td>
+        <td>{{recommendation}}</td>
+      </tr>
+      {{/priorities}}
+      {{^priorities}}
+      <tr><td colspan="6">No refactoring priorities identified. Nice work!</td></tr>
+      {{/priorities}}
+    </tbody>
+  </table>
+</section>

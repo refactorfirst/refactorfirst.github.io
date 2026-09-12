@@ -1,0 +1,33 @@
+# GitLab CI configuration for this RefactorFirst Pages site.
+#
+# Deploys the static files to GitLab Pages. A copy of index.html is published as
+# 404.html so client-side routes like /user/repo serve the application instead of
+# GitLab's generic 404 page.
+
+stages:
+  - test
+  - deploy
+
+validate-site:
+  stage: test
+  image: alpine:3.20
+  script:
+    - test -f index.html
+    - test -f repositories.txt
+    - sort -c repositories.txt
+    - '! grep -Ev "^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$" repositories.txt'
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+pages:
+  stage: deploy
+  image: alpine:3.20
+  script:
+    - mkdir -p public
+    - cp -r index.html repositories.txt css js templates assets public/
+    - cp index.html public/404.html   # client-side routing for deep links
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

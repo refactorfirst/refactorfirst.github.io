@@ -1,0 +1,17 @@
+<section class="report">
+  <h1>{{projectName}}</h1>
+  <p>Classes analyzed: {{totalClasses}} &middot; Classes to refactor: {{classesToRefactor}}</p>
+  <table>
+    <thead>
+      <tr><th>Rank</th><th>Class</th><th>Priority</th><th>Effort</th><th>Recommendation</th></tr>
+    </thead>
+    <tbody>
+      {{#priorities}}
+      <tr>
+        <td>{{rank}}</td><td><code>{{className}}</code></td><td>{{priority}}</td>
+        <td>{{effort}}</td><td>{{recommendation}}</td>
+      </tr>
+      {{/priorities}}
+    </tbody>
+  </table>
+</section>

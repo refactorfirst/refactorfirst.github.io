@@ -1,0 +1,9 @@
+<h1>RefactorFirst Report: {{projectName}}</h1>
+<p>Version: {{version}}</p>
+<p>Classes analyzed: {{totalClasses}}</p>
+<p>Classes to refactor: {{classesToRefactor}}</p>
+<ul>
+{{#priorities}}
+  <li>{{rank}}. {{className}} ({{priority}}) - {{recommendation}}</li>
+{{/priorities}}
+</ul>

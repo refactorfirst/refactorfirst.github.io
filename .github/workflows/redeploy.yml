@@ -1,0 +1,52 @@
+name: Scheduled Redeploy
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # Every 10 minutes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  check-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for repositories.txt changes
+        id: check-changes
+        run: |
+          LAST_COMMIT=$(git log -1 --format=%ct -- repositories.txt || echo 0)
+          CURRENT_TIME=$(date +%s)
+          TIME_DIFF=$((CURRENT_TIME - LAST_COMMIT))
+
+          echo "Last commit: $LAST_COMMIT"
+          echo "Current time: $CURRENT_TIME"
+          echo "Time difference: $TIME_DIFF seconds"
+
+          # Only deploy if changed in the last 15 minutes
+          if [ "$TIME_DIFF" -lt 900 ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "repositories.txt has recent changes, deploying"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No recent changes, skipping deployment"
+          fi
+
+      - name: Setup Pages
+        if: steps.check-changes.outputs.changed == 'true'
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        if: steps.check-changes.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        if: steps.check-changes.outputs.changed == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,93 @@
+/* Main stylesheet: CSS custom properties, base layout, footer. */
+
+:root {
+  --brand-color: #2a6f97;
+  --brand-accent: #61c0bf;
+  --text-color: #1f2d3d;
+  --muted-color: #5c6b7a;
+  --bg-color: #ffffff;
+  --surface-color: #f5f8fa;
+  --error-color: #c0392b;
+  --success-color: #1e8449;
+  --menu-max-height: 200px;
+  --menu-height: 48px;
+  --radius: 6px;
+  --shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+body {
+  margin: 0;
+  color: var(--text-color);
+  background: var(--bg-color);
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--brand-color);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 3rem;
+  min-height: 60vh;
+}
+
+main:focus {
+  outline: none;
+}
+
+.hero {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.hero h1 {
+  color: var(--brand-color);
+  margin-bottom: 0.25rem;
+}
+
+.loading {
+  text-align: center;
+  color: var(--muted-color);
+  padding: 3rem 0;
+}
+
+.site-footer {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: var(--muted-color);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--surface-color);
+}
+
+a {
+  color: var(--brand-color);
+}
+
+code {
+  background: var(--surface-color);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--surface-color);
+  padding: 1rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}

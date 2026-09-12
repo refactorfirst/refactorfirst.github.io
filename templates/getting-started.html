@@ -1,0 +1,34 @@
+<section>
+  <h1>Getting Started</h1>
+
+  <h2>1. Configure the RefactorFirst Maven plugin</h2>
+  <p>Add the plugin to your <code>pom.xml</code>:</p>
+  <pre><code>&lt;plugin&gt;
+  &lt;groupId&gt;org.hjug&lt;/groupId&gt;
+  &lt;artifactId&gt;refactorfirst-maven-plugin&lt;/artifactId&gt;
+  &lt;version&gt;LATEST&lt;/version&gt;
+&lt;/plugin&gt;</code></pre>
+
+  <h2>2. Set up report generation in your repository</h2>
+  <div id="workflow-sample"></div>
+
+  <h2>3. Add your repository to this site</h2>
+  <p>Once a report exists on your default branch, go to
+     <a href="/add-repo" data-link>Add Your Repo</a> and sign in with GitHub.</p>
+
+  <h3>Why GitHub authentication?</h3>
+  <p>We require sign-in to verify that you have write access to the repository you
+     submit. This prevents abuse and keeps the listing trustworthy.</p>
+  <h3>What permissions are needed?</h3>
+  <p>The OAuth app requests <code>public_repo</code> (to trigger the validation workflow)
+     and <code>read:user</code> (to show who you are). Your token is stored only in
+     your browser session and is never sent anywhere except GitHub's API.</p>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><strong>Report doesn't render?</strong> Ensure <code>.refactorfirst/refactor-first.json</code> exists on your default branch.</li>
+    <li><strong>Changed default branch?</strong> Reports are looked up on the branch in the URL, then <code>main</code>, then <code>master</code>.</li>
+    <li><strong>Submission fails?</strong> You need write access to the repository, and it must not already be listed.</li>
+    <li><strong>Submission is slow to appear?</strong> The site redeploys on a 10-minute schedule.</li>
+  </ul>
+</section>
