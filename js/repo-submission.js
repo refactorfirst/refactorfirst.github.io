@@ -1,15 +1,24 @@
-// Repository submission: form validation, access checks and
-// triggering the add-repository GitHub Actions workflow.
+// Repository submission: form validation, unauthenticated report checks and
+// pre-filled issue URLs. The platform CI job (GitHub Actions / GitLab CI /
+// Bitbucket Pipelines) is the authoritative validator; the submitter's
+// verified identity is captured as the author of the created issue.
 
 import { isValidGitHubName } from './router.js';
+import { constructRawUrl } from './fetcher.js';
 
-const GITHUB_API = 'https://api.github.com';
-const GITHUB_RAW = 'https://raw.githubusercontent.com';
-const DEFAULT_DISPATCH_REPO = 'refactorfirst/refactorfirst.github.io';
-const REPORT_PATH = '.refactorfirst/refactor-first.json';
-
+export const DEFAULT_SUBMISSION_TARGET = 'refactorfirst/refactorfirst.github.io';
 export const REPORT_MISSING_MESSAGE =
   'The repository specified must have a .refactorfirst/refactor-first.json file present.';
+
+const PLATFORM_LABELS = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  bitbucket: 'Bitbucket'
+};
+
+export function platformLabel(environment) {
+  return PLATFORM_LABELS[environment] || PLATFORM_LABELS.github;
+}
 
 export function validateRepositoryInput(owner, repo) {
   const errors = [];
@@ -26,55 +35,72 @@ export function validateRepositoryInput(owner, repo) {
   return { valid: errors.length === 0, errors };
 }
 
-// Verify the authenticated user has write/admin access to owner/repo.
-export async function checkRepositoryAccess(owner, repo, username, token) {
-  const response = await fetch(
-    `${GITHUB_API}/repos/${owner}/${repo}/collaborators/${username}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/vnd.github+json'
-      }
-    }
-  );
+function normalizeBaseUrl(baseUrl) {
+  return String(baseUrl || 'https://gitlab.com').replace(/\/+$/, '');
+}
 
-  if (!response.ok) {
-    if (response.status === 404) {
-      return { granted: false, reason: 'Repository not found or you do not have access to it' };
-    }
-    if (response.status === 403) {
-      return { granted: false, reason: 'GitHub API rate limit or permission error' };
-    }
-    return { granted: false, reason: `GitHub API error: ${response.status}` };
+// Build the pre-filled "new issue" URL for the deployment's platform. The
+// issue title carries the submitted repository; the platform captures the
+// verified submitter identity as the issue author.
+export function buildSubmissionIssueUrl({
+  owner, repo,
+  environment = 'github',
+  target = DEFAULT_SUBMISSION_TARGET,
+  baseUrl
+}) {
+  const title = `Add repository: ${owner}/${repo}`;
+  const params = new URLSearchParams();
+  if (environment === 'gitlab') {
+    params.set('issue[title]', title);
+    params.set('issuable_template', 'Add repository');
+    return `${normalizeBaseUrl(baseUrl)}/${target}/-/issues/new?${params}`;
   }
+  params.set('title', title);
+  if (environment === 'bitbucket') {
+    return `https://bitbucket.org/${target}/issues/new?${params}`;
+  }
+  params.set('template', 'add-repo.md');
+  return `https://github.com/${target}/issues/new?${params}`;
+}
 
-  const data = await response.json();
-  if (data.permission === 'write' || data.permission === 'admin') {
-    return { granted: true };
+// URL of the platform API endpoint describing the repository/project.
+export function repositoryInfoUrl(owner, repo, { environment = 'github', baseUrl } = {}) {
+  if (environment === 'gitlab') {
+    return `${normalizeBaseUrl(baseUrl)}/api/v4/projects/${encodeURIComponent(`${owner}/${repo}`)}`;
   }
-  return { granted: false, reason: 'You need write access to submit this repository' };
+  if (environment === 'bitbucket') {
+    return `https://api.bitbucket.org/2.0/repositories/${owner}/${repo}`;
+  }
+  return `https://api.github.com/repos/${owner}/${repo}`;
+}
+
+function extractDefaultBranch(info, environment) {
+  if (environment === 'bitbucket') {
+    return (info && info.mainbranch && info.mainbranch.name) || 'main';
+  }
+  return (info && info.default_branch) || 'main';
 }
 
 // Check whether the repository has a .refactorfirst/refactor-first.json file.
-// Tries the main branch first, then the repository's default branch.
-export async function checkReportExists(owner, repo, token) {
-  const response = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/vnd.github+json'
-    }
-  });
-  if (!response.ok) {
+// Unauthenticated (public repositories only). Tries the main branch, then the
+// repository's default branch and finally master.
+export async function checkReportExists(owner, repo, options = {}) {
+  const { environment = 'github', baseUrl } = options;
+
+  const infoResponse = await fetch(repositoryInfoUrl(owner, repo, { environment, baseUrl }));
+  if (!infoResponse.ok) {
     return { exists: false, message: 'Repository not found or inaccessible' };
   }
 
-  const { default_branch: defaultBranch = 'main' } = await response.json();
-  const branchesToTry = [...new Set(['main', defaultBranch])];
+  const info = await infoResponse.json().catch(() => ({}));
+  const defaultBranch = extractDefaultBranch(info, environment);
+  const branchesToTry = [...new Set(['main', defaultBranch, 'master'])];
 
   for (const branch of branchesToTry) {
-    const rawResponse = await fetch(`${GITHUB_RAW}/${owner}/${repo}/${branch}/${REPORT_PATH}`, {
-      method: 'HEAD'
-    });
+    const rawResponse = await fetch(
+      constructRawUrl(owner, repo, branch, { environment, baseUrl }),
+      { method: 'HEAD' }
+    );
     if (rawResponse.ok) {
       return { exists: true, branch };
     }
@@ -83,55 +109,30 @@ export async function checkReportExists(owner, repo, token) {
   return { exists: false, message: REPORT_MISSING_MESSAGE };
 }
 
-// Trigger the add-repository workflow in the listing repository.
-export async function triggerAddRepositoryWorkflow({
-  owner, repo, submittedBy, token,
-  dispatchRepo = DEFAULT_DISPATCH_REPO
-}) {
-  const response = await fetch(`${GITHUB_API}/repos/${dispatchRepo}/dispatches`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/vnd.github+json'
-    },
-    body: JSON.stringify({
-      event_type: 'add-repository',
-      client_payload: { owner, repo, submitted_by: submittedBy }
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to trigger repository validation workflow (HTTP ${response.status})`);
-  }
-}
-
-// Full submission flow: validate input, check access, verify the report
-// exists, then trigger the validation workflow.
-export async function submitRepository({ owner, repo }, submittedBy, token, options = {}) {
+// Submission flow: validate input, verify the report file exists (best-effort
+// pre-check), then hand off to the platform's issue tracker where the
+// submitter's identity is captured and the CI validation happens.
+export async function submitRepository({ owner, repo }, options = {}) {
   const validation = validateRepositoryInput(owner, repo);
   if (!validation.valid) {
     return { success: false, message: validation.errors.join('. ') + ' - required fields must be valid' };
   }
 
+  const { environment = 'github' } = options;
   const cleanOwner = owner.trim();
   const cleanRepo = repo.trim();
 
   try {
-    const access = await checkRepositoryAccess(cleanOwner, cleanRepo, submittedBy, token);
-    if (!access.granted) {
-      return { success: false, message: access.reason };
-    }
-    const report = await checkReportExists(cleanOwner, cleanRepo, token);
+    const report = await checkReportExists(cleanOwner, cleanRepo, options);
     if (!report.exists) {
       return { success: false, message: report.message };
     }
-    await triggerAddRepositoryWorkflow({
-      owner: cleanOwner, repo: cleanRepo, submittedBy, token,
-      dispatchRepo: options.dispatchRepo || DEFAULT_DISPATCH_REPO
-    });
     return {
       success: true,
-      message: 'Repository submitted for validation. It will appear in the listing within ~10 minutes.'
+      issueUrl: buildSubmissionIssueUrl({ owner: cleanOwner, repo: cleanRepo, ...options }),
+      message:
+        `Repository verified. Continue on ${platformLabel(environment)} to submit — ` +
+        'your account there will be recorded as the submitter.'
     };
   } catch (error) {
     return { success: false, message: error.message };

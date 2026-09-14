@@ -16,11 +16,6 @@ describe('classifyError', () => {
     expect(classifyError({ status: 429 }).type).toBe('rate-limit');
   });
 
-  it('classifies OAuth errors', () => {
-    expect(classifyError(new Error('OAuth state mismatch - possible CSRF attack')).type).toBe('oauth');
-    expect(classifyError(new Error('OAuth error: access_denied')).type).toBe('oauth');
-  });
-
   it('classifies network failures', () => {
     expect(classifyError(new TypeError('Failed to fetch')).type).toBe('network');
   });
@@ -40,7 +35,7 @@ describe('classifyError', () => {
 
 describe('userMessageFor', () => {
   it('provides a friendly message and suggestion for every error type', () => {
-    for (const type of ['not-found', 'rate-limit', 'oauth', 'network', 'template', 'api', 'general']) {
+    for (const type of ['not-found', 'rate-limit', 'network', 'template', 'api', 'general']) {
       const message = userMessageFor(type);
       expect(message.title.length).toBeGreaterThan(0);
       expect(message.suggestion.length).toBeGreaterThan(0);

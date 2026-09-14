@@ -108,10 +108,56 @@ test('static pages render: about and getting started', async ({ page }) => {
   await expect(page.locator('code', { hasText: 'refactorfirst:jsonReport' }).first()).toBeVisible();
 });
 
-test('add-repo page requires GitHub login', async ({ page }) => {
+test('add-repo form renders directly, without any login', async ({ page }) => {
   await page.goto('/add-repo');
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('#login-github')).toBeVisible();
+  await expect(page.locator('form#repo-form')).toBeVisible();
+  await expect(page.locator('#repo-owner')).toBeVisible();
+  await expect(page.locator('#repo-name')).toBeVisible();
+  // No login button exists anymore
+  await expect(page.locator('#login-github')).toHaveCount(0);
+});
+
+test('submission validates input client-side before any network call', async ({ page }) => {
+  await page.goto('/add-repo');
+  await page.waitForLoadState('networkidle');
+  await page.click('button[type="submit"]');
+  await expect(page.locator('.form-status')).toContainText('required');
+});
+
+test('valid submission opens a pre-filled GitHub issue in a new tab', async ({ page, context }) => {
+  await page.route('**/api.github.com/repos/octocat/hello-world', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ default_branch: 'main' }) }));
+  // Never load the real GitHub issue page; the popup content is irrelevant.
+  await context.route(/github\.com/, route => route.fulfill({ status: 200, body: '<html>stub</html>' }));
+
+  await page.goto('/add-repo');
+  await page.waitForLoadState('networkidle');
+  await page.fill('#repo-owner', 'octocat');
+  await page.fill('#repo-name', 'hello-world');
+
+  const popupPromise = page.waitForEvent('popup');
+  await page.click('button[type="submit"]');
+  const popup = await popupPromise;
+
+  const popupUrl = new URL(popup.url());
+  expect(popupUrl.hostname).toBe('github.com');
+  expect(popupUrl.pathname).toBe('/refactorfirst/refactorfirst.github.io/issues/new');
+  expect(popupUrl.searchParams.get('title')).toBe('Add repository: octocat/hello-world');
+  await popup.close();
+
+  await expect(page.locator('.form-status')).toContainText('Continue on GitHub');
+});
+
+test('submission of a repository without a report shows an error', async ({ page }) => {
+  await page.route('**/api.github.com/repos/ghost/nope', route =>
+    route.fulfill({ status: 404, contentType: 'application/json', body: '{}' }));
+  await page.goto('/add-repo');
+  await page.waitForLoadState('networkidle');
+  await page.fill('#repo-owner', 'ghost');
+  await page.fill('#repo-name', 'nope');
+  await page.click('button[type="submit"]');
+  await expect(page.locator('.form-status')).toContainText('Repository not found');
 });
 
 test('top menu height stays within 140px', async ({ page }) => {

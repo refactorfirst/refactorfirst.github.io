@@ -48,12 +48,8 @@ export function classifyRoute(path) {
     return { type: 'landing' };
   }
 
-  if (username === 'add-repo' && repository === 'callback') {
-    return { type: 'oauth-callback' };
-  }
-
-  if (username === 'add-repo' && !repository) {
-    return { type: 'add-repo' };
+  if (username === 'add-repo') {
+    return repository ? { type: 'not-found' } : { type: 'add-repo' };
   }
 
   if (STATIC_PAGES.has(username) && !repository) {

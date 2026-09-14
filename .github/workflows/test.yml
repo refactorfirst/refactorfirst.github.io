@@ -12,6 +12,7 @@ jobs:
       - run: bun install
       - run: bun test tests/unit tests/integration
       - run: bunx eslint "js/**/*.js" "tests/**/*.js"
+      - run: shellcheck ci/process-submissions.sh
 
   e2e-tests:
     runs-on: ubuntu-latest

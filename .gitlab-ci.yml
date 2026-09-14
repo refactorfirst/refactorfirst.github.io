@@ -6,6 +6,7 @@
 
 stages:
   - test
+  - process
   - deploy
 
 validate-site:
@@ -18,6 +19,21 @@ validate-site:
     - '! grep -Ev "^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$" repositories.txt'
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Processes open "Add repository: owner/repo" issues: validates the issue
+# author has write access to the project, checks the report file exists,
+# commits repositories.txt and closes the issue with the outcome.
+# GitLab has no issue-triggered pipelines, so create a pipeline schedule
+# (e.g. every 10 minutes) in Settings -> CI/CD -> Schedules.
+process-submissions:
+  stage: process
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - sh ci/process-submissions.sh gitlab
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 pages:
   stage: deploy

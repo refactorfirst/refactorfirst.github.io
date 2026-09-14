@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' https://avatars.githubusercontent.com data:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://github.com; frame-ancestors 'none'; base-uri 'self';">
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' https://avatars.githubusercontent.com data:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; frame-ancestors 'none'; base-uri 'self';">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <!-- GitHub OAuth App Client ID for the "Add Your Repo" login flow -->
-  <meta name="oauth-client-id" content="YOUR_GITHUB_OAUTH_CLIENT_ID">
+  <!-- Repository submissions open an issue in this "<owner>/<repo>" project.
+       Self-managed GitLab deployments can also set a platform-base-url meta. -->
+  <meta name="submission-target" content="refactorfirst/refactorfirst.github.io">
   <title>RefactorFirst - Know Where to Refactor First</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mvp.css@1.15.0/mvp.css">
   <link rel="stylesheet" href="/css/main.css">

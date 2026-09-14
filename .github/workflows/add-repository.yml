@@ -1,16 +1,24 @@
 name: Add Repository
 on:
-  repository_dispatch:
-    types: [add-repository]
+  issues:
+    types: [opened]
+  # Manual re-run for an existing issue number (e.g. after a transient failure).
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process'
+        required: true
+        type: string
 
-# Serialize listing updates: concurrent dispatches would otherwise race at
-# git push and reject valid submissions with non-fast-forward errors.
+# Serialize listing updates: concurrent runs would otherwise race at commit
+# time and reject valid submissions with non-fast-forward errors.
 concurrency:
   group: add-repository
   cancel-in-progress: false
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   add-repository:
@@ -19,92 +27,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate repository and user access
-        id: validate
-        run: |
-          OWNER="${{ github.event.client_payload.owner }}"
-          REPO="${{ github.event.client_payload.repo }}"
-          SUBMITTED_BY="${{ github.event.client_payload.submitted_by }}"
-          REPO_FULL_NAME="$OWNER/$REPO"
-
-          echo "Validating repository: $REPO_FULL_NAME"
-          echo "Submitted by: $SUBMITTED_BY"
-
-          # Input validation: only safe GitHub name characters
-          if ! [[ "$OWNER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$ ]] || \
-             ! [[ "$REPO" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$ ]]; then
-            echo "error=Invalid owner or repository name" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
-          # Check if repository exists
-          if ! gh repo view "$REPO_FULL_NAME" --json name --jq '.name' > /dev/null 2>&1; then
-            echo "error=Repository not found" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
-          # Check if user has access to the repository
-          if ! gh api "repos/$REPO_FULL_NAME/collaborators/$SUBMITTED_BY" --jq '.permission' > /dev/null 2>&1; then
-            OWNER_INFO=$(gh repo view "$REPO_FULL_NAME" --json owner --jq '.owner.login')
-            if [[ "$OWNER_INFO" != "$SUBMITTED_BY" ]]; then
-              echo "error=User does not have access to this repository" >> "$GITHUB_OUTPUT"
-              exit 1
-            fi
-            PERMISSION="admin"
-          else
-            PERMISSION=$(gh api "repos/$REPO_FULL_NAME/collaborators/$SUBMITTED_BY" --jq '.permission')
-            if [[ "$PERMISSION" != "write" && "$PERMISSION" != "admin" ]]; then
-              echo "error=User does not have write access to this repository" >> "$GITHUB_OUTPUT"
-              exit 1
-            fi
-          fi
-
-          # Check for .refactorfirst/refactor-first.json file
-          if ! gh api "repos/$REPO_FULL_NAME/contents/.refactorfirst/refactor-first.json" --jq '.sha' > /dev/null 2>&1; then
-            echo "error=RefactorFirst JSON file not found" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
-          echo "status=valid" >> "$GITHUB_OUTPUT"
-          echo "repository=$REPO_FULL_NAME" >> "$GITHUB_OUTPUT"
-          echo "submitted_by=$SUBMITTED_BY" >> "$GITHUB_OUTPUT"
+      - name: Process submission issue
+        run: bash ci/process-submissions.sh github
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Add to repositories.txt
-        if: steps.validate.outputs.status == 'valid'
-        run: |
-          REPO="${{ steps.validate.outputs.repository }}"
-          SUBMITTED_BY="${{ steps.validate.outputs.submitted_by }}"
-
-          if grep -Fxq -- "$REPO" repositories.txt; then
-            echo "Repository already in listing"
-            exit 0
-          fi
-
-          echo "$REPO" >> repositories.txt
-          sort -o repositories.txt repositories.txt
-          awk '!seen[$0]++' repositories.txt > temp.txt && mv temp.txt repositories.txt
-
-          echo "Repository $REPO added by $SUBMITTED_BY (audit: $(date -u +%FT%TZ))"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Commit changes
-        if: steps.validate.outputs.status == 'valid'
-        run: |
-          REPO="${{ steps.validate.outputs.repository }}"
-          SUBMITTED_BY="${{ steps.validate.outputs.submitted_by }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add repositories.txt
-          git diff --staged --quiet || git commit -m "Add repository: $REPO (submitted by $SUBMITTED_BY)"
-          git push
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Report failure
-        if: failure()
-        run: |
-          echo "Repository validation failed: ${{ steps.validate.outputs.error }}"
+          # The submitter identity is github.event.issue.user.login, resolved
+          # from the issue number inside the script (never interpolated here).
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}

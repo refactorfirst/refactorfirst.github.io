@@ -15,23 +15,26 @@
      <a href="/getting-started" data-link>Getting Started</a>.</p>
 
   <h2>How do I add my repository to the listing?</h2>
-  <p>Use the <a href="/add-repo" data-link>Add Your Repo</a> page. You must sign in with
-     GitHub and have write access to the repository.</p>
+  <p>Use the <a href="/add-repo" data-link>Add Your Repo</a> page. It opens a
+     pre-filled issue on this site's platform (GitHub, GitLab or Bitbucket);
+     submitting that issue is all you need to do. You must have write access
+     to the repository.</p>
 
   <h2>How long until my repository appears after submission?</h2>
-  <p>The site redeploys every 10 minutes, so at most about 10 minutes.</p>
+  <p>The CI validation picks issues up shortly after they are created (the
+     GitHub deployment reacts immediately; GitLab and Bitbucket deployments
+     poll on a schedule), and the site redeploys on a 10-minute schedule —
+     so in the worst case about 20 minutes.</p>
 
-  <h2>Why do I need to authenticate with GitHub?</h2>
-  <p>Authentication proves you have write access to the repository you submit, preventing
-     spam and unauthorized additions.</p>
+  <h2>Why is there no sign-in on this site?</h2>
+  <p>Your identity is captured by your platform when you create the submission
+     issue: the issue author is a verified account, and the CI job
+     independently confirms that account has write access to the submitted
+     repository. That proves ownership without any tokens or apps.</p>
 
-  <h2>What permissions does the OAuth app require?</h2>
-  <p><code>public_repo</code> and <code>read:user</code> only. We never store your token
-     outside your browser session.</p>
-
-  <h2>Is my GitHub data safe?</h2>
-  <p>Yes. Tokens live only in sessionStorage, are cleared when you log out or close the
-     session, and are only sent to GitHub's API over HTTPS.</p>
+  <h2>Is my platform data safe?</h2>
+  <p>Yes. This site never receives credentials, tokens or permissions from you.
+     The validation runs entirely in this project's own CI.</p>
 
   <h2>What are disharmonies like God Class and Brain Method?</h2>
   <p>Disharmonies are design flaws detected from metrics: a <em>God Class</em> does too

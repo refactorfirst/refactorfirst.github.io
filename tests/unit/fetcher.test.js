@@ -78,6 +78,27 @@ describe('GitHub API Fetching', () => {
     expect(url).toBe('https://raw.githubusercontent.com/user/repo/branch/.refactorfirst/refactor-first-report.mustache');
   });
 
+  it('should construct GitLab raw URLs with -/raw/ and honor a custom base URL', () => {
+    expect(constructRawUrl('group', 'proj', 'main', { environment: 'gitlab' }))
+      .toBe('https://gitlab.com/group/proj/-/raw/main/.refactorfirst/refactor-first.json');
+    expect(constructRawUrl('group', 'proj', 'main', { environment: 'gitlab', baseUrl: 'https://gl.example.com/' }))
+      .toBe('https://gl.example.com/group/proj/-/raw/main/.refactorfirst/refactor-first.json');
+    expect(constructTemplateUrl('group', 'proj', 'main', { environment: 'gitlab' }))
+      .toBe('https://gitlab.com/group/proj/-/raw/main/.refactorfirst/refactor-first-report.mustache');
+  });
+
+  it('should construct Bitbucket raw URLs', () => {
+    expect(constructRawUrl('ws', 'proj', 'main', { environment: 'bitbucket' }))
+      .toBe('https://bitbucket.org/ws/proj/raw/main/.refactorfirst/refactor-first.json');
+    expect(constructTemplateUrl('ws', 'proj', 'main', { environment: 'bitbucket' }))
+      .toBe('https://bitbucket.org/ws/proj/raw/main/.refactorfirst/refactor-first-report.mustache');
+  });
+
+  it('falls back to GitHub URLs for unknown environments', () => {
+    expect(constructRawUrl('user', 'repo', 'main', { environment: 'something-else' }))
+      .toBe('https://raw.githubusercontent.com/user/repo/main/.refactorfirst/refactor-first.json');
+  });
+
   it('should include headers in fetch requests', async () => {
     mockFetch.mockResolvedValue({
       ok: true,

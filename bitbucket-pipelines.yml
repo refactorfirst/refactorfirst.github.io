@@ -30,3 +30,17 @@ pipelines:
             - git add repositories.txt
             - git commit -m "Normalize repositories.txt" || echo "No changes"
             - git push
+
+    # Processes open "Add repository: owner/repo" issues: validates write
+    # access of the issue author, checks the report file, commits
+    # repositories.txt and closes the issue with the outcome.
+    # Bitbucket has no issue-triggered pipelines: schedule this pipeline
+    # (Repository settings -> Pipelines -> Schedules) and define the secured
+    # repository variables BITBUCKET_CLIENT_ID and BITBUCKET_CLIENT_SECRET
+    # (workspace OAuth consumer with Issues + Repositories scopes).
+    process-submissions:
+      - step:
+          name: Process submission issues
+          script:
+            - apk add --no-cache curl jq
+            - sh ci/process-submissions.sh bitbucket

@@ -14,15 +14,21 @@
 
   <h2>3. Add your repository to this site</h2>
   <p>Once a report exists on your default branch, go to
-     <a href="/add-repo" data-link>Add Your Repo</a> and sign in with GitHub.</p>
+     <a href="/add-repo" data-link>Add Your Repo</a> and enter your repository name.
+     A pre-filled issue opens on this site's platform (GitHub, GitLab or
+     Bitbucket) — submit it there and a CI job validates and adds your
+     repository automatically.</p>
 
-  <h3>Why GitHub authentication?</h3>
-  <p>We require sign-in to verify that you have write access to the repository you
-     submit. This prevents abuse and keeps the listing trustworthy.</p>
-  <h3>What permissions are needed?</h3>
-  <p>The OAuth app requests <code>public_repo</code> (to trigger the validation workflow)
-     and <code>read:user</code> (to show who you are). Your token is stored only in
-     your browser session and is never sent anywhere except GitHub's API.</p>
+  <h3>How is my identity verified?</h3>
+  <p>This site has no login and stores no credentials: your identity is captured
+     by your platform (GitHub, GitLab or Bitbucket) as the author of the issue
+     you create. The CI job then verifies — independently — that you actually
+     have write access to the repository you submitted. This prevents abuse and
+     keeps the listing trustworthy.</p>
+  <h3>Any permissions or apps needed?</h3>
+  <p>None. You never grant this site access to anything, and no OAuth apps or
+     tokens are involved. You just need an account on the platform hosting the
+     site you are using.</p>
 
   <h2>Troubleshooting</h2>
   <ul>

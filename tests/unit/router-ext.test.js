@@ -51,9 +51,9 @@ describe('classifyRoute', () => {
     expect(classifyRoute('/add-repo').type).toBe('add-repo');
   });
 
-  it('classifies the OAuth callback', () => {
+  it('treats unknown sub-paths of /add-repo as not found', () => {
     const result = classifyRoute('/add-repo/callback');
-    expect(result.type).toBe('oauth-callback');
+    expect(result.type).toBe('not-found');
   });
 
   it('classifies a single segment as a user repository listing', () => {

@@ -12,10 +12,6 @@ const ERROR_INFO = {
     title: 'GitHub API Rate Limit Reached',
     suggestion: 'Too many requests were made to the GitHub API. Please wait a few minutes and try again.'
   },
-  'oauth': {
-    title: 'Authentication Error',
-    suggestion: 'There was a problem signing in with GitHub. Please try logging in again.'
-  },
   'network': {
     title: 'Network Error',
     suggestion: 'Check your internet connection and try again.'
@@ -43,9 +39,6 @@ export function classifyError(error) {
   }
   if (status === 403 || status === 429 || /rate limit/i.test(message)) {
     return { type: 'rate-limit', status };
-  }
-  if (message.startsWith('OAuth ') || message.includes('access_denied')) {
-    return { type: 'oauth', status };
   }
   if (error instanceof TypeError && /fetch|network/i.test(message)) {
     return { type: 'network', status };

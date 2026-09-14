@@ -6,8 +6,9 @@ A purely client-side static web application that renders RefactorFirst reports b
 
 **Key Features:**
 - Search over curated repository listing (`repositories.txt`)
-- Reports rendered with Mustache.js from raw GitHub content
-- Repository submission with GitHub OAuth (PKCE)
+- Reports rendered with Mustache.js from raw platform content
+- Repository submission via pre-filled platform issues — no login, apps or
+  tokens; identity is captured as the issue author and validated in CI
 - Works with plain static file server
 
 ## Development Setup
@@ -45,8 +46,10 @@ npx eslint js/**/*.js tests/**/*.js --fix     # auto-fix
 index.html                    # Single-page app shell (top menu + #app container)
 repositories.txt              # Listed repositories, one "user/repo" per line
 js/                           # ES6 modules: router, fetcher, renderer, search,
-                              # oauth-handler, repo-submission, error-handler,
+                              # repo-submission, error-handler,
                               # rate-limiter, cache-manager, utils, main
+ci/process-submissions.sh     # Shared submission validator for GitHub Actions,
+                              # GitLab CI and Bitbucket Pipelines
 css/                          # main.css + components.css
 templates/                    # Static page templates (about, faq, errors, ...)
                               # + user CI templates for GitHub/GitLab/Bitbucket
@@ -69,22 +72,22 @@ tests/                        # unit/ (Bun), integration/ (Bun), e2e/ (Playwrigh
 | Module | Responsibility |
 |--------|---------------|
 | `js/router.js` | URL routes and routing logic |
-| `js/fetcher.js` | GitHub fetching / branch fallback |
+| `js/fetcher.js` | Platform-aware raw fetching / branch fallback |
 | `js/renderer.js` | Mustache rendering |
 | `js/search.js` | Search / type-ahead functionality |
-| `js/repo-submission.js` | Submission flow |
-| `js/oauth-handler.js` | OAuth / PKCE handling |
+| `js/repo-submission.js` | Submission flow: validation, report check, per-platform issue URLs |
 | `js/error-handler.js` | Error page rendering |
 | `js/utils.js` | Utility functions, environment detection |
 | `js/main.js` | Application entry point |
+| `ci/process-submissions.sh` | CI-side submission validation + write-back for all platforms |
 
 ## Testing Requirements
 
 - **Unit tests**: Pure module logic (router, fetcher, renderer, search, etc.)
-- **Integration tests**: DOM + routing flows (search flow, submission flow, OAuth states)
-- **E2E tests**: User journeys, cross-browser smoke tests, mobile responsiveness
+- **Integration tests**: DOM + routing flows (search flow, submission flow incl. per-platform issue redirect)
+- **E2E tests**: User journeys (incl. submission → pre-filled issue hand-off), cross-browser smoke tests, mobile responsiveness
 - **Coverage target**: 80%+ on core modules
-- **Current suite**: 164 tests
+- **Current suite**: 165 tests
 
 ## CI/CD
 
@@ -118,12 +121,13 @@ See README.md for detailed deployment instructions for each platform.
 - No build step required
 - Client-side routing from single `index.html`
 - Mustache.js for templating
-- GitHub OAuth with PKCE flow
+- No client-side authentication — submission identity comes from the platform issue author
 - Static file serving (no server-side code)
 
 ## Important Notes
 
-- OAuth Client ID must be set in the `<meta name="oauth-client-id">` tag in `index.html` for "Add Your Repo" functionality
-- For GitHub Enterprise Server, update API/raw endpoints in `js/repo-submission.js`, `js/fetcher.js`, and `js/oauth-handler.js`
+- The `<meta name="submission-target">` tag in `index.html` points submissions at the listing project; self-managed GitLab deployments add `<meta name="platform-base-url">`
+- Deployments must extend the CSP `connect-src` with the platform endpoints they use (`api.gitlab.com`/custom base, `api.bitbucket.org`, ...)
+- For GitHub Enterprise Server, update API/raw endpoints in `js/repo-submission.js`, `js/fetcher.js`, and `ci/process-submissions.sh`
 - Deep links require `404.html` copy of `index.html` for proper client-side routing on some platforms
 - Reports are fetched client-side — end users' browsers must reach GitHub/raw endpoints

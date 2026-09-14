@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import {
   validateRepositoryInput,
-  checkRepositoryAccess,
+  buildSubmissionIssueUrl,
+  repositoryInfoUrl,
   checkReportExists,
-  triggerAddRepositoryWorkflow,
   submitRepository,
+  platformLabel,
+  DEFAULT_SUBMISSION_TARGET,
   REPORT_MISSING_MESSAGE
 } from '../../js/repo-submission.js';
 
@@ -29,41 +31,76 @@ describe('validateRepositoryInput', () => {
   });
 });
 
-describe('checkRepositoryAccess', () => {
-  let mockFetch;
-  beforeEach(() => { mockFetch = spyOn(global, 'fetch'); });
-  afterEach(() => mockFetch.mockRestore());
-
-  it('returns granted when the user is a collaborator with write access', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ permission: 'admin' })
-    });
-
-    const result = await checkRepositoryAccess('owner', 'repo', 'user', 'token');
-    expect(result.granted).toBe(true);
-    expect(mockFetch.mock.calls[0][0]).toBe('https://api.github.com/repos/owner/repo/collaborators/user');
-    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer token');
-  });
-
-  it('denies access when the collaborator check returns 404', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 404 });
-    const result = await checkRepositoryAccess('owner', 'repo', 'user', 'token');
-    expect(result.granted).toBe(false);
-    expect(result.reason).toContain('access');
-  });
-
-  it('denies access when the user has only read permission', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ permission: 'read' })
-    });
-    const result = await checkRepositoryAccess('owner', 'repo', 'user', 'token');
-    expect(result.granted).toBe(false);
+describe('platformLabel', () => {
+  it('maps environments to display names', () => {
+    expect(platformLabel('github')).toBe('GitHub');
+    expect(platformLabel('gitlab')).toBe('GitLab');
+    expect(platformLabel('bitbucket')).toBe('Bitbucket');
+    expect(platformLabel('unknown')).toBe('GitHub');
   });
 });
 
-describe('checkReportExists', () => {
+describe('buildSubmissionIssueUrl', () => {
+  it('builds a GitHub issue URL with the template and encoded title', () => {
+    const url = buildSubmissionIssueUrl({ owner: 'octocat', repo: 'hello-world' });
+    expect(url.startsWith('https://github.com/refactorfirst/refactorfirst.github.io/issues/new?')).toBe(true);
+    const params = new URL(url).searchParams;
+    expect(params.get('title')).toBe('Add repository: octocat/hello-world');
+    expect(params.get('template')).toBe('add-repo.md');
+  });
+
+  it('honors a custom submission target for GitHub', () => {
+    const url = buildSubmissionIssueUrl({ owner: 'o', repo: 'r', target: 'my-org/my-site' });
+    expect(url.startsWith('https://github.com/my-org/my-site/issues/new?')).toBe(true);
+  });
+
+  it('builds a GitLab issue URL with issue[title] and the template', () => {
+    const url = buildSubmissionIssueUrl({ owner: 'o', repo: 'r', environment: 'gitlab' });
+    expect(url.startsWith('https://gitlab.com/refactorfirst/refactorfirst.github.io/-/issues/new?')).toBe(true);
+    const params = new URL(url).searchParams;
+    expect(params.get('issue[title]')).toBe('Add repository: o/r');
+    expect(params.get('issuable_template')).toBe('Add repository');
+  });
+
+  it('honors a custom base URL for self-managed GitLab', () => {
+    const url = buildSubmissionIssueUrl({
+      owner: 'o', repo: 'r', environment: 'gitlab',
+      baseUrl: 'https://gitlab.example.com/'
+    });
+    expect(url.startsWith('https://gitlab.example.com/refactorfirst/refactorfirst.github.io/-/issues/new?')).toBe(true);
+  });
+
+  it('builds a Bitbucket issue URL with the title', () => {
+    const url = buildSubmissionIssueUrl({ owner: 'o', repo: 'r', environment: 'bitbucket' });
+    expect(url.startsWith('https://bitbucket.org/refactorfirst/refactorfirst.github.io/issues/new?')).toBe(true);
+    const params = new URL(url).searchParams;
+    expect(params.get('title')).toBe('Add repository: o/r');
+  });
+
+  it('uses the default submission target constant', () => {
+    expect(DEFAULT_SUBMISSION_TARGET).toBe('refactorfirst/refactorfirst.github.io');
+  });
+});
+
+describe('repositoryInfoUrl', () => {
+  it('builds the GitHub repo API URL', () => {
+    expect(repositoryInfoUrl('o', 'r')).toBe('https://api.github.com/repos/o/r');
+  });
+
+  it('builds the GitLab project API URL with an encoded path', () => {
+    expect(repositoryInfoUrl('my-group', 'my-repo', { environment: 'gitlab' }))
+      .toBe('https://gitlab.com/api/v4/projects/my-group%2Fmy-repo');
+    expect(repositoryInfoUrl('o', 'r', { environment: 'gitlab', baseUrl: 'https://gl.example.com/' }))
+      .toBe('https://gl.example.com/api/v4/projects/o%2Fr');
+  });
+
+  it('builds the Bitbucket repository API URL', () => {
+    expect(repositoryInfoUrl('ws', 'r', { environment: 'bitbucket' }))
+      .toBe('https://api.bitbucket.org/2.0/repositories/ws/r');
+  });
+});
+
+describe('checkReportExists (unauthenticated)', () => {
   let mockFetch;
   beforeEach(() => { mockFetch = spyOn(global, 'fetch'); });
   afterEach(() => mockFetch.mockRestore());
@@ -78,7 +115,7 @@ describe('checkReportExists', () => {
     };
   }
 
-  it('finds the report on the main branch', async () => {
+  it('finds the report on the main branch without any token', async () => {
     mockFetch.mockImplementation(url => {
       if (url === 'https://api.github.com/repos/owner/repo') {
         return Promise.resolve(mockRepoInfo());
@@ -87,9 +124,11 @@ describe('checkReportExists', () => {
       return Promise.resolve({ ok: false, status: 404 });
     });
 
-    const result = await checkReportExists('owner', 'repo', 'token');
+    const result = await checkReportExists('owner', 'repo');
     expect(result.exists).toBe(true);
     expect(result.branch).toBe('main');
+    const infoCall = mockFetch.mock.calls.find(c => c[0] === 'https://api.github.com/repos/owner/repo');
+    expect(infoCall[1]).toBeUndefined();
   });
 
   it('falls back to the default branch when main returns 404', async () => {
@@ -102,14 +141,30 @@ describe('checkReportExists', () => {
       return Promise.resolve({ ok: false, status: 404 });
     });
 
-    const result = await checkReportExists('owner', 'repo', 'token');
+    const result = await checkReportExists('owner', 'repo');
     expect(result.exists).toBe(true);
     expect(result.branch).toBe('develop');
     expect(mockFetch.mock.calls.some(c => c[0] === rawMain)).toBe(true);
     expect(mockFetch.mock.calls.some(c => c[0] === rawDefault)).toBe(true);
   });
 
-  it('reports missing when neither main nor the default branch has the file', async () => {
+  it('falls back to master when main and the default branch miss', async () => {
+    mockFetch.mockImplementation(url => {
+      if (url === 'https://api.github.com/repos/owner/repo') {
+        return Promise.resolve(mockRepoInfo('develop'));
+      }
+      if (url === 'https://raw.githubusercontent.com/owner/repo/master/.refactorfirst/refactor-first.json') {
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+
+    const result = await checkReportExists('owner', 'repo');
+    expect(result.exists).toBe(true);
+    expect(result.branch).toBe('master');
+  });
+
+  it('reports missing when no candidate branch has the file', async () => {
     mockFetch.mockImplementation(url => {
       if (url === 'https://api.github.com/repos/owner/repo') {
         return Promise.resolve(mockRepoInfo('develop'));
@@ -117,9 +172,9 @@ describe('checkReportExists', () => {
       return Promise.resolve({ ok: false, status: 404 });
     });
 
-    const result = await checkReportExists('owner', 'repo', 'token');
+    const result = await checkReportExists('owner', 'repo');
     expect(result.exists).toBe(false);
-    expect(result.message).toBe('The repository specified must have a .refactorfirst/refactor-first.json file present.');
+    expect(result.message).toBe(REPORT_MISSING_MESSAGE);
     expect(REPORT_MISSING_MESSAGE).toContain('refactor-first.json');
   });
 
@@ -131,59 +186,48 @@ describe('checkReportExists', () => {
       return Promise.resolve({ ok: false, status: 404 });
     });
 
-    const result = await checkReportExists('owner', 'repo', 'token');
+    const result = await checkReportExists('owner', 'repo');
     expect(result.exists).toBe(false);
     expect(mockFetch.mock.calls.filter(c => c[0] === rawMain).length).toBe(1);
   });
 
   it('reports missing when the repository info call fails', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
-    const result = await checkReportExists('owner', 'repo', 'token');
+    const result = await checkReportExists('owner', 'repo');
     expect(result.exists).toBe(false);
     expect(result.message).toContain('Repository not found');
   });
 
-  it('passes the auth token to the GitHub API call', async () => {
+  it('checks GitLab projects with the raw file URL scheme', async () => {
     mockFetch.mockImplementation(url => {
-      if (url === 'https://api.github.com/repos/owner/repo') {
-        return Promise.resolve(mockRepoInfo());
+      if (url === 'https://gitlab.com/api/v4/projects/group%2Fproj') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ default_branch: 'main' }) });
       }
-      return Promise.resolve({ ok: true });
-    });
-    await checkReportExists('owner', 'repo', 'secret-token');
-    const call = mockFetch.mock.calls.find(c => c[0] === 'https://api.github.com/repos/owner/repo');
-    expect(call[1].headers.Authorization).toBe('Bearer secret-token');
-  });
-});
-
-describe('triggerAddRepositoryWorkflow', () => {
-  let mockFetch;
-  beforeEach(() => { mockFetch = spyOn(global, 'fetch'); });
-  afterEach(() => mockFetch.mockRestore());
-
-  it('sends a repository_dispatch event to the listing repository', async () => {
-    mockFetch.mockResolvedValue({ ok: true, status: 204 });
-    await triggerAddRepositoryWorkflow({
-      owner: 'octocat', repo: 'hello-world', submittedBy: 'octocat',
-      token: 'token', dispatchRepo: 'refactorfirst/refactorfirst.github.io'
+      if (url === 'https://gitlab.com/group/proj/-/raw/main/.refactorfirst/refactor-first.json') {
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
     });
 
-    const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe('https://api.github.com/repos/refactorfirst/refactorfirst.github.io/dispatches');
-    expect(options.method).toBe('POST');
-    const body = JSON.parse(options.body);
-    expect(body.event_type).toBe('add-repository');
-    expect(body.client_payload).toEqual({
-      owner: 'octocat', repo: 'hello-world', submitted_by: 'octocat'
-    });
+    const result = await checkReportExists('group', 'proj', { environment: 'gitlab' });
+    expect(result.exists).toBe(true);
+    expect(result.branch).toBe('main');
   });
 
-  it('throws a friendly error when the dispatch is unauthorized', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 403 });
-    await expect(triggerAddRepositoryWorkflow({
-      owner: 'o', repo: 'r', submittedBy: 'u', token: 't',
-      dispatchRepo: 'refactorfirst/refactorfirst.github.io'
-    })).rejects.toThrow('403');
+  it('reads the Bitbucket mainbranch and uses the raw URL scheme', async () => {
+    mockFetch.mockImplementation(url => {
+      if (url === 'https://api.bitbucket.org/2.0/repositories/ws/proj') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ mainbranch: { name: 'develop' } }) });
+      }
+      if (url === 'https://bitbucket.org/ws/proj/raw/develop/.refactorfirst/refactor-first.json') {
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+
+    const result = await checkReportExists('ws', 'proj', { environment: 'bitbucket' });
+    expect(result.exists).toBe(true);
+    expect(result.branch).toBe('develop');
   });
 });
 
@@ -193,58 +237,64 @@ describe('submitRepository (orchestration)', () => {
   afterEach(() => mockFetch.mockRestore());
 
   it('validates input before making API calls', async () => {
-    const result = await submitRepository({ owner: '', repo: '' }, 'user', 'token');
+    const result = await submitRepository({ owner: '', repo: '' });
     expect(result.success).toBe(false);
     expect(result.message).toContain('required');
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  function mockHappyPath() {
+  it('returns the GitHub issue URL after a successful check', async () => {
     mockFetch.mockImplementation(url => {
-      if (url.includes('/collaborators/')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ permission: 'write' }) });
-      }
       if (url === 'https://api.github.com/repos/o/r') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ default_branch: 'main' }) });
       }
       if (url.includes('raw.githubusercontent.com/o/r/main/')) {
         return Promise.resolve({ ok: true });
       }
-      if (url.endsWith('/dispatches')) {
-        return Promise.resolve({ ok: true, status: 204 });
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+
+    const result = await submitRepository({ owner: 'o', repo: 'r' });
+    expect(result.success).toBe(true);
+    expect(new URL(result.issueUrl).searchParams.get('title')).toBe('Add repository: o/r');
+    expect(result.message).toContain('GitHub');
+  });
+
+  it('returns the platform issue URL for other environments', async () => {
+    mockFetch.mockImplementation(url => {
+      if (url === 'https://gitlab.com/api/v4/projects/g%2Fr') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ default_branch: 'main' }) });
+      }
+      if (url === 'https://gitlab.com/g/r/-/raw/main/.refactorfirst/refactor-first.json') {
+        return Promise.resolve({ ok: true });
       }
       return Promise.resolve({ ok: false, status: 404 });
     });
-  }
 
-  it('checks access then triggers the workflow on success', async () => {
-    mockHappyPath();
-    const result = await submitRepository({ owner: 'o', repo: 'r' }, 'user', 'token');
+    const result = await submitRepository({ owner: 'g', repo: 'r' }, { environment: 'gitlab' });
     expect(result.success).toBe(true);
-    expect(mockFetch.mock.calls.some(c => c[0].endsWith('/dispatches'))).toBe(true);
+    expect(result.issueUrl.startsWith('https://gitlab.com/')).toBe(true);
+    expect(result.message).toContain('GitLab');
   });
 
   it('rejects repositories without .refactorfirst/refactor-first.json', async () => {
     mockFetch.mockImplementation(url => {
-      if (url.includes('/collaborators/')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ permission: 'write' }) });
-      }
       if (url === 'https://api.github.com/repos/o/r') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ default_branch: 'develop' }) });
       }
       return Promise.resolve({ ok: false, status: 404 });
     });
 
-    const result = await submitRepository({ owner: 'o', repo: 'r' }, 'user', 'token');
+    const result = await submitRepository({ owner: 'o', repo: 'r' });
     expect(result.success).toBe(false);
-    expect(result.message).toBe('The repository specified must have a .refactorfirst/refactor-first.json file present.');
-    expect(mockFetch.mock.calls.some(c => c[0].endsWith('/dispatches'))).toBe(false);
+    expect(result.message).toBe(REPORT_MISSING_MESSAGE);
+    expect(result.issueUrl).toBeUndefined();
   });
 
-  it('reports access failures without triggering the workflow', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
-    const result = await submitRepository({ owner: 'o', repo: 'r' }, 'user', 'token');
+  it('reports unknown repositories', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+    const result = await submitRepository({ owner: 'ghost', repo: 'nope' });
     expect(result.success).toBe(false);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(result.message).toContain('Repository not found');
   });
 });

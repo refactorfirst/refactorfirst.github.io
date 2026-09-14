@@ -20,23 +20,25 @@ import { fetchReport } from './fetcher.js';
 import { renderTemplate } from './renderer.js';
 import { renderErrorPage, logError } from './error-handler.js';
 import {
-  buildAuthorizationUrl,
-  parseCallback,
-  exchangeCodeForToken,
-  isAuthenticated,
-  fetchUserProfile,
-  getToken,
-  logout
-} from './oauth-handler.js';
-import { submitRepository, validateRepositoryInput } from './repo-submission.js';
+  submitRepository,
+  validateRepositoryInput,
+  platformLabel,
+  DEFAULT_SUBMISSION_TARGET
+} from './repo-submission.js';
 
-// The GitHub OAuth Client ID is deployment-specific and configured via the
-// <meta name="oauth-client-id"> tag in index.html.
-function getOAuthClientId() {
-  return document.querySelector('meta[name="oauth-client-id"]')?.content?.trim() || '';
-}
-const OAUTH_SCOPES = ['public_repo', 'read:user'];
 const FEATURED_COUNT = 6;
+
+// Deployment configuration via meta tags in index.html:
+// - submission-target: the "<owner>/<listing repo>" issue destination.
+// - platform-base-url: API/web base URL (self-managed GitLab only).
+function getSubmissionTarget() {
+  return document.querySelector('meta[name="submission-target"]')?.content?.trim()
+    || DEFAULT_SUBMISSION_TARGET;
+}
+
+function getPlatformBaseUrl() {
+  return document.querySelector('meta[name="platform-base-url"]')?.content?.trim() || undefined;
+}
 
 // Built-in fallback page fragments used when the HTML templates in
 // /templates cannot be loaded (e.g. file:// testing or network failure).
@@ -83,7 +85,9 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
   const environment = hostEnvironment || detectHostingEnvironment(location.hostname);
 
   const navigate = onNavigate || navigateTo;
-  const externalRedirect = onExternalRedirect || (url => { location.assign(url); });
+  // Successful submissions open the pre-filled issue in a new tab.
+  const externalRedirect = onExternalRedirect
+    || (url => { window.open(url, '_blank', 'noopener,noreferrer'); });
   const pending = new Set();
   let repositoriesPromise = null;
 
@@ -151,7 +155,11 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
         .then(res => (res.ok ? res.text() : null))
         .catch(() => null);
       const { data, template, branch: resolvedBranch } =
-        await fetchReport(username, repository, branch, { fallbackTemplate });
+        await fetchReport(username, repository, branch, {
+          fallbackTemplate,
+          environment,
+          baseUrl: getPlatformBaseUrl()
+        });
       root.innerHTML = renderTemplate(template, data);
       root.dataset.resolvedBranch = resolvedBranch;
     } catch (error) {
@@ -160,37 +168,15 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
     }
   }
 
-  function renderLogin() {
-    root.innerHTML = `
-      <section class="login-required">
-        <h1>Add Your Repository</h1>
-        <p>Sign in with GitHub to add your repository to the RefactorFirst listing.
-           We request <code>public_repo</code> and <code>read:user</code> permissions so we can
-           verify that you have access to the repository you are submitting.</p>
-        <button id="login-github" type="button">Login with GitHub</button>
-      </section>`;
-    root.querySelector('#login-github').addEventListener('click', () => {
-      track(
-        buildAuthorizationUrl({
-          clientId: getOAuthClientId(),
-          redirectUri: `${location.origin}/add-repo/callback`,
-          scopes: OAUTH_SCOPES
-        }).then(url => externalRedirect(url))
-      );
-    });
-  }
-
-  function renderSubmissionForm(profile) {
+  function renderSubmissionForm() {
+    const label = platformLabel(environment);
     root.innerHTML = `
       <section class="add-repo-page">
         <h1>Add Your Repository</h1>
-        <div class="user-info">
-          <img class="user-avatar" src="${escapeHtml(profile.avatarUrl)}" alt="" width="40" height="40">
-          <span>Signed in as <strong>${escapeHtml(profile.username)}</strong></span>
-          <button id="logout" type="button">Log out</button>
-        </div>
         <p class="info">Only repositories with a <code>.refactorfirst/refactor-first.json</code>
-           file will be added. The RefactorFirst GitHub Page redeploys every 10 minutes.</p>
+           file can be added. After the check, a pre-filled ${label} issue opens in a new
+           tab &mdash; submit it there and your ${label} account will be recorded as the
+           submitter. No login or tokens are needed on this site.</p>
         <form id="repo-form" novalidate>
           <label for="repo-owner">User/Organization Name</label>
           <input id="repo-owner" name="owner" type="text" required autocomplete="off">
@@ -200,11 +186,6 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
         </form>
         <p class="form-status" role="status" aria-live="polite"></p>
       </section>`;
-
-    root.querySelector('#logout').addEventListener('click', () => {
-      logout();
-      navigate('/add-repo');
-    });
 
     root.querySelector('#repo-form').addEventListener('submit', event => {
       event.preventDefault();
@@ -225,10 +206,23 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
       button.disabled = true;
       status.textContent = 'Validating repository...';
       track(
-        submitRepository({ owner, repo }, profile.username, getToken())
+        submitRepository({ owner, repo }, {
+          environment,
+          baseUrl: getPlatformBaseUrl(),
+          target: getSubmissionTarget()
+        })
           .then(result => {
-            status.textContent = result.message;
             status.classList.add(result.success ? 'success' : 'error');
+            if (result.success && result.issueUrl) {
+              // Popup blockers may swallow window.open after async work, so
+              // the status message always carries the clickable issue link.
+              status.innerHTML =
+                `${escapeHtml(result.message)} <a class="cta" href="${escapeHtml(result.issueUrl)}" ` +
+                `target="_blank" rel="noopener noreferrer">Continue on ${escapeHtml(platformLabel(environment))}</a>`;
+              externalRedirect(result.issueUrl);
+            } else {
+              status.textContent = result.message;
+            }
           })
           .catch(error => {
             status.textContent = error.message;
@@ -240,34 +234,7 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
   }
 
   async function renderAddRepo() {
-    if (!isAuthenticated()) {
-      renderLogin();
-      return;
-    }
-    try {
-      const profile = await fetchUserProfile();
-      renderSubmissionForm(profile);
-    } catch (error) {
-      logError(error, { route: 'add-repo' });
-      renderErrorPage(root, error);
-    }
-  }
-
-  async function renderOAuthCallback() {
-    try {
-      const { code } = parseCallback(location.search);
-      const codeVerifier = sessionStorage.getItem('oauth_code_verifier');
-      await exchangeCodeForToken({
-        code,
-        codeVerifier,
-        clientId: getOAuthClientId(),
-        redirectUri: `${location.origin}/add-repo/callback`
-      });
-      navigate('/add-repo');
-    } catch (error) {
-      logError(error, { route: 'oauth-callback' });
-      renderErrorPage(root, error);
-    }
+    renderSubmissionForm();
   }
 
   // Load the CI sample matching the hosting environment into the
@@ -309,8 +276,6 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
         return renderStaticPage(route.page);
       case 'add-repo':
         return renderAddRepo();
-      case 'oauth-callback':
-        return renderOAuthCallback();
       default:
         return renderErrorPage(root, Object.assign(new Error('Page not found'), { status: 404 }));
     }
@@ -334,7 +299,7 @@ export function initApp() {
     console.error('Root element #app not found');
     return;
   }
-  
+
   const app = createApp({ root });
 
   // Top-menu search
