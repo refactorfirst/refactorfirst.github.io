@@ -1,20 +1,73 @@
 import { test, expect } from '@playwright/test';
 
+// Real RefactorFirst report schema (see tests/fixtures/junit4-report.json
+// for a full-size sample published by the plugin).
 const SAMPLE_REPORT = {
-  projectName: 'refactorfirst',
-  version: '0.5.1',
-  totalClasses: 150,
-  classesToRefactor: 2,
-  priorities: [
+  project: {
+    name: 'refactorfirst',
+    version: '0.5.1',
+    repoUrl: 'https://github.com/refactorfirst/refactorfirst',
+    scanTimestamp: '9/9/26, 8:06 PM',
+    hasAnyDisharmony: true
+  },
+  classMap: {
+    graphId: 'classGraph',
+    classCount: 3,
+    relationshipCount: 2,
+    dotThreshold: 4000,
+    dotThresholdExceeded: false,
+    dot: 'strict digraph G {\nGitLogReader -> CostBenefitCalculator [ label = "2" weight = "2" ];\nGitLogReader -> GitLogEntry [ label = "1" weight = "1" ];\n}',
+    hasEdges: true
+  },
+  packageMap: {
+    graphId: 'packageGraph',
+    classCount: 2,
+    relationshipCount: 1,
+    dotThreshold: 4000,
+    dotThresholdExceeded: false,
+    dot: 'strict digraph G {\ngit -> cbc [ label = "1" weight = "1" ];\n}',
+    hasEdges: true
+  },
+  classRelationshipsToRemove: {
+    cycleCount: 0, relationshipsToRemoveCount: 0, hasRelationships: false, relationships: []
+  },
+  packageRelationshipsToRemove: {
+    cycleCount: 0, relationshipsToRemoveCount: 0, hasRelationships: false, relationships: []
+  },
+  hasDisharmonies: true,
+  disharmonies: [
     {
-      rank: 1,
-      className: 'org.hjug.git.GitLogReader',
-      priority: 'HIGH',
-      effort: '3',
-      disharmonies: ['God Class'],
-      recommendation: 'Break into smaller classes.'
+      type: 'God Class',
+      anchorId: 'GOD',
+      title: 'God Classes',
+      methodLevel: false,
+      problem: 'God Classes take on too much responsibility,',
+      solution: 'Extract related islands of functionality into separate classes.',
+      maxPriority: 2,
+      chart: {
+        canvasId: 'chart_GOD',
+        bubbles: [
+          {
+            id: 'GitLogReader.java', label: 'GitLogReader.java', x: 1, y: 2, r: 24,
+            priority: 1, effortRank: 1, changePronenessRank: 2,
+            color: 'rgba(235, 64, 52, 0.75)', borderColor: 'rgb(235, 64, 52)'
+          }
+        ],
+        xaxisLabel: 'Effort to refactor',
+        yaxisLabel: 'Relative churn (impact)'
+      },
+      table: {
+        headers: ['Class', 'Priority'],
+        rows: [
+          { cells: [
+            { content: '<code>org.hjug.git.GitLogReader</code>', align: 'left' },
+            { content: '1', align: 'right' }
+          ] }
+        ]
+      }
     }
-  ]
+  ],
+  classCycles: { hasCycles: false, summary: [], largestCycle: { hasCycleMap: false } }
 };
 
 test.beforeEach(async ({ page }) => {
@@ -52,11 +105,15 @@ test('search navigates to a repository report', async ({ page }) => {
   await expect(page.locator('#app')).toContainText('refactorfirst');
 });
 
-test('report renders from repository JSON with fallback template', async ({ page }) => {
+test('report renders all sections from repository JSON with fallback template', async ({ page }) => {
   await page.goto('/refactorfirst/refactorfirst');
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('h1')).toContainText('refactorfirst');
+  await expect(page.locator('h1').first()).toContainText('RefactorFirst Report for refactorfirst 0.5.1');
+  await expect(page.locator('a#CLASSMAP')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'God Classes', level: 1 })).toBeVisible();
+  await expect(page.locator('canvas#chart_GOD')).toBeAttached();
   await expect(page.locator('text=org.hjug.git.GitLogReader')).toBeVisible();
+  await expect(page.locator('#publishDate')).toContainText('Last Published:');
 });
 
 test('branch fallback shows report from master', async ({ page }) => {
@@ -76,7 +133,7 @@ test('branch fallback shows report from master', async ({ page }) => {
 
   await page.goto('/refactorfirst/refactorfirst');
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('h1')).toContainText('refactorfirst');
+  await expect(page.locator('h1').first()).toContainText('refactorfirst');
   expect(requested.some(u => u.includes('/main/'))).toBe(true);
   expect(requested.some(u => u.includes('/master/'))).toBe(true);
 });
@@ -158,6 +215,39 @@ test('submission of a repository without a report shows an error', async ({ page
   await page.fill('#repo-name', 'nope');
   await page.click('button[type="submit"]');
   await expect(page.locator('.form-status')).toContainText('Repository not found');
+});
+
+test('interactive popup buttons work without inline handlers', async ({ page }) => {
+  await page.goto('/refactorfirst/refactorfirst');
+  await page.waitForLoadState('networkidle');
+  const overlay = page.locator('#overlay');
+  await expect(overlay).toBeHidden();
+  await page.getByRole('button', { name: 'Show classGraph 2D' }).click();
+  await expect(overlay).toBeVisible();
+  await page.locator('#popup-classGraph .close-btn').click();
+  await expect(overlay).toBeHidden();
+});
+
+test('malicious report data cannot inject scripts or handlers', async ({ page }) => {
+  const poisoned = JSON.parse(JSON.stringify(SAMPLE_REPORT));
+  poisoned.disharmonies[0].solution =
+    '<img src=x onerror="window.__xss=1"><script>window.__xss2=1</script>';
+  await page.unroute('**/raw.githubusercontent.com/**');
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    const url = route.request().url();
+    if (url.endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(poisoned) });
+    } else {
+      route.fulfill({ status: 404 });
+    }
+  });
+
+  await page.goto('/refactorfirst/refactorfirst');
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByRole('heading', { name: 'God Classes', level: 1 })).toBeVisible();
+  await expect(page.locator('img[onerror]')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+  expect(await page.evaluate(() => window.__xss2)).toBeUndefined();
 });
 
 test('top menu height stays within 140px', async ({ page }) => {

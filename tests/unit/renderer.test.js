@@ -63,3 +63,47 @@ describe('Mustache Rendering', () => {
     expect(typeof mustache.render).toBe('function');
   })
 })
+
+describe('templating safety (repository-provided templates are untrusted)', () => {
+  it('strips template-provided script tags from the output', () => {
+    const html = renderTemplate(
+      '<section>{{name}}<script>window.__xss = 1</script></section>',
+      { name: 'demo' }
+    );
+    expect(html).not.toContain('<script>');
+  });
+
+  it('strips inline event handlers from template markup', () => {
+    const html = renderTemplate(
+      '<button onclick="window.__xss=1" data-x="y">Go</button>',
+      {}
+    );
+    expect(html).not.toContain('onclick=');
+    expect(html).toContain('data-x="y"');
+    expect(html).toContain('<button');
+  });
+
+  it('sanitizes triple-mustache data values too', () => {
+    const html = renderTemplate('<div>{{{content}}}</div>', {
+      content: '<img src=x onerror="window.__xss = 1">'
+    });
+    expect(html).not.toContain('onerror');
+    expect(html).toContain('<img');
+  });
+
+  it('keeps benign structure, style attributes and data attributes intact', () => {
+    const html = renderTemplate(
+      '<div id="popup-classGraph" style="width: 100%;"><span class="close-btn">&times;</span></div>',
+      {}
+    );
+    expect(html).toContain('id="popup-classGraph"');
+    expect(html).toContain('style="width: 100%;');
+    expect(html).toContain('class="close-btn"');
+  });
+
+  it('still renders the real report template to non-empty HTML', () => {
+    const html = renderTemplate('<p>{{project.name}} {{project.version}}</p>',
+      { project: { name: 'JUnit', version: '1.0' } });
+    expect(html).toBe('<p>JUnit 1.0</p>');
+  });
+});

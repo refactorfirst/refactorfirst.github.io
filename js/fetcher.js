@@ -3,7 +3,6 @@
 // GitLab or Bitbucket); URL construction depends on that environment.
 
 const REPORT_PATH = '.refactorfirst/refactor-first.json';
-const TEMPLATE_PATH = '.refactorfirst/refactor-first-report.mustache';
 
 const PLATFORM_BUILDERS = {
   github: {
@@ -32,11 +31,6 @@ export function constructRawUrl(username, repository, branch, options = {}) {
   return buildRaw(username, repository, branch, REPORT_PATH, base);
 }
 
-export function constructTemplateUrl(username, repository, branch, options = {}) {
-  const { buildRaw, base } = platformConfig(options);
-  return buildRaw(username, repository, branch, TEMPLATE_PATH, base);
-}
-
 export async function fetchJson(username, repository, branch, options = {}) {
   const url = constructRawUrl(username, repository, branch, options);
   const response = await fetch(url, {
@@ -56,25 +50,6 @@ export async function fetchJson(username, repository, branch, options = {}) {
   }
 
   return response.json();
-}
-
-export async function fetchTemplate(username, repository, branch, fallbackTemplate = null, options = {}) {
-  const url = constructTemplateUrl(username, repository, branch, options);
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'text/plain'
-      }
-    });
-    if (!response.ok) {
-      if (fallbackTemplate) return fallbackTemplate;
-      throw new Error(`Failed to fetch template: ${response.status} ${response.statusText}`);
-    }
-    return await response.text();
-  } catch (error) {
-    if (fallbackTemplate) return fallbackTemplate;
-    throw error;
-  }
 }
 
 // Fetch with retry + exponential backoff for transient network/server errors.
@@ -118,14 +93,12 @@ function getDefaultBranchName() {
   return 'main';
 }
 
-// Fetch both the report JSON and the Mustache template for a repository,
-// applying branch fallback logic and the bundled fallback template.
-export async function fetchReport(username, repository, branch = 'main',
-  { fallbackTemplate = null, environment, baseUrl } = {}) {
-  const options = { environment, baseUrl };
+// Fetch the report JSON for a repository, applying branch fallback logic.
+// The Mustache template is NOT fetched from the repository: templates are
+// untrusted content, so the app always renders with its own bundled
+// assets/refactor-first-report.mustache. Repositories only supply data.
+export async function fetchReport(username, repository, branch = 'main', options = {}) {
   const { data, branch: resolvedBranch } =
     await fetchJsonWithFallback(username, repository, branch, options);
-  const template =
-    await fetchTemplate(username, repository, resolvedBranch, fallbackTemplate, options);
-  return { data, template, branch: resolvedBranch };
+  return { data, branch: resolvedBranch };
 }

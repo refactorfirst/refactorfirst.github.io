@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Note: frame-ancestors is intentionally served via HTTP header (it is
+       ignored in a meta element). Platform deployment docs list the header. -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' https://avatars.githubusercontent.com data:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; frame-ancestors 'none'; base-uri 'self';">
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh https://buttons.github.io 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' https://avatars.githubusercontent.com https://buttons.github.io https://github.githubassets.com data:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.sh; base-uri 'self';">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <!-- Repository submissions open an issue in this "<owner>/<repo>" project.
        Self-managed GitLab deployments can also set a platform-base-url meta. -->
@@ -13,6 +15,15 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mvp.css@1.15.0/mvp.css">
   <link rel="stylesheet" href="/css/main.css">
   <link rel="stylesheet" href="/css/components.css">
+  <!-- Report rendering dependencies (used on /user/repo report pages).
+       mustache + DOMPurify are vendored in assets/vendor/; the CDN scripts
+       below power the interactive report widgets. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.4/dist/graphlib-dot.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/3d-force-graph"></script>
 </head>
 <body>
   <a class="skip-link" href="#app">Skip to content</a>

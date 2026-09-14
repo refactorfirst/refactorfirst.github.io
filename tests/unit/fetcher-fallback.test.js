@@ -43,29 +43,28 @@ describe('fetchJsonWithFallback (branch fallback)', () => {
   });
 });
 
-describe('fetchReport (JSON + template with fallback)', () => {
+describe('fetchReport (report JSON only; the bundled template is authoritative)', () => {
   let mockFetch;
   beforeEach(() => { mockFetch = spyOn(global, 'fetch'); });
   afterEach(() => mockFetch.mockRestore());
 
-  it('returns data, template and the resolved branch', async () => {
+  it('returns data and the resolved branch', async () => {
     mockFetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ x: 1 }) })
-      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('<h1>{{name}}</h1>') });
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ x: 1 }) });
 
     const report = await fetchReport('u', 'r', 'main');
     expect(report.data).toEqual({ x: 1 });
-    expect(report.template).toBe('<h1>{{name}}</h1>');
     expect(report.branch).toBe('main');
   });
 
-  it('uses the fallback template when the repo has none', async () => {
+  it('never requests a template from the repository', async () => {
     mockFetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ x: 1 }) })
-      .mockResolvedValueOnce({ ok: false, status: 404 });
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve({ x: 1 }) });
 
-    const report = await fetchReport('u', 'r', 'main', { fallbackTemplate: '<em>default</em>' });
-    expect(report.template).toBe('<em>default</em>');
+    await fetchReport('u', 'r', 'main');
+    expect(
+      mockFetch.mock.calls.some(c => String(c[0]).endsWith('.refactorfirst/refactor-first-report.mustache'))
+    ).toBe(false);
   });
 });
 

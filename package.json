@@ -1,8 +1,16 @@
 {
   "name": "refactorfirst-page",
   "version": "1.0.0",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@sentry/browser": "^7.80.0",
+    "eslint": "^8.55.0",
+    "jsdom": "^23.0.0"
+  },
   "description": "RefactorFirst GitHub Pages Application",
-  "type": "module",
+  "engines": {
+    "bun": ">=1.0.0"
+  },
   "scripts": {
     "test": "bun test tests/unit tests/integration",
     "test:watch": "bun test --watch tests/unit tests/integration",
@@ -12,16 +20,5 @@
     "lint": "eslint js/**/*.js tests/**/*.js",
     "lint:fix": "eslint js/**/*.js tests/**/*.js --fix"
   },
-  "devDependencies": {
-    "@playwright/test": "^1.40.0",
-    "@sentry/browser": "^7.80.0",
-    "eslint": "^8.55.0",
-    "jsdom": "^23.0.0"
-  },
-  "dependencies": {
-    "mustache": "^4.2.0"
-  },
-  "engines": {
-    "bun": ">=1.0.0"
-  }
+  "type": "module"
 }

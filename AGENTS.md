@@ -76,6 +76,7 @@ tests/                        # unit/ (Bun), integration/ (Bun), e2e/ (Playwrigh
 | `js/renderer.js` | Mustache rendering |
 | `js/search.js` | Search / type-ahead functionality |
 | `js/repo-submission.js` | Submission flow: validation, report check, per-platform issue URLs |
+| `js/report-view.js` | Interactive report widgets: DOT popups (Sigma/3D), Chart.js bubbles, vizdom WASM graphs |
 | `js/error-handler.js` | Error page rendering |
 | `js/utils.js` | Utility functions, environment detection |
 | `js/main.js` | Application entry point |
@@ -128,6 +129,8 @@ See README.md for detailed deployment instructions for each platform.
 
 - The `<meta name="submission-target">` tag in `index.html` points submissions at the listing project; self-managed GitLab deployments add `<meta name="platform-base-url">`
 - Deployments must extend the CSP `connect-src` with the platform endpoints they use (`api.gitlab.com`/custom base, `api.bitbucket.org`, ...)
+- Report rendering loads CDN libs (Chart.js, sigma/graphology, graphlib-dot, svg-pan-zoom, 3d-force-graph, vizdom WASM) — keep CSP `script-src`/`connect-src` entries (`cdn.jsdelivr.net`, `cdnjs.cloudflare.com`, `esm.sh`, `buttons.github.io`, `wasm-unsafe-eval`) when tightening the policy
+- `assets/refactor-first-report.mustache` is a port of the RefactorFirst viewer template — keep it in sync with upstream
 - For GitHub Enterprise Server, update API/raw endpoints in `js/repo-submission.js`, `js/fetcher.js`, and `ci/process-submissions.sh`
 - Deep links require `404.html` copy of `index.html` for proper client-side routing on some platforms
 - Reports are fetched client-side — end users' browsers must reach GitHub/raw endpoints

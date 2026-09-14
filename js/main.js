@@ -18,6 +18,7 @@ import {
 } from './utils.js';
 import { fetchReport } from './fetcher.js';
 import { renderTemplate } from './renderer.js';
+import { enhanceReport } from './report-view.js';
 import { renderErrorPage, logError } from './error-handler.js';
 import {
   submitRepository,
@@ -151,17 +152,24 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
   async function renderReport({ username, repository, branch }) {
     root.innerHTML = '<p class="loading" role="status">Loading report&hellip;</p>';
     try {
-      const fallbackTemplate = await fetch('/assets/refactor-first-report.mustache')
+      // The bundled template is authoritative — repository-provided templates
+      // are untrusted and intentionally never fetched.
+      const template = await fetch('/assets/refactor-first-report.mustache')
         .then(res => (res.ok ? res.text() : null))
         .catch(() => null);
-      const { data, template, branch: resolvedBranch } =
+      if (!template) {
+        const error = new Error('Report template could not be loaded');
+        error.status = 500;
+        throw error;
+      }
+      const { data, branch: resolvedBranch } =
         await fetchReport(username, repository, branch, {
-          fallbackTemplate,
           environment,
           baseUrl: getPlatformBaseUrl()
         });
       root.innerHTML = renderTemplate(template, data);
       root.dataset.resolvedBranch = resolvedBranch;
+      track(enhanceReport(root, data));
     } catch (error) {
       logError(error, { route: 'report', username, repository, branch });
       renderErrorPage(root, error, { onRetry: () => track(renderReport({ username, repository, branch })) });

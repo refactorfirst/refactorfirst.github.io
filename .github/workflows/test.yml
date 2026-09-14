@@ -15,6 +15,11 @@ jobs:
       - run: shellcheck ci/process-submissions.sh
 
   e2e-tests:
+    # Matrix execution: one runner per browser so the suites run in parallel.
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,11 +27,11 @@ jobs:
         with:
           bun-version: latest
       - run: bun install
-      - run: bunx playwright install --with-deps
-      - run: bunx playwright test
+      - run: bunx playwright install --with-deps ${{ matrix.browser }}
+      - run: bunx playwright test --project=${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.browser }}
           path: playwright-report/
           retention-days: 7

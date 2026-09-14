@@ -7,8 +7,12 @@ code, no database, no build step — HTML, CSS and ES6 JavaScript modules served
 static files.
 
 - **Search** over a curated listing of repositories (`repositories.txt`)
-- **Reports** rendered with Mustache.js from raw GitHub content, with `main` → `master`
-  branch fallback
+- **Reports** rendered with Mustache.js from raw platform content, with `main` → `master`
+  branch fallback — the same report the
+  [RefactorFirst report viewer](https://github.com/RefactorFirst/RefactorFirst) produces:
+  class/package maps (vizdom WASM SVGs with pan/zoom, plus Sigma 2D and 3D force-graph
+  popups), relationship-removal priority tables, Chart.js disharmony bubble charts and
+  class cycle summaries
 - **Repository submission** via a pre-filled issue on the hosting platform
   (no login, apps or tokens on this site): your platform account is captured as
   the issue author and validated server-side by the platform's CI
@@ -388,7 +392,8 @@ domain hosting the GitLab variant), pass `hostEnvironment: 'gitlab'` to
 |---|---|
 | URL routes | `js/router.js` (+ `tests/unit/router-ext.test.js`) |
 | Raw fetching / branch fallback (platform-aware) | `js/fetcher.js` |
-| Mustache rendering | `js/renderer.js`, `assets/refactor-first-report.mustache` |
+| Mustache rendering | `js/renderer.js`, `assets/refactor-first-report.mustache` (port of the RefactorFirst viewer template) |
+| Interactive report widgets | `js/report-view.js` (+ CDN libs declared in `index.html`: Chart.js, sigma/graphology, graphlib-dot, svg-pan-zoom, 3d-force-graph, vizdom WASM) |
 | Search / type-ahead | `js/search.js` |
 | Submission flow | `js/repo-submission.js`, `js/main.js` (`renderAddRepo`) |
 | Submission validation (CI) | `ci/process-submissions.sh`, `.github/workflows/add-repository.yml`, `.gitlab-ci.yml`, `bitbucket-pipelines.yml` |
@@ -408,9 +413,9 @@ on every push and pull request. Keep it green before merging.
 ## Testing
 
 - **Unit** (`tests/unit/`): router, fetcher (incl. branch fallback, retry and
-  per-platform URL construction), renderer, search, repo-submission (incl.
-  report-file existence check and per-platform issue URLs), error-handler,
-  rate-limiter, cache-manager, utils.
+  per-platform URL construction), renderer, report-view (charts/graphs/popups),
+  search, repo-submission (incl. report-file existence check and per-platform
+  issue URLs), error-handler, rate-limiter, cache-manager, utils.
 - **Integration** (`tests/integration/`): search flow, submission flow (missing
   report, unknown repo, per-platform issue redirect), report rendering.
 - **E2E** (`tests/e2e/`): user journeys (incl. the submission → pre-filled

@@ -4,6 +4,9 @@
 #top-menu {
   background: var(--surface-color);
   border-bottom: 1px solid #dde4ea;
+  /* mvp.css adds generous header padding; reset it so max-height bounds the
+     whole rendered box (padding contributes outside max-height). */
+  padding: 0;
   max-height: var(--menu-max-height);
 }
 
