@@ -344,6 +344,7 @@ bun install            # install devDependencies (mustache, jsdom, playwright, e
 ```bash
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
+When making changes to the site locally, you may need to clear the cache to see your changes.  Alternatively, you can disable caching in your browser.
 
 ### Test-driven development (mandatory)
 

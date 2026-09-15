@@ -36,10 +36,11 @@ body {
 }
 
 main {
-  max-width: 1000px;
+  max-width: min(3840px, 95vw);
   margin: 0 auto;
   padding: 1rem 1.5rem 3rem;
   min-height: 60vh;
+
 }
 
 main:focus {

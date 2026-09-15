@@ -7,7 +7,7 @@ const REPORT_PATH = '.refactorfirst/refactor-first.json';
 const PLATFORM_BUILDERS = {
   github: {
     raw: (user, repo, branch, path) =>
-      `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${path}`
+      `https://raw.githubusercontent.com/${user}/${repo}/refs/heads/${branch}/${path}`
   },
   gitlab: {
     defaultBase: 'https://gitlab.com',
