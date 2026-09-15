@@ -60,7 +60,7 @@ describe('Repository submission flow integration', () => {
       if (requested.endsWith('api.github.com/repos/octocat/hello-world')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ default_branch: 'main' }) });
       }
-      if (requested.includes('raw.githubusercontent.com/octocat/hello-world/main/')) {
+      if (requested.includes('raw.githubusercontent.com/octocat/hello-world/refs/heads/main/')) {
         return Promise.resolve({ ok: true });
       }
       return Promise.resolve({ ok: false, status: 404 });
