@@ -5,8 +5,11 @@ import {
   reposForUser,
   sortByRepository,
   renderPaginationControls,
-  detectHostingEnvironment
+  detectHostingEnvironment as detectHostingEnvironmentUtil
 } from '../../js/utils.js';
+
+// Alias for test clarity
+const detectHostingEnvironment = detectHostingEnvironmentUtil;
 
 describe('escapeHtml', () => {
   it('escapes HTML special characters', () => {
@@ -125,6 +128,12 @@ describe('detectHostingEnvironment', () => {
     expect(detectHostingEnvironment('127.0.0.1')).toBe('github');
     expect(detectHostingEnvironment('reports.example.com')).toBe('github');
     expect(detectHostingEnvironment('')).toBe('github');
+  });
+
+  it('respects explicit platform setting over hostname detection', () => {
+    expect(detectHostingEnvironment('localhost', 'gitlab')).toBe('gitlab');
+    expect(detectHostingEnvironment('my-custom-domain.com', 'bitbucket')).toBe('bitbucket');
+    expect(detectHostingEnvironment('gitlab.example.com', 'github')).toBe('github');
   });
 });
 

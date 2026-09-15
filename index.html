@@ -6,7 +6,7 @@
   <!-- Note: frame-ancestors is intentionally served via HTTP header (it is
        ignored in a meta element). Platform deployment docs list the header. -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh https://buttons.github.io 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' https://avatars.githubusercontent.com https://buttons.github.io https://github.githubassets.com data:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.sh; base-uri 'self';">
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh https://buttons.github.io 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' https://avatars.githubusercontent.com https://buttons.github.io https://github.githubassets.com data:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.sh https://gitlab.com https://api.gitlab.com https://bitbucket.org https://api.bitbucket.org; base-uri 'self';">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <!-- Repository submissions open an issue in this "<owner>/<repo>" project.
        Self-managed GitLab deployments can also set a platform-base-url meta. -->

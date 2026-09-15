@@ -47,7 +47,27 @@ export function paginate(items, page = 1, perPage = REPOSITORIES_PER_PAGE) {
 
 // Detect which hosting environment the site is deployed to from the hostname,
 // so documentation can show the relevant CI sample only.
-export function detectHostingEnvironment(hostname) {
+export function detectHostingEnvironment(hostname, explicitPlatform) {
+  // First check for explicit platform setting from deployment metadata
+  if (typeof document !== 'undefined') {
+    const platformMeta = document.querySelector('meta[name="platform"]');
+    if (platformMeta && platformMeta.content) {
+      const platform = String(platformMeta.content).toLowerCase();
+      if (['github', 'gitlab', 'bitbucket'].includes(platform)) {
+        return platform;
+      }
+    }
+  }
+
+  // Check explicit platform parameter (for testing)
+  if (explicitPlatform) {
+    const platform = String(explicitPlatform).toLowerCase();
+    if (['github', 'gitlab', 'bitbucket'].includes(platform)) {
+      return platform;
+    }
+  }
+
+  // Fallback to hostname detection
   const host = String(hostname || '').toLowerCase();
   if (host.endsWith('.gitlab.io') || host.split('.').includes('gitlab')) {
     return 'gitlab';

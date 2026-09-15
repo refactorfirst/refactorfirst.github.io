@@ -13,6 +13,8 @@ on:
 jobs:
   generate-report:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,7 +27,7 @@ jobs:
           cache: 'maven'
 
       - name: Generate RefactorFirst report
-        run: mvn refactorfirst:jsonReport
+        run: mvn org.hjug.refactorfirst.plugin:refactor-first-maven-plugin:0.10.0:jsonReport
 
       - name: Commit report
         run: |
@@ -36,5 +38,3 @@ jobs:
             git diff --staged --quiet || git commit -m "Update RefactorFirst report"
             git push
           fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

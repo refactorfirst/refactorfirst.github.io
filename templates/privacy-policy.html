@@ -10,8 +10,10 @@
      (GitHub, GitLab or Bitbucket). Your platform username (the issue author)
      and the repository name are recorded in the public
      <code>repositories.txt</code> file, the public issue and CI logs for
-     auditing. The validation job only reads data a visitor could already see
-     publicly (repository existence, report file, membership/permission API).</p>
+     auditing. The validation job uses platform credentials to verify that
+     you have write access to the submitted repository by checking membership
+     and permission status via the platform API. This check is performed by the
+     CI system and the results are retained in CI logs and issue comments.</p>
 
   <h2>Cookies</h2>
   <p>This site does not use cookies.</p>

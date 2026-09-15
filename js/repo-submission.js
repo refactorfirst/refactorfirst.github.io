@@ -89,7 +89,11 @@ export async function checkReportExists(owner, repo, options = {}) {
 
   const infoResponse = await fetch(repositoryInfoUrl(owner, repo, { environment, baseUrl }));
   if (!infoResponse.ok) {
-    return { exists: false, message: 'Repository not found or inaccessible' };
+    if (infoResponse.status === 404) {
+      return { exists: false, message: 'Repository not found or inaccessible' };
+    }
+    // Propagate other status codes so the user can retry
+    throw new Error(`Repository check failed with status ${infoResponse.status}`);
   }
 
   const info = await infoResponse.json().catch(() => ({}));
@@ -104,6 +108,11 @@ export async function checkReportExists(owner, repo, options = {}) {
     if (rawResponse.ok) {
       return { exists: true, branch };
     }
+    if (rawResponse.status === 404) {
+      continue; // Try next branch on 404
+    }
+    // Propagate other status codes so the user can retry
+    throw new Error(`Report check failed with status ${rawResponse.status}`);
   }
 
   return { exists: false, message: REPORT_MISSING_MESSAGE };

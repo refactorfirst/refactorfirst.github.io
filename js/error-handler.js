@@ -9,8 +9,8 @@ const ERROR_INFO = {
     suggestion: 'Check that the repository exists and contains a .refactorfirst/refactor-first.json file on the requested branch.'
   },
   'rate-limit': {
-    title: 'GitHub API Rate Limit Reached',
-    suggestion: 'Too many requests were made to the GitHub API. Please wait a few minutes and try again.'
+    title: 'Hosting Platform API Rate Limit Reached',
+    suggestion: 'Too many requests were made to the hosting platform API. Please wait a few minutes and try again.'
   },
   'network': {
     title: 'Network Error',
@@ -21,8 +21,8 @@ const ERROR_INFO = {
     suggestion: 'The report template could not be loaded or rendered. The repository may use an incompatible template.'
   },
   'api': {
-    title: 'GitHub API Error',
-    suggestion: 'The GitHub API returned an unexpected error. Please try again later.'
+    title: 'Hosting Platform API Error',
+    suggestion: 'The hosting platform API returned an unexpected error. Please try again later.'
   },
   'general': {
     title: 'Something Went Wrong',

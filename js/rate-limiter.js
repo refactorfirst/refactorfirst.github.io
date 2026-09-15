@@ -1,4 +1,4 @@
-// Rate limiting: track GitHub API limits via response headers and
+// Rate limiting: track hosting platform API limits via response headers and
 // prevent abuse of the repository submission form.
 
 export class ApiRateLimiter {
@@ -7,7 +7,7 @@ export class ApiRateLimiter {
     this.resetEpochSeconds = null;
   }
 
-  // Record X-RateLimit-* style headers from a GitHub API response.
+  // Record X-RateLimit-* style headers from a hosting platform API response.
   recordResponse({ remaining, resetEpochSeconds }) {
     this.remainingCount = remaining;
     this.resetEpochSeconds = resetEpochSeconds;

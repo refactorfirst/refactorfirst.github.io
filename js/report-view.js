@@ -151,7 +151,12 @@ export async function createForceGraph(popupId, containerName, dot) {
     const nodes = [];
     const links = [];
     graphlibGraph.nodes().forEach(node => {
-        nodes.push({id: node, color: graphlibGraph.node(node).color || 'white'});
+        nodes.push({
+            id: node,
+            color: graphlibGraph.node(node).color || 'white',
+            neighbors: [],
+            links: []
+        });
     });
     graphlibGraph.edges().forEach(edge => {
         links.push({
@@ -165,12 +170,8 @@ export async function createForceGraph(popupId, containerName, dot) {
     gData.links.forEach(link => {
         const a = gData.nodes.find(node => node.id === link.source);
         const b = gData.nodes.find(node => node.id === link.target);
-        if (!a.neighbors) a.neighbors = [];
-        if (!b.neighbors) b.neighbors = [];
         a.neighbors.push(b);
         b.neighbors.push(a);
-        if (!a.links) a.links = [];
-        if (!b.links) b.links = [];
         a.links.push(link);
         b.links.push(link);
     });

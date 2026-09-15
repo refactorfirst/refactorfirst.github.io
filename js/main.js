@@ -14,7 +14,7 @@ import {
   reposForUser,
   sortByRepository,
   renderPaginationControls,
-  detectHostingEnvironment
+  detectHostingEnvironment as detectHostingEnvironmentUtil
 } from './utils.js';
 import { fetchReport } from './fetcher.js';
 import { renderTemplate } from './renderer.js';
@@ -83,7 +83,7 @@ function fetchText(url) {
 export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironment } = {}) {
   if (!root) throw new Error('createApp requires a root element');
 
-  const environment = hostEnvironment || detectHostingEnvironment(location.hostname);
+  const environment = hostEnvironment || detectHostingEnvironmentUtil(location.hostname);
 
   const navigate = onNavigate || navigateTo;
   // Successful submissions open the pre-filled issue in a new tab.
@@ -91,6 +91,7 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
     || (url => { window.open(url, '_blank', 'noopener,noreferrer'); });
   const pending = new Set();
   let repositoriesPromise = null;
+  let currentRouteToken = 0;
 
   function loadRepositories() {
     repositoriesPromise ||= fetchText('/repositories.txt').then(parseRepositories);
@@ -150,6 +151,7 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
   }
 
   async function renderReport({ username, repository, branch }) {
+    const routeToken = ++currentRouteToken;
     root.innerHTML = '<p class="loading" role="status">Loading report&hellip;</p>';
     try {
       // The bundled template is authoritative — repository-provided templates
@@ -167,10 +169,14 @@ export function createApp({ root, onNavigate, onExternalRedirect, hostEnvironmen
           environment,
           baseUrl: getPlatformBaseUrl()
         });
+      // Abort if a newer route has started rendering
+      if (routeToken !== currentRouteToken) return;
       root.innerHTML = renderTemplate(template, data);
       root.dataset.resolvedBranch = resolvedBranch;
       track(enhanceReport(root, data));
     } catch (error) {
+      // Abort if a newer route has started rendering
+      if (routeToken !== currentRouteToken) return;
       logError(error, { route: 'report', username, repository, branch });
       renderErrorPage(root, error, { onRetry: () => track(renderReport({ username, repository, branch })) });
     }

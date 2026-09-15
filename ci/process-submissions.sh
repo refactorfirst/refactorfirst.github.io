@@ -179,6 +179,7 @@ check_access() { # owner repo submitter
 # HEAD-check the report file across candidate branches (0 = found).
 report_file_exists() { # owner repo
   OWNER="$1"; REPO="$2"
+  SEEN_BRANCHES=""
   DEFAULT_BRANCH=$(repo_default_branch "$OWNER" "$REPO") || DEFAULT_BRANCH="main"
   raw_url() {
     case "$PLATFORM" in
@@ -191,7 +192,8 @@ report_file_exists() { # owner repo
     # Deduplicate branch candidates
     case " ${SEEN_BRANCHES:-} " in *" $BRANCH "*) continue ;; esac
     SEEN_BRANCHES="${SEEN_BRANCHES:-} $BRANCH"
-    code=$(curl -s -o /dev/null -w '%{http_code}' -X HEAD "$(raw_url "$BRANCH")")
+    code=$(curl -sI -o /dev/null -w '%{http_code}' \
+      --connect-timeout 10 --max-time 30 "$(raw_url "$BRANCH")")
     [ "$code" = "200" ] && return 0
   done
   return 1

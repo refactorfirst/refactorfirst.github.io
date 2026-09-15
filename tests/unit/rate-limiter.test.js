@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { ApiRateLimiter, SubmissionRateLimiter } from '../../js/rate-limiter.js';
 
-describe('ApiRateLimiter (GitHub rate limit headers)', () => {
+describe('ApiRateLimiter (hosting platform rate limit headers)', () => {
   let limiter;
   beforeEach(() => { limiter = new ApiRateLimiter(); });
 

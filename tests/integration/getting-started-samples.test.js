@@ -55,6 +55,22 @@ describe('Getting Started workflow samples per hosting environment', () => {
     expect(root.querySelector('#workflow-sample').textContent).toContain('GitHub Actions');
   });
 
+  it('respects explicit platform meta tag over hostname detection', async () => {
+    // Add meta tag for explicit platform
+    const meta = document.createElement('meta');
+    meta.name = 'platform';
+    meta.content = 'gitlab';
+    document.head.appendChild(meta);
+
+    app = createApp({ root });
+    history.replaceState(null, '', '/getting-started');
+    await app.handleRoute();
+    expect(root.querySelector('#workflow-sample').textContent).toContain('GitLab');
+
+    // Clean up
+    document.head.removeChild(meta);
+  });
+
   it('shows a friendly note when the sample cannot be loaded', async () => {
     mockFetch.mockImplementation(url => {
       if (url.endsWith('/templates/getting-started.html')) {

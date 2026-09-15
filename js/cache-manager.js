@@ -1,4 +1,4 @@
-// Client-side caching for GitHub API/raw responses with TTL expiry
+// Client-side caching for hosting platform API/raw responses with TTL expiry
 // and LRU eviction.
 
 export class CacheManager {

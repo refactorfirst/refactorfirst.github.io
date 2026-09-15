@@ -33,7 +33,7 @@
   <h2>Troubleshooting</h2>
   <ul>
     <li><strong>Report doesn't render?</strong> Ensure <code>.refactorfirst/refactor-first.json</code> exists on your default branch.</li>
-    <li><strong>Changed default branch?</strong> Reports are looked up on the branch in the URL, then <code>main</code>, then <code>master</code>.</li>
+    <li><strong>Changed default branch?</strong> Reports are looked up on the branch in the URL. If no branch is specified, the request falls back to <code>main</code>, then <code>master</code>.</li>
     <li><strong>Submission fails?</strong> You need write access to the repository, and it must not already be listed.</li>
     <li><strong>Submission is slow to appear?</strong> The site redeploys on a 10-minute schedule.</li>
   </ul>

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { fetchJson, constructRawUrl } from '../../js/fetcher.js';
 
-describe('GitHub API Fetching', () => {
+describe('Hosting Platform API Fetching', () => {
   let mockFetch;
 
   beforeEach(() => {
