@@ -1,0 +1,36 @@
+name: Add Repository
+on:
+  issues:
+    types: [opened]
+  # Manual re-run for an existing issue number (e.g. after a transient failure).
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process'
+        required: true
+        type: string
+
+# Serialize listing updates: concurrent runs would otherwise race at commit
+# time and reject valid submissions with non-fast-forward errors.
+concurrency:
+  group: add-repository
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  add-repository:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Process submission issue
+        run: bash ci/process-submissions.sh github
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The submitter identity is github.event.issue.user.login, resolved
+          # from the issue number inside the script (never interpolated here).
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}

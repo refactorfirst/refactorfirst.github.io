@@ -1,0 +1,24 @@
+{
+  "name": "refactorfirst-page",
+  "version": "1.0.0",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@sentry/browser": "^7.80.0",
+    "eslint": "^8.55.0",
+    "jsdom": "^23.0.0"
+  },
+  "description": "RefactorFirst GitHub Pages Application",
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "scripts": {
+    "test": "bun test tests/unit tests/integration",
+    "test:watch": "bun test --watch tests/unit tests/integration",
+    "test:coverage": "bun test --coverage tests/unit tests/integration",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "lint": "eslint js/**/*.js tests/**/*.js",
+    "lint:fix": "eslint js/**/*.js tests/**/*.js --fix"
+  },
+  "type": "module"
+}

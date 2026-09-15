@@ -1,0 +1,32 @@
+# User-provided pipeline template (GitLab).
+# Copy this file to .gitlab-ci.yml in YOUR repository root to generate a
+# RefactorFirst JSON report on every push to the default branch and commit it to
+# .refactorfirst/refactor-first.json, where the RefactorFirst site can render it.
+#
+# Prerequisites:
+#   - Your project builds with Maven
+#   - The RefactorFirst Maven plugin (org.hjug:refactorfirst-maven-plugin) is
+#     configured in your pom.xml
+#
+# The job pushes back to the repository using the built-in CI_JOB_TOKEN.
+
+generate-refactorfirst-report:
+  image: maven:3.9-eclipse-temurin-17
+  cache:
+    key: maven
+    paths:
+      - .m2/repository
+  before_script:
+    - export MAVEN_OPTS="-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - mvn -B refactorfirst:jsonReport
+    - |
+      if [ -f .refactorfirst/refactor-first.json ]; then
+        git config user.email "gitlab-ci@localhost"
+        git config user.name "GitLab CI"
+        git add .refactorfirst/refactor-first.json
+        git commit -m "Update RefactorFirst report" || echo "Report unchanged"
+        git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_REF_NAME}"
+      fi

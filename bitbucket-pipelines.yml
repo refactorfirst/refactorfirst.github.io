@@ -1,0 +1,46 @@
+# Bitbucket Pipelines configuration for this RefactorFirst Pages site.
+#
+# Bitbucket serves static sites from a repository named <workspace>.bitbucket.io
+# automatically whenever files are pushed, so no deploy step is needed here.
+# This pipeline keeps repositories.txt tidy and verifies the site files exist.
+
+image: alpine:3.20
+
+pipelines:
+  default:
+    - step:
+        name: Validate site files
+        script:
+          - apk add --no-cache grep coreutils
+          - test -f index.html
+          - test -f repositories.txt
+          # Listing must be sorted, unique and well-formed (one user/repo per line)
+          - sort -c repositories.txt
+          - '! grep -Ev "^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$" repositories.txt'
+
+  custom:
+    # Manual pipeline: normalize repositories.txt and push the result back.
+    sort-repos:
+      - step:
+          name: Normalize repositories.txt
+          script:
+            - sort -u -o repositories.txt repositories.txt
+            - git config user.email "pipeline-bot@bitbucket.org"
+            - git config user.name "Bitbucket Pipeline"
+            - git add repositories.txt
+            - git commit -m "Normalize repositories.txt" || echo "No changes"
+            - git push
+
+    # Processes open "Add repository: owner/repo" issues: validates write
+    # access of the issue author, checks the report file, commits
+    # repositories.txt and closes the issue with the outcome.
+    # Bitbucket has no issue-triggered pipelines: schedule this pipeline
+    # (Repository settings -> Pipelines -> Schedules) and define the secured
+    # repository variables BITBUCKET_CLIENT_ID and BITBUCKET_CLIENT_SECRET
+    # (workspace OAuth consumer with Issues + Repositories scopes).
+    process-submissions:
+      - step:
+          name: Process submission issues
+          script:
+            - apk add --no-cache curl jq
+            - sh ci/process-submissions.sh bitbucket
