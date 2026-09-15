@@ -105,8 +105,8 @@ describe('checkReportExists (unauthenticated)', () => {
   beforeEach(() => { mockFetch = spyOn(global, 'fetch'); });
   afterEach(() => mockFetch.mockRestore());
 
-  const rawMain = 'https://raw.githubusercontent.com/owner/repo/main/.refactorfirst/refactor-first.json';
-  const rawDefault = 'https://raw.githubusercontent.com/owner/repo/develop/.refactorfirst/refactor-first.json';
+  const rawMain = 'https://raw.githubusercontent.com/owner/repo/refs/heads/main/.refactorfirst/refactor-first.json';
+  const rawDefault = 'https://raw.githubusercontent.com/owner/repo/refs/heads/develop/.refactorfirst/refactor-first.json';
 
   function mockRepoInfo(defaultBranch = 'develop') {
     return {
@@ -153,7 +153,7 @@ describe('checkReportExists (unauthenticated)', () => {
       if (url === 'https://api.github.com/repos/owner/repo') {
         return Promise.resolve(mockRepoInfo('develop'));
       }
-      if (url === 'https://raw.githubusercontent.com/owner/repo/master/.refactorfirst/refactor-first.json') {
+      if (url === 'https://raw.githubusercontent.com/owner/repo/refs/heads/master/.refactorfirst/refactor-first.json') {
         return Promise.resolve({ ok: true });
       }
       return Promise.resolve({ ok: false, status: 404 });
@@ -248,7 +248,7 @@ describe('submitRepository (orchestration)', () => {
       if (url === 'https://api.github.com/repos/o/r') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ default_branch: 'main' }) });
       }
-      if (url.includes('raw.githubusercontent.com/o/r/main/')) {
+      if (url.includes('raw.githubusercontent.com/o/r/refs/heads/main/')) {
         return Promise.resolve({ ok: true });
       }
       return Promise.resolve({ ok: false, status: 404 });

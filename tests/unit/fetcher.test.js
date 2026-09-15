@@ -22,8 +22,12 @@ describe('Hosting Platform API Fetching', () => {
     const result = await fetchJson('user', 'repo', 'main');
     expect(result).toEqual(mockData);
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://raw.githubusercontent.com/user/repo/main/.refactorfirst/refactor-first.json',
-      expect.any(Object)
+      'https://raw.githubusercontent.com/user/repo/refs/heads/main/.refactorfirst/refactor-first.json',
+      {
+        headers: {
+          'Accept': 'application/json'
+        }
+      }
     );
   });
 
@@ -44,7 +48,7 @@ describe('Hosting Platform API Fetching', () => {
 
   it('should construct correct raw URL', () => {
     const url = constructRawUrl('user', 'repo', 'branch');
-    expect(url).toBe('https://raw.githubusercontent.com/user/repo/branch/.refactorfirst/refactor-first.json');
+    expect(url).toBe('https://raw.githubusercontent.com/user/repo/refs/heads/branch/.refactorfirst/refactor-first.json');
   });
 
   it('should construct GitLab raw URLs with -/raw/ and honor a custom base URL', () => {
@@ -61,7 +65,7 @@ describe('Hosting Platform API Fetching', () => {
 
   it('falls back to GitHub URLs for unknown environments', () => {
     expect(constructRawUrl('user', 'repo', 'main', { environment: 'something-else' }))
-      .toBe('https://raw.githubusercontent.com/user/repo/main/.refactorfirst/refactor-first.json');
+      .toBe('https://raw.githubusercontent.com/user/repo/refs/heads/main/.refactorfirst/refactor-first.json');
   });
 
   it('should include headers in fetch requests', async () => {
