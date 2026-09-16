@@ -4,7 +4,7 @@ import {
   filterRepositories,
   debounce,
   createSearch
-} from '../../js/search.js';
+} from '../../lib/search.js';
 
 describe('parseRepositories', () => {
   it('parses one username/repository per line', () => {

@@ -6,12 +6,25 @@
   },
   "parserOptions": {
     "ecmaVersion": 2022,
-    "sourceType": "module"
+    "sourceType": "module",
+    "ecmaFeatures": { "jsx": true }
   },
-  "extends": "eslint:recommended",
+  "extends": [
+    "eslint:recommended",
+    "plugin:react/recommended",
+    "plugin:react/jsx-runtime",
+    "plugin:react-hooks/recommended"
+  ],
+  "settings": {
+    "react": { "version": "detect" }
+  },
+  "globals": {
+    "process": "readonly"
+  },
   "rules": {
     "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
-    "no-console": ["warn", { "allow": ["warn", "error"] }]
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "react/prop-types": "off"
   },
-  "ignorePatterns": ["node_modules/", "playwright-report/", "test-results/"]
+  "ignorePatterns": ["node_modules/", "playwright-report/", "test-results/", ".next/", "out/", "public/widgets/"]
 }

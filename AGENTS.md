@@ -1,136 +1,114 @@
-# RefactorFirst GitHub Pages Application - Agent Guide
+# RefactorFirst Pages — Agent Guide
 
 ## Project Overview
 
-A purely client-side static web application that renders RefactorFirst reports by fetching `.refactorfirst/refactor-first.json` data directly from GitHub repositories. No server-side code, no database, no build step — HTML, CSS and ES6 JavaScript modules served as static files.
+A purely client-side site that renders RefactorFirst reports by fetching
+`.refactorfirst/refactor-first.json` directly from GitHub/GitLab/Bitbucket. Built
+as a **Next.js static export** (`output: 'export'`): Server Components render the
+static shells, client components (`components/`) own all interactivity. The export
+in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
 
 **Key Features:**
 - Search over curated repository listing (`repositories.txt`)
-- Reports rendered with Mustache.js from raw platform content
-- Repository submission via pre-filled platform issues — no login, apps or
-  tokens; identity is captured as the issue author and validated in CI
-- Works with plain static file server
+- Reports rendered with Mustache.js (bundled template is authoritative)
+- Repository submission via pre-filled platform issues — no login, apps or tokens
+- Fully static deploy; deep links handled via generateStaticParams + `404.html`
 
 ## Development Setup
 
 ```bash
-bun install            # install devDependencies
-python3 -m http.server 8000   # run locally at http://localhost:8000
+bun install                  # install dependencies
+bun run dev                  # next dev at http://localhost:3000
+bun run build                # static export to out/ (sync repositories + next build + CSP hashes)
+python3 scripts/serve-out.py # serve out/ at :8003 with GitHub Pages 404 semantics
 ```
 
 ## Testing Commands
 
 **Unit + Integration Tests (Bun):**
 ```bash
-bun test tests/unit tests/integration           # run all unit/integration tests
+bun test tests/unit tests/integration           # run all
 bun test --watch tests/unit                     # watch mode
 bun test --coverage tests/unit tests/integration # coverage report
 ```
 
-**E2E Tests (Playwright):**
+**E2E Tests (Playwright) — always against the built export:**
 ```bash
 npx playwright install        # one-time: download browsers
-npx playwright test           # full E2E suite (chromium, firefox, webkit)
-npx playwright test --ui      # interactive mode
+npx playwright test           # full E2E (builds out/, all 3 browsers)
+bun run test:e2e:basepath     # NEXT_PUBLIC_BASE_PATH=/preview leg (chromium)
 ```
 
 **Linting:**
 ```bash
-npx eslint js/**/*.js tests/**/*.js           # lint
-npx eslint js/**/*.js tests/**/*.js --fix     # auto-fix
+npx eslint "lib/**/*.js" "app/**/*.{js,jsx}" "components/**/*" "tests/**/*"
 ```
 
 ## Project Structure
 
 ```
-index.html                    # Single-page app shell (top menu + #app container)
-repositories.txt              # Listed repositories, one "user/repo" per line
-js/                           # ES6 modules: router, fetcher, renderer, search,
-                              # repo-submission, error-handler,
-                              # rate-limiter, cache-manager, utils, main
-ci/process-submissions.sh     # Shared submission validator for GitHub Actions,
-                              # GitLab CI and Bitbucket Pipelines
-css/                          # main.css + components.css
-templates/                    # Static page templates (about, faq, errors, ...)
-                              # + user CI templates for GitHub/GitLab/Bitbucket
-assets/                       # Fallback Mustache template, logo, Sentry config
-tests/                        # unit/ (Bun), integration/ (Bun), e2e/ (Playwright)
-.github/workflows/            # add-repository.yml, redeploy.yml, test.yml
+app/                        # Next.js App Router (static export)
+  layout.jsx                # CSP meta, header/footer, submission-target meta
+  not-found.jsx             # 404 page + branch deep-link redirect (§6)
+  error.jsx                 # global error boundary (+ per-route boundaries)
+  page.jsx                  # landing (/)
+  add-repo|about|api|.../page.jsx    # static content pages
+  [username]/page.jsx       # user listing (pagination client-side)
+  [username]/[repository]/page.jsx   # report shell
+  [username]/[repository]/[branch]/page.jsx  # main|master pre-generated
+  globals.css               # css/main.css + components.css
+components/                 # client components: report-view, repo-list,
+                            # repo-submission-form, search-combobox,
+                            # hero-search, menu-search, menu-toggle,
+                            # workflow-sample, platform-config, sentry-provider
+lib/                        # shared logic (client + RSC): routes, fetcher,
+                            # renderer, search, utils, host, rate-limiter,
+                            # cache-manager, error-handler, repo-submission,
+                            # report-view, static-params, widget-loader; the
+                            # Node-side listing loader is lib/repositories.js
+public/                     # static files copied verbatim into out/:
+  repositories.txt          #   synced from the repo root (sync-repositories.mjs)
+  assets/                   #   mustache template, logo
+  templates/                #   workflow-sample-*.html fragments
+  widgets/                  #   module bridges: vizdom WASM, three-spritetext,
+                            #   sentry (runtime CDN imports cannot be bundled)
+templates/                  # user CI samples (user-refactorfirst-*.yml) for the docs
+ci/process-submissions.sh   # shared submission validator for GH/Gl/BB CI
+.github/workflows/          # test.yml, static.yml, redeploy.yml,
+                            # add-repository.yml, deploy-repositories-fast.yml
+.gitlab-ci.yml              # GitLab Pages: build out/ → public/
+bitbucket-pipelines.yml     # Bitbucket build producing out/
+scripts/                    # sync-repositories.mjs, fix-csp-hashes.mjs, serve-out.py
+tests/                      # unit/ (Bun), integration/ (Bun + RTL/jsdom), e2e/ (Playwright)
 ```
 
 ## Development Workflow
 
 **TDD is mandatory** — write failing tests before production code:
 
-1. Write a failing test in `tests/unit/` (pure module logic) or `tests/integration/` (DOM + routing flows)
+1. Write a failing test in `tests/unit/` (pure module logic) or `tests/integration/` (RTL/jsdom)
 2. Run `bun test tests/unit tests/integration` and watch it fail
-3. Write the minimal implementation in `js/` to make it pass
+3. Write the minimal implementation in `lib/` / `components/` / `app/`
 4. Refactor while keeping tests green
 
-## Key Module Responsibilities
+## Platform-Aware Sections in This Repo
 
-| Module | Responsibility |
-|--------|---------------|
-| `js/router.js` | URL routes and routing logic |
-| `js/fetcher.js` | Platform-aware raw fetching / branch fallback |
-| `js/renderer.js` | Mustache rendering |
-| `js/search.js` | Search / type-ahead functionality |
-| `js/repo-submission.js` | Submission flow: validation, report check, per-platform issue URLs |
-| `js/report-view.js` | Interactive report widgets: DOT popups (Sigma/3D), Chart.js bubbles, vizdom WASM graphs |
-| `js/error-handler.js` | Error page rendering |
-| `js/utils.js` | Utility functions, environment detection |
-| `js/main.js` | Application entry point |
-| `ci/process-submissions.sh` | CI-side submission validation + write-back for all platforms |
+- **CSP** lives in `app/layout.jsx` (`script-src` includes the CDN widget hosts and
+  `wasm-unsafe-eval`); after `next build`, `scripts/fix-csp-hashes.mjs` injects
+  sha256 hashes of the inline bootstrap scripts into the exported HTML's CSP meta —
+  keep it in the build pipeline.
+- **Static export constraints:** `dynamicParams = false` on dynamic routes;
+  `generateStaticParams` enumerates `(username)`, `(username, repository)` and
+  `(username, repository, main|master)` from `repositories.txt`; new repos render
+  client-side immediately thanks to the client-side listing refresh and the
+  `?branch=` deep-link redirect in `app/not-found.jsx`.
+- **Widget loading:** CDN scripts load via `next/script` `lazyOnload` inside
+  `components/report-view.jsx`, registered through `lib/widget-loader.js`);
+  wasm/ESM bridges in `public/widgets/` run as native module scripts.
+- **Environment config:** meta tags in `app/layout.jsx` (`submission-target`,
+  `sentry-dsn`, `platform-base-url`) plus `NEXT_PUBLIC_HOSTING_ENVIRONMENT`
+  / `NEXT_PUBLIC_BASE_PATH` at build time.
 
-## Testing Requirements
+## Current Test Count
 
-- **Unit tests**: Pure module logic (router, fetcher, renderer, search, etc.)
-- **Integration tests**: DOM + routing flows (search flow, submission flow incl. per-platform issue redirect)
-- **E2E tests**: User journeys (incl. submission → pre-filled issue hand-off), cross-browser smoke tests, mobile responsiveness
-- **Coverage target**: 80%+ on core modules
-- **Current suite**: 165 tests
-
-## CI/CD
-
-- `.github/workflows/test.yml` runs Bun unit/integration tests and Playwright E2E suite on every push and PR
-- Keep tests green before merging
-- GitHub Actions used for scheduled redeployment and repository submission validation
-
-## Environment-Aware Documentation
-
-The Getting Started page shows only the CI sample matching the hosting environment, detected from hostname:
-- `*.github.io` → GitHub Actions
-- `*.gitlab.io` → GitLab CI  
-- `*.bitbucket.io` → Bitbucket Pipelines
-- Anything else → defaults to GitHub
-
-Detection logic in `js/utils.js` → `detectHostingEnvironment()`
-
-## Deployment Targets
-
-This project supports deployment to:
-- GitHub Pages (organization or personal account)
-- GitHub Enterprise Server
-- GitLab Pages
-- Bitbucket static hosting
-
-See README.md for detailed deployment instructions for each platform.
-
-## Code Conventions
-
-- ES6 modules throughout
-- No build step required
-- Client-side routing from single `index.html`
-- Mustache.js for templating
-- No client-side authentication — submission identity comes from the platform issue author
-- Static file serving (no server-side code)
-
-## Important Notes
-
-- The `<meta name="submission-target">` tag in `index.html` points submissions at the listing project; self-managed GitLab deployments add `<meta name="platform-base-url">`
-- Deployments must extend the CSP `connect-src` with the platform endpoints they use (`api.gitlab.com`/custom base, `api.bitbucket.org`, ...)
-- Report rendering loads CDN libs (Chart.js, sigma/graphology, graphlib-dot, svg-pan-zoom, 3d-force-graph, vizdom WASM) — keep CSP `script-src`/`connect-src` entries (`cdn.jsdelivr.net`, `cdnjs.cloudflare.com`, `esm.sh`, `buttons.github.io`, `wasm-unsafe-eval`) when tightening the policy
-- `assets/refactor-first-report.mustache` is a port of the RefactorFirst viewer template — keep it in sync with upstream
-- For GitHub Enterprise Server, update API/raw endpoints in `js/repo-submission.js`, `js/fetcher.js`, and `ci/process-submissions.sh`
-- Deep links require `404.html` copy of `index.html` for proper client-side routing on some platforms
-- Reports are fetched client-side — end users' browsers must reach GitHub/raw endpoints
+~271 unit/integration + 81 E2E (three browsers + basePath leg).

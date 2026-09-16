@@ -11,11 +11,13 @@ jobs:
           bun-version: latest
       - run: bun install
       - run: bun test tests/unit tests/integration
-      - run: bunx eslint "js/**/*.js" "tests/**/*.js"
+      - run: bunx eslint "js/**/*.js" "lib/**/*.js" "app/**/*.{js,jsx}" "components/**/*.{js,jsx}" "tests/**/*.{js,jsx}"
       - run: shellcheck ci/process-submissions.sh
 
   e2e-tests:
     # Matrix execution: one runner per browser so the suites run in parallel.
+    # The Playwright webServer builds the static export (bun run build) and
+    # serves ./out with GitHub Pages semantics (scripts/serve-out.py).
     strategy:
       fail-fast: false
       matrix:
@@ -33,5 +35,23 @@ jobs:
         if: failure()
         with:
           name: playwright-report-${{ matrix.browser }}
+          path: playwright-report/
+          retention-days: 7
+
+  e2e-basepath:
+    # Sub-path deployment leg (GitHub Pages project sites): NEXT_PUBLIC_BASE_PATH
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - run: bun install
+      - run: bunx playwright install --with-deps chromium
+      - run: bunx playwright test --config playwright.basepath.config.js
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-basepath
           path: playwright-report/
           retention-days: 7

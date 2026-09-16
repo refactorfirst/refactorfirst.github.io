@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { renderTemplate, initializeMustache } from '../../js/renderer.js';
+import { renderTemplate, initializeMustache } from '../../lib/renderer.js';
 
 describe('Mustache Rendering', () => {
   it('should render template with data', () => {
@@ -43,6 +43,27 @@ describe('Mustache Rendering', () => {
     const data = { content: '<b>bold</b>' };
     const result = renderTemplate(template, data);
     expect(result).toBe('<b>bold</b>');
+  })
+
+  it('strips active-content tags (iframe/form/meta/link/input) from untrusted data', () => {
+    const template = '{{{content}}}';
+    const data = {
+      content:
+        '<iframe src="https://evil.example"></iframe>' +
+        '<form action="https://evil.example/login"><input name="password"></form>' +
+        '<meta http-equiv="refresh" content="0;url=https://evil.example">' +
+        '<link rel="stylesheet" href="https://evil.example/x.css">' +
+        '<object data="https://evil.example/o.swf"></object>' +
+        '<p>safe</p>'
+    };
+    const result = renderTemplate(template, data);
+    expect(result).not.toContain('<iframe');
+    expect(result).not.toContain('<form');
+    expect(result).not.toContain('<input');
+    expect(result).not.toContain('<meta');
+    expect(result).not.toContain('<link');
+    expect(result).not.toContain('<object');
+    expect(result).toContain('<p>safe</p>');
   })
 
   it('should handle empty data', () => {

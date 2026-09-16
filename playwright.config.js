@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // The basePath leg is part of its own config (playwright.basepath.config.js)
+  testIgnore: '**/basepath.spec.js',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -26,8 +28,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'python3 server.py',
+    // Build the static export, then serve out/ with GitHub Pages semantics
+    // (see scripts/serve-out.py).
+    command: 'bun run build && python3 scripts/serve-out.py',
     port: 8003,
-    timeout: 120 * 1000,
+    timeout: 300 * 1000,
   },
 });

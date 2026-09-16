@@ -1,0 +1,404 @@
+/* Main stylesheet: CSS custom properties, base layout, footer. */
+
+:root {
+  --brand-color: #2a6f97;
+  --brand-accent: #61c0bf;
+  --text-color: #1f2d3d;
+  --muted-color: #5c6b7a;
+  --bg-color: #ffffff;
+  --surface-color: #f5f8fa;
+  --error-color: #c0392b;
+  --success-color: #1e8449;
+  --menu-max-height: 140px;
+  --menu-height: 48px;
+  --radius: 6px;
+  --shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+body {
+  margin: 0;
+  color: var(--text-color);
+  background: var(--bg-color);
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--brand-color);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+main {
+  max-width: min(3840px, 95vw);
+  margin: 0 auto;
+  padding: 1rem 1.5rem 3rem;
+  min-height: 60vh;
+
+}
+
+main:focus {
+  outline: none;
+}
+
+.hero {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.hero h1 {
+  color: var(--brand-color);
+  margin-bottom: 0.25rem;
+}
+
+.loading {
+  text-align: center;
+  color: var(--muted-color);
+  padding: 3rem 0;
+}
+
+.site-footer {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: var(--muted-color);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--surface-color);
+}
+
+a {
+  color: var(--brand-color);
+}
+
+code {
+  background: var(--surface-color);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--surface-color);
+  padding: 1rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+/* Component styles: top menu, search, repo grid, pagination, forms, errors. */
+
+/* ---- Top navigation (max 140px, mobile hamburger) ---- */
+#top-menu {
+  background: var(--surface-color);
+  border-bottom: 1px solid #dde4ea;
+  /* mvp.css adds generous header padding; reset it so max-height bounds the
+     whole rendered box (padding contributes outside max-height). */
+  padding: 0;
+  max-height: var(--menu-max-height);
+}
+
+.menu-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.3rem 0.8rem;
+  min-height: 48px;
+  overflow: visible;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: bold;
+  color: var(--brand-color);
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.menu-search {
+  position: relative;
+  /* Grow into the space freed by the tighter link spacing. */
+  flex: 1 0 240px;
+  /* Space between the last menu link and the search bar matches the
+     left-to-right spacing measured between menu links: the .menu-bar flex
+     gap plus this small margin reproduce it (verified at 1280px via E2E). */
+  margin-left: 0.1rem;
+}
+
+.menu-search input {
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #c6d2dc;
+  border-radius: var(--radius);
+}
+
+.menu-toggle {
+  display: none;
+  background: none;
+  border: 1px solid #c6d2dc;
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+}
+
+.menu-links {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex-wrap: nowrap;
+  flex-shrink: 0; /* never squeeze the links — the bar scrolls/wraps instead */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* mvp.css gives every li a horizontal margin — zero it so the menu items
+   sit at the same tight rhythm as the search bar to their right. */
+.menu-links li {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.menu-links a {
+  display: inline-block;
+  padding: 0.15rem 0.2rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text-color);
+  font-size: 0.8rem;
+}
+
+.menu-links a:hover,
+.menu-links a:focus-visible {
+  background: var(--brand-color);
+  color: #fff;
+}
+
+/* ---- Search results ---- */
+.search-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 50;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #c6d2dc;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.search-results li {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.search-results li.active,
+.search-results li:hover {
+  background: var(--brand-color);
+  color: #fff;
+}
+
+.hero-search {
+  position: relative;
+  max-width: 480px;
+  margin: 1rem auto;
+  text-align: left;
+}
+
+/* ---- Repository grid ---- */
+.repo-grid,
+.featured-repos ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.repo-card {
+  display: block;
+  padding: 0.85rem 1rem;
+  border: 1px solid #dde4ea;
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text-color);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.repo-card:hover,
+.repo-card:focus-visible {
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+}
+
+/* ---- Pagination ---- */
+.pagination {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.pagination .page {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #c6d2dc;
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+.pagination .page.current {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: #fff;
+}
+
+/* ---- Forms / add-repo ---- */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.user-avatar {
+  border-radius: 50%;
+}
+
+#repo-form {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 420px;
+}
+
+.form-status.error {
+  color: var(--error-color);
+}
+
+.form-status.success {
+  color: var(--success-color);
+}
+
+.cta {
+  display: inline-block;
+  background: var(--brand-color);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+  border: none;
+  font-size: 1rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cta:hover {
+  background: var(--brand-accent);
+  color: #fff;
+}
+
+/* ---- Error pages ---- */
+.error-page {
+  max-width: 640px;
+  margin: 3rem auto;
+  text-align: center;
+  padding: 2rem;
+  border: 1px solid #f0c6c0;
+  border-radius: var(--radius);
+  background: #fdf6f5;
+}
+
+.error-page h1 {
+  color: var(--error-color);
+}
+
+.error-code {
+  color: var(--muted-color);
+  font-size: 0.85rem;
+}
+
+.error-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.error-actions .retry {
+  background: var(--brand-color);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+/* ---- Responsive ---- */
+/* The header (brand + search + 9 menu links at 0.8rem) needs roughly 900px.
+ * Below that widths links would clip because .menu-links uses nowrap +
+ * overflow:hidden without a visible toggle, so switch to the collapsible
+ * menu early — before any navigation item becomes unreachable. */
+@media (max-width: 900px) {
+  #top-menu {
+    max-height: none;
+  }
+
+  .menu-bar {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .menu-toggle {
+    display: block;
+    margin-left: auto;
+    order: 2;
+  }
+
+  .menu-search {
+    /* On mobile the search sits on its own row between toggle and links. */
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-top: 0.5rem;
+  }
+
+  .menu-links {
+    display: none;
+    flex-basis: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    padding-bottom: 0.5rem;
+    order: 4;
+  }
+
+  .menu-links.open {
+    display: flex;
+  }
+
+  .repo-grid,
+  .featured-repos ul {
+    grid-template-columns: 1fr;
+  }
+}
