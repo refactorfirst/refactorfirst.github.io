@@ -4,12 +4,8 @@ import {
   paginate,
   reposForUser,
   sortByRepository,
-  renderPaginationControls,
-  detectHostingEnvironment as detectHostingEnvironmentUtil
-} from '../../js/utils.js';
-
-// Alias for test clarity
-const detectHostingEnvironment = detectHostingEnvironmentUtil;
+  renderPaginationControls
+} from '../../lib/utils.js';
 
 describe('escapeHtml', () => {
   it('escapes HTML special characters', () => {
@@ -98,44 +94,7 @@ describe('paginate', () => {
   });
 });
 
-describe('detectHostingEnvironment', () => {
-  it('detects github.io Pages hosts as github', () => {
-    expect(detectHostingEnvironment('refactorfirst.github.io')).toBe('github');
-    expect(detectHostingEnvironment('my-org.github.io')).toBe('github');
-  });
-
-  it('detects gitlab.io Pages hosts as gitlab', () => {
-    expect(detectHostingEnvironment('group.gitlab.io')).toBe('gitlab');
-    expect(detectHostingEnvironment('sub.group.gitlab.io')).toBe('gitlab');
-  });
-
-  it('detects bitbucket.io sites as bitbucket', () => {
-    expect(detectHostingEnvironment('team.bitbucket.io')).toBe('bitbucket');
-  });
-
-  it('treats github.com and github enterprise domains as github', () => {
-    expect(detectHostingEnvironment('github.com')).toBe('github');
-    expect(detectHostingEnvironment('github.my-corp.example.com')).toBe('github');
-  });
-
-  it('treats self-hosted gitlab/bitbucket hosts by keyword', () => {
-    expect(detectHostingEnvironment('gitlab.example.com')).toBe('gitlab');
-    expect(detectHostingEnvironment('bitbucket.example.org')).toBe('bitbucket');
-  });
-
-  it('defaults unknown and local hosts to github', () => {
-    expect(detectHostingEnvironment('localhost')).toBe('github');
-    expect(detectHostingEnvironment('127.0.0.1')).toBe('github');
-    expect(detectHostingEnvironment('reports.example.com')).toBe('github');
-    expect(detectHostingEnvironment('')).toBe('github');
-  });
-
-  it('respects explicit platform setting over hostname detection', () => {
-    expect(detectHostingEnvironment('localhost', 'gitlab')).toBe('gitlab');
-    expect(detectHostingEnvironment('my-custom-domain.com', 'bitbucket')).toBe('bitbucket');
-    expect(detectHostingEnvironment('gitlab.example.com', 'github')).toBe('github');
-  });
-});
+// detectHostingEnvironment moved to lib/host.js — see tests/unit/host.test.js
 
 describe('renderPaginationControls', () => {
   it('renders page links with the current page marked', () => {

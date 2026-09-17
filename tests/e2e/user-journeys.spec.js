@@ -89,7 +89,7 @@ test('landing page loads with hero, search and menu', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   await expect(page.locator('.hero')).toBeVisible();
   await expect(page.locator('#menu-search-input')).toBeVisible();
-  await expect(page.locator('#top-menu .menu-links a[href="/about"]')).toBeVisible();
+  await expect(page.locator('#top-menu .menu-links a[href^="/about"]')).toBeVisible();
   await expect(page.locator('text=Add My Repo')).toBeVisible();
 });
 
@@ -101,7 +101,7 @@ test('search navigates to a repository report', async ({ page }) => {
   const option = page.locator('.hero-search .search-results li', { hasText: 'refactorfirst/refactorfirst' });
   await option.click();
   await page.waitForLoadState('networkidle');
-  await expect(page).toHaveURL(/\/refactorfirst\/refactorfirst$/);
+  await expect(page).toHaveURL(/\/refactorfirst\/refactorfirst\/?$/);
   await expect(page.locator('#app')).toContainText('refactorfirst');
 });
 
@@ -248,6 +248,26 @@ test('malicious report data cannot inject scripts or handlers', async ({ page })
   await expect(page.locator('img[onerror]')).toHaveCount(0);
   expect(await page.evaluate(() => window.__xss)).toBeUndefined();
   expect(await page.evaluate(() => window.__xss2)).toBeUndefined();
+});
+
+test('spacing between the GitHub link and the search bar matches menu link rhythm', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  const { gapToSearch, linkGap } = await page.evaluate(() => {
+    const anchors = [...document.querySelectorAll('#top-menu .menu-links a')];
+    const linkGap =
+      anchors[1].getBoundingClientRect().left - anchors[0].getBoundingClientRect().right;
+    const gh = anchors[anchors.length - 1].getBoundingClientRect();
+    const search = document.querySelector('.menu-search').getBoundingClientRect();
+    return { gapToSearch: search.left - gh.right, linkGap };
+  });
+  // Anchor boxes exclude the links' internal horizontal padding, so the
+  // link-to-link "gap" reads smaller than the rendered rhythm; the search
+  // gap must stay inside a narrow window around it (neither touching nor
+  // wider than the noise of one link padding).
+  expect(linkGap).toBeGreaterThan(0);
+  expect(gapToSearch).toBeGreaterThan(linkGap);
+  expect(gapToSearch - linkGap).toBeLessThanOrEqual(12);
 });
 
 test('top menu height stays within 140px', async ({ page }) => {

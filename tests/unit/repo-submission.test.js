@@ -8,7 +8,7 @@ import {
   platformLabel,
   DEFAULT_SUBMISSION_TARGET,
   REPORT_MISSING_MESSAGE
-} from '../../js/repo-submission.js';
+} from '../../lib/repo-submission.js';
 
 describe('validateRepositoryInput', () => {
   it('accepts valid owner and repository names', () => {

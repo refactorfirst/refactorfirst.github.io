@@ -8,7 +8,7 @@ import {
   hidePopup,
   bindPopupHandlers,
   enhanceReport
-} from '../../js/report-view.js';
+} from '../../lib/report-view.js';
 
 describe('exposeGraphDots', () => {
   it('exposes class, package and cycle DOT strings as window globals', () => {

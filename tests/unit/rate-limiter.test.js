@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { ApiRateLimiter, SubmissionRateLimiter } from '../../js/rate-limiter.js';
+import { ApiRateLimiter, SubmissionRateLimiter } from '../../lib/rate-limiter.js';
 
 describe('ApiRateLimiter (hosting platform rate limit headers)', () => {
   let limiter;

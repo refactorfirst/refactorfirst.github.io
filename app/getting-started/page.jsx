@@ -1,0 +1,49 @@
+import Link from 'next/link';
+import WorkflowSample from '../../components/workflow-sample';
+
+export default function GettingStartedPage() {
+  return (
+    <section>
+      <h1>Getting Started</h1>
+
+      <h2>1. Configure the RefactorFirst Maven plugin</h2>
+      <p>Add the plugin to your <code>pom.xml</code>:</p>
+      <pre><code>&lt;plugin&gt;
+  &lt;groupId&gt;org.hjug&lt;/groupId&gt;
+  &lt;artifactId&gt;refactorfirst-maven-plugin&lt;/artifactId&gt;
+  &lt;version&gt;LATEST&lt;/version&gt;
+&lt;/plugin&gt;</code></pre>
+
+      <h2>2. Set up report generation in your repository</h2>
+      <div id="workflow-sample">
+        <WorkflowSample />
+      </div>
+
+      <h2>3. Add your repository to this site</h2>
+      <p>Once a report exists on your default branch, go to
+         <Link href="/add-repo">Add Your Repo</Link> and enter your repository name.
+         A pre-filled issue opens on this site&apos;s platform (GitHub, GitLab or
+         Bitbucket) — submit it there and a CI job validates and adds your
+         repository automatically.</p>
+
+      <h3>How is my identity verified?</h3>
+      <p>This site has no login and stores no credentials: your identity is captured
+         by your platform (GitHub, GitLab or Bitbucket) as the author of the issue
+         you create. The CI job then verifies — independently — that you actually
+         have write access to the repository you submitted. This prevents abuse and
+         keeps the listing trustworthy.</p>
+      <h3>Any permissions or apps needed?</h3>
+      <p>None. You never grant this site access to anything, and no OAuth apps or
+         tokens are involved. You just need an account on the platform hosting the
+         site you are using.</p>
+
+      <h2>Troubleshooting</h2>
+      <ul>
+        <li><strong>Report doesn&apos;t render?</strong> Ensure <code>.refactorfirst/refactor-first.json</code> exists on your default branch.</li>
+        <li><strong>Changed default branch?</strong> Reports are looked up on the branch in the URL. If no branch is specified, the request falls back to <code>main</code>, then <code>master</code>.</li>
+        <li><strong>Submission fails?</strong> You need write access to the repository, and it must not already be listed.</li>
+        <li><strong>Submission is slow to appear?</strong> The site redeploys on a 10-minute schedule.</li>
+      </ul>
+    </section>
+  );
+}

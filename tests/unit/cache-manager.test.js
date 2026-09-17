@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { CacheManager } from '../../js/cache-manager.js';
+import { CacheManager } from '../../lib/cache-manager.js';
 
 describe('CacheManager', () => {
   let cache;

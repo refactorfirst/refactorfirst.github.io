@@ -2,8 +2,21 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import {
   classifyError,
   userMessageFor,
-  renderErrorPage
-} from '../../js/error-handler.js';
+  renderErrorPage,
+  errorPageHtml
+} from '../../lib/error-handler.js';
+
+describe('errorPageHtml', () => {
+  it('prefixes raw root-relative links with NEXT_PUBLIC_BASE_PATH', () => {
+    process.env.NEXT_PUBLIC_BASE_PATH = '/preview';
+    try {
+      expect(errorPageHtml(new Error('boom'))).toContain('href="/preview/"');
+      expect(errorPageHtml(new Error('boom'))).not.toContain('href="//"');
+    } finally {
+      delete process.env.NEXT_PUBLIC_BASE_PATH;
+    }
+  });
+});
 
 describe('classifyError', () => {
   it('classifies 404s as not-found', () => {

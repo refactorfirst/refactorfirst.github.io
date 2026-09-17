@@ -17,6 +17,7 @@ pnpm-lock.yaml
 dist/
 build/
 out/
+.next/
 *.tsbuildinfo
 
 # Test coverage and reports

@@ -11,8 +11,8 @@ test.describe('mobile viewports', () => {
     await toggle.click();
     const links = page.locator('#menu-links');
     await expect(links).toHaveClass(/open/);
-    await page.locator('#menu-links a[href="/about"]').click();
-    await expect(page).toHaveURL(/\/about$/);
+    await page.locator('#menu-links a[href^="/about"]').click();
+    await expect(page).toHaveURL(/\/about\/?$/);
   });
 
   test('repository grid collapses to a single column on mobile', async ({ page }) => {

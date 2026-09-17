@@ -9,9 +9,13 @@ permissions:
   pages: write
   id-token: write
 
+# Redeployment when repositories.txt changed recently. The build is cached
+# (actions/cache on .next/cache) to hit the <6 minute target.
 jobs:
-  check-and-deploy:
+  check:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check-changes.outputs.changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,17 +40,41 @@ jobs:
             echo "No recent changes, skipping deployment"
           fi
 
-      - name: Setup Pages
-        if: steps.check-changes.outputs.changed == 'true'
-        uses: actions/configure-pages@v4
-
+  build:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cache .next build cache
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock', '**/package.json') }}-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock', '**/package.json') }}-
+      - run: bun install
+      - name: Build static export
+        run: bun run build
+        env:
+          NEXT_PUBLIC_HOSTING_ENVIRONMENT: github
       - name: Upload artifact
-        if: steps.check-changes.outputs.changed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: 'out'
 
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to GitHub Pages
-        if: steps.check-changes.outputs.changed == 'true'
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

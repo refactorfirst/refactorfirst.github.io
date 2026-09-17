@@ -3,7 +3,7 @@ import {
   fetchJsonWithFallback,
   fetchReport,
   fetchWithRetry
-} from '../../js/fetcher.js';
+} from '../../lib/fetcher.js';
 
 describe('fetchJsonWithFallback (branch fallback)', () => {
   let mockFetch;

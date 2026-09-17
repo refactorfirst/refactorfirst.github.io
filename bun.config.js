@@ -3,7 +3,7 @@ export default {
     environment: 'jsdom',
     coverage: {
       reporter: ['text', 'html'],
-      include: ['js/**/*.js'],
+      include: ['lib/**/*.js'],
       exclude: ['tests/']
     }
   }
