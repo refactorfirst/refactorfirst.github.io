@@ -3,7 +3,7 @@ import WorkflowSample from '../../components/workflow-sample';
 
 export default function GettingStartedPage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>Getting Started</h1>
 
       <h2>1. Configure the RefactorFirst Maven plugin</h2>

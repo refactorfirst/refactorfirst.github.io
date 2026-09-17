@@ -32,6 +32,15 @@ describe('static content pages', () => {
       const html = renderToStaticMarkup(_jsx(Page, {}));
       expect(html).toContain(`<h1>${heading}</h1>`);
     });
+
+    // Layout cleanup: prose pages carry the .content-page class so the CSS
+    // gives them a bounded, centered, block-flowed column (see
+    // plans/layout-cleanup-plan.md — mvp.css would otherwise make the
+    // section a wrapping flex row that smashes the children together).
+    test(`/${name} uses the content-page layout class`, () => {
+      const html = renderToStaticMarkup(_jsx(Page, {}));
+      expect(html).toMatch(/^<section class="content-page">/);
+    });
   }
 
   test('getting-started carries the workflow-sample slot', () => {

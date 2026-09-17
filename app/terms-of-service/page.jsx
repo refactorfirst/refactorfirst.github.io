@@ -1,6 +1,6 @@
 export default function TermsOfServicePage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>Terms of Service</h1>
 
       <h2>Acceptable use</h2>

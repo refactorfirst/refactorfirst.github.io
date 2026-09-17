@@ -111,4 +111,4 @@ tests/                      # unit/ (Bun), integration/ (Bun + RTL/jsdom), e2e/ 
 
 ## Current Test Count
 
-~271 unit/integration + 81 E2E (three browsers + basePath leg).
+~294 unit/integration + 112 E2E (three browsers + basePath leg).

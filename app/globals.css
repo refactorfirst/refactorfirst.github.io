@@ -53,6 +53,30 @@ main:focus {
   outline: none;
 }
 
+/* mvp.css makes every `section` a wrapping flex row with no gap and center
+   justification (`section { display: flex; flex-wrap: wrap; justify-content:
+   var(--justify-important) }`). It targets the mvp `section > aside` card
+   pattern, but our pages use sections as plain prose containers — so headings,
+   paragraphs, lists and code blocks were laid out side by side as flex items
+   and smashed together. mvp.css is loaded after this bundle, so the reset must
+   win on specificity: `main section` (0-0-2) beats the bare `section`
+   selector (0-0-1) regardless of cascade order. */
+main section {
+  display: block;
+}
+
+/* Prose pages: roughly 75ch measure, centered in the wide main column. */
+.content-page {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+/* Landing sections (CTA, featured repos) that keep centered text now that
+   sections no longer flex-center their children. */
+.section-center {
+  text-align: center;
+}
+
 .hero {
   text-align: center;
   padding: 2.5rem 1rem;
@@ -281,6 +305,17 @@ pre {
   color: #fff;
 }
 
+/* ---- User listing (/user) ---- */
+.repo-listing h1,
+.repo-listing .listing-subtitle {
+  text-align: center;
+}
+
+.listing-subtitle {
+  margin-top: 0.25rem;
+  color: var(--muted-color);
+}
+
 /* ---- Forms / add-repo ---- */
 .user-info {
   display: flex;
@@ -297,6 +332,7 @@ pre {
   display: grid;
   gap: 0.5rem;
   max-width: 420px;
+  margin: 0 auto;
 }
 
 .form-status.error {

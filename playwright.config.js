@@ -33,5 +33,8 @@ export default defineConfig({
     command: 'bun run build && python3 scripts/serve-out.py',
     port: 8003,
     timeout: 300 * 1000,
+    // Locally (bun run build + serve-out.py already running) reuse the
+    // existing server; CI always gets a fresh build.
+    reuseExistingServer: !process.env.CI,
   },
 });

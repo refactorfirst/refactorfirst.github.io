@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function FaqPage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>Frequently Asked Questions</h1>
 
       <h2>What do the different priority colors mean?</h2>

@@ -67,6 +67,15 @@ describe('RepoSubmissionForm', () => {
     expect(container.querySelector('.form-status')?.getAttribute('aria-live')).toBe('polite');
   });
 
+  // Layout cleanup: the add-repo section uses the bounded prose column
+  // (plans/layout-cleanup-plan.md).
+  test('uses the content-page layout class on its section', () => {
+    const { container } = renderForm();
+    const section = container.querySelector('section');
+    expect(section.className).toContain('add-repo-page');
+    expect(section.className).toContain('content-page');
+  });
+
   test('shows inline validation errors for empty fields', async () => {
     const { container } = renderForm();
     submit(container, {});

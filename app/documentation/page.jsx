@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function DocumentationPage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>Documentation</h1>
 
       <h2>Generating Reports</h2>

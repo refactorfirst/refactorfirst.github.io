@@ -35,12 +35,17 @@ describe('Landing page', () => {
     const cta = screen.getByRole('link', { name: 'Add My Repo' });
     expect(cta.getAttribute('href')).toBe('/add-repo');
     expect(cta.className).toBe('cta');
+    // Layout cleanup: the CTA section is centered (block-flowed prose layout).
+    expect(cta.closest('section').className).toContain('section-center');
   });
 
   test('lists the first 6 repositories as featured links', () => {
     render(_jsx(Landing, { repositories: REPOS }));
     const featured = document.querySelector('.featured-repos');
     expect(featured).toBeTruthy();
+    // Layout cleanup: the featured section is centered (block-flowed prose
+    // layout, see plans/layout-cleanup-plan.md).
+    expect(featured.closest('section').className).toContain('section-center');
     const links = [...featured.querySelectorAll('a')];
     expect(links.map(a => a.textContent)).toEqual([
       'apache/tomcat',

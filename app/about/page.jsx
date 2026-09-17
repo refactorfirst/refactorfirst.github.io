@@ -1,6 +1,6 @@
 export default function AboutPage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>About RefactorFirst</h1>
       <p>RefactorFirst is a static analysis tool that identifies which classes in your Java
          codebase you should refactor first, ranked by cost-benefit. It is based on the paper

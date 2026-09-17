@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function ExamplesPage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>Example Reports</h1>
       <p>See RefactorFirst reports for real projects. Each link opens the live report
          rendered from that repository.</p>
