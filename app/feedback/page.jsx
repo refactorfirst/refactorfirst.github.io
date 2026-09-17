@@ -1,6 +1,6 @@
 export default function FeedbackPage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>Feedback</h1>
       <p>We welcome your feedback! The best place to share ideas, report bugs or request
          features is the RefactorFirst project on GitHub.</p>

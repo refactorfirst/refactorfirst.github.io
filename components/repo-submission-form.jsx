@@ -62,7 +62,7 @@ export default function RepoSubmissionForm({ onExternalRedirect }) {
   const label = platformLabel(environment);
 
   return (
-    <section className="add-repo-page">
+    <section className="add-repo-page content-page">
       <h1>Add Your Repository</h1>
       <p className="info">
         Only repositories with a <code>.refactorfirst/refactor-first.json</code> file

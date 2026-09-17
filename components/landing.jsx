@@ -15,10 +15,10 @@ export default function Landing({ repositories }) {
         <p>Know which parts of your codebase to refactor first. Search for a repository to see its report.</p>
       </section>
       <HeroSearch repositories={repositories} />
-      <section>
+      <section className="section-center">
         <Link href="/add-repo" className="cta">Add My Repo</Link>
       </section>
-      <section>
+      <section className="section-center">
         <h2>Featured Repositories</h2>
         <div className="featured-repos">
           <ul>

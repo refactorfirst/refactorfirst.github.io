@@ -1,6 +1,6 @@
 export default function ApiPage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>API for Tool Integrations</h1>
 
       <h2>Fetching reports programmatically</h2>

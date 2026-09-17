@@ -33,5 +33,7 @@ export default defineConfig({
     command: 'bun run build && python3 scripts/serve-out.py',
     port: 8003,
     timeout: 300 * 1000,
+    // Reuse a locally started server only when explicitly requested.
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === 'true',
   },
 });

@@ -1,6 +1,6 @@
 export default function PrivacyPolicyPage() {
   return (
-    <section>
+    <section className="content-page">
       <h1>Privacy Policy</h1>
 
       <h2>Data Collected</h2>
