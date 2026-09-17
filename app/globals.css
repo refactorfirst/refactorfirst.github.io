@@ -13,6 +13,10 @@
   --menu-height: 48px;
   --radius: 6px;
   --shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  /* mvp.css caps header/footer/main at --width-content (1080px by default).
+     Report pages and listings should fill the view: content uses 95% of the
+     viewport width instead. */
+  --width-content: min(3840px, 95vw);
 }
 
 body {
@@ -35,12 +39,14 @@ body {
   left: 0;
 }
 
-main {
+/* mvp.css targets `footer, header, main` with the same specificity and is
+   loaded after the bundle CSS, so the id-qualified selector is the stable
+   way to win the cascade. Report pages should fill 95% of the view. */
+main#app {
   max-width: min(3840px, 95vw);
   margin: 0 auto;
   padding: 1rem 1.5rem 3rem;
   min-height: 60vh;
-
 }
 
 main:focus {

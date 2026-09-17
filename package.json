@@ -24,8 +24,8 @@
     "test:e2e": "npx playwright test",
     "test:e2e:basepath": "npx playwright test --config playwright.basepath.config.js",
     "test:e2e:ui": "npx playwright test --ui",
-    "lint": "eslint js/**/*.js lib/**/*.js app/**/*.jsx components/**/*.jsx tests/**/*.js tests/**/*.jsx",
-    "lint:fix": "eslint js/**/*.js lib/**/*.js app/**/*.jsx components/**/*.jsx tests/**/*.js tests/**/*.jsx --fix"
+    "lint": "eslint lib/**/*.js app/**/*.jsx components/**/*.jsx tests/**/*.js tests/**/*.jsx",
+    "lint:fix": "eslint lib/**/*.js app/**/*.jsx components/**/*.jsx tests/**/*.js tests/**/*.jsx --fix"
   },
   "type": "module",
   "dependencies": {

@@ -11,7 +11,7 @@ jobs:
           bun-version: latest
       - run: bun install
       - run: bun test tests/unit tests/integration
-      - run: bunx eslint "js/**/*.js" "lib/**/*.js" "app/**/*.{js,jsx}" "components/**/*.{js,jsx}" "tests/**/*.{js,jsx}"
+      - run: bunx eslint "lib/**/*.js" "app/**/*.{js,jsx}" "components/**/*.{js,jsx}" "tests/**/*.{js,jsx}"
       - run: shellcheck ci/process-submissions.sh
 
   e2e-tests:
