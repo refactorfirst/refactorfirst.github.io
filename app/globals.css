@@ -249,9 +249,20 @@ pre {
 
 .hero-search {
   position: relative;
-  max-width: 480px;
+  /* Exactly half the rendered width of the top menu (#top-menu is capped by
+     mvp.css at --width-content = 1080px, full width below that) and centered
+     under it. */
+  width: min(540px, 50vw);
   margin: 1rem auto;
   text-align: left;
+}
+
+.hero-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #c6d2dc;
+  border-radius: var(--radius);
 }
 
 /* ---- Repository grid ---- */
