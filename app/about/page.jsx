@@ -1,5 +1,6 @@
 export const metadata = { title: 'About - RefactorFirst' };
 
+/** Renders the RefactorFirst project overview. */
 export default function AboutPage() {
   return (
     <section className="content-page">

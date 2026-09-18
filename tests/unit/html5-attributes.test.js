@@ -23,6 +23,11 @@ const OBSOLETE_ATTRIBUTES = [
 
 // Every file that contributes markup: the report template, the workflow
 // sample fragments and the JS/JSX sources that embed HTML strings.
+/**
+ * Lists template files whose markup must satisfy the HTML5 checks.
+ *
+ * @returns {string[]} Repository-relative template paths.
+ */
 function markupSources() {
   const files = [
     'public/assets/refactor-first-report.mustache',
@@ -38,6 +43,12 @@ const obsoleteAttrPattern = new RegExp(
   'i'
 );
 
+/**
+ * Finds obsolete HTML attributes in a markup source file.
+ *
+ * @param {string} file - Repository-relative source path.
+ * @returns {string[]} Source lines containing obsolete attributes.
+ */
 function scanForObsoleteAttributes(file) {
   const source = readFileSync(path.join(ROOT, file), 'utf8');
   const found = [];

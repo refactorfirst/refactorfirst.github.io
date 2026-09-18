@@ -1,5 +1,6 @@
 export const metadata = { title: 'API - RefactorFirst' };
 
+/** Renders the API and integration reference page. */
 export default function ApiPage() {
   return (
     <section className="content-page">

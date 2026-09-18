@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 export const metadata = { title: 'FAQ - RefactorFirst' };
 
+/** Renders answers to frequently asked questions. */
 export default function FaqPage() {
   return (
     <section className="content-page">

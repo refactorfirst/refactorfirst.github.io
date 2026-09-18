@@ -1,5 +1,6 @@
 export const metadata = { title: 'Privacy Policy - RefactorFirst' };
 
+/** Renders the RefactorFirst privacy policy. */
 export default function PrivacyPolicyPage() {
   return (
     <section className="content-page">

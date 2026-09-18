@@ -11,6 +11,12 @@ const css = readFileSync(
   'utf-8'
 );
 
+/**
+ * Indexes CSS declaration blocks by selector.
+ *
+ * @param {string} source - Stylesheet source.
+ * @returns {Map<string, string>} Declaration blocks keyed by selector.
+ */
 function ruleMap(source) {
   const noComments = source.replace(/\/\*[\s\S]*?\*\//g, '');
   const rules = new Map();
@@ -24,6 +30,12 @@ function ruleMap(source) {
   return rules;
 }
 
+/**
+ * Collects custom property declarations from a stylesheet.
+ *
+ * @param {string} source - Stylesheet source.
+ * @returns {Map<string, string>} Custom property values keyed by name.
+ */
 function cssVars(source) {
   const vars = new Map();
   const varRe = /--([\w-]+)\s*:\s*([^;]+);/g;
@@ -37,11 +49,23 @@ function cssVars(source) {
 const rules = ruleMap(css);
 const vars = cssVars(css);
 
+/**
+ * Resolves a direct CSS custom-property reference.
+ *
+ * @param {string} value - CSS value to resolve.
+ * @returns {string|undefined} The referenced value or the original value.
+ */
 function resolve(value) {
   const varMatch = value.match(/var\((--[\w-]+)\)/);
   return varMatch ? vars.get(varMatch[1]) : value;
 }
 
+/**
+ * Converts a three- or six-digit hex color to normalized RGB channels.
+ *
+ * @param {string} hex - Hexadecimal CSS color.
+ * @returns {number[]} Red, green, and blue channels in the range 0 to 1.
+ */
 function hexToRgb(hex) {
   const match = hex.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
   if (!match) throw new Error(`not a hex color: ${hex}`);
@@ -50,6 +74,12 @@ function hexToRgb(hex) {
   return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 }
 
+/**
+ * Calculates a color's WCAG relative luminance.
+ *
+ * @param {string} hex - Hexadecimal CSS color.
+ * @returns {number} Relative luminance in the range 0 to 1.
+ */
 function relativeLuminance(hex) {
   const [r, g, b] = hexToRgb(hex).map(channel =>
     channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
@@ -57,6 +87,13 @@ function relativeLuminance(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/**
+ * Calculates the WCAG contrast ratio between two colors.
+ *
+ * @param {string} colorA - First hexadecimal CSS color.
+ * @param {string} colorB - Second hexadecimal CSS color.
+ * @returns {number} Contrast ratio from 1 to 21.
+ */
 function contrastRatio(colorA, colorB) {
   const [la, lb] = [relativeLuminance(colorA), relativeLuminance(colorB)];
   const [light, dark] = la >= lb ? [la, lb] : [lb, la];
