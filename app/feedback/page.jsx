@@ -1,3 +1,5 @@
+export const metadata = { title: 'Feedback - RefactorFirst' };
+
 export default function FeedbackPage() {
   return (
     <section className="content-page">

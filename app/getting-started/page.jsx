@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import WorkflowSample from '../../components/workflow-sample';
 
+export const metadata = { title: 'Getting Started - RefactorFirst' };
+
 export default function GettingStartedPage() {
   return (
     <section className="content-page">

@@ -109,8 +109,10 @@ test('report renders all sections from repository JSON with fallback template', 
   await page.goto('/refactorfirst/refactorfirst');
   await page.waitForLoadState('networkidle');
   await expect(page.locator('h1').first()).toContainText('RefactorFirst Report for refactorfirst 0.5.1');
-  await expect(page.locator('a#CLASSMAP')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'God Classes', level: 1 })).toBeVisible();
+  await expect(page.locator('h2#CLASSMAP')).toBeVisible();
+  // WCAG 2.2 AA: the report has a single h1 (the title); section and
+  // disharmony headings nest beneath it.
+  await expect(page.getByRole('heading', { name: 'God Classes', level: 3 })).toBeVisible();
   await expect(page.locator('canvas#chart_GOD')).toBeAttached();
   await expect(page.locator('text=org.hjug.git.GitLogReader')).toBeVisible();
   await expect(page.locator('#publishDate')).toContainText('Last Published:');
@@ -244,7 +246,7 @@ test('malicious report data cannot inject scripts or handlers', async ({ page })
 
   await page.goto('/refactorfirst/refactorfirst');
   await page.waitForLoadState('networkidle');
-  await expect(page.getByRole('heading', { name: 'God Classes', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'God Classes', level: 3 })).toBeVisible();
   await expect(page.locator('img[onerror]')).toHaveCount(0);
   expect(await page.evaluate(() => window.__xss)).toBeUndefined();
   expect(await page.evaluate(() => window.__xss2)).toBeUndefined();

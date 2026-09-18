@@ -1,3 +1,5 @@
+export const metadata = { title: 'About - RefactorFirst' };
+
 export default function AboutPage() {
   return (
     <section className="content-page">

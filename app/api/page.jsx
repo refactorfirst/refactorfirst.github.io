@@ -1,3 +1,5 @@
+export const metadata = { title: 'API - RefactorFirst' };
+
 export default function ApiPage() {
   return (
     <section className="content-page">

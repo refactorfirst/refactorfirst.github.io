@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+export const metadata = { title: 'Documentation - RefactorFirst' };
+
 export default function DocumentationPage() {
   return (
     <section className="content-page">

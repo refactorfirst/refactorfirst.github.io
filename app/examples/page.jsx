@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+export const metadata = { title: 'Example Reports - RefactorFirst' };
+
 export default function ExamplesPage() {
   return (
     <section className="content-page">
