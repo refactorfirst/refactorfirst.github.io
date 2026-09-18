@@ -115,4 +115,31 @@ describe('report template WCAG 2.2 AA (rendered with fixture data)', () => {
 
     expect(docWithoutCycleMap.querySelector('a[href="#CYCLEMAP"]')).toBeNull();
   });
+
+  it('omits optional navigation links when their report sections are absent', () => {
+    const sparseFixture = structuredClone(fixture);
+    sparseFixture.classRelationshipsToRemove.hasRelationships = false;
+    sparseFixture.packageMap.hasEdges = false;
+    sparseFixture.packageRelationshipsToRemove.hasRelationships = false;
+    sparseFixture.hasDisharmonies = false;
+    sparseFixture.disharmonies = [];
+    sparseFixture.classCycles.hasCycles = false;
+
+    const sparseDoc = new JSDOM(renderTemplate(template, sparseFixture)).window.document;
+    const optionalTargets = [
+      '#CLASSEDGES',
+      '#PACKAGEMAP',
+      '#PACKAGEEDGES',
+      '#DISHARMONIES',
+      '#CYCLES',
+      '#CYCLEMAP'
+    ];
+
+    expect(sparseDoc.querySelector('a[href="#CLASSMAP"]')).not.toBeNull();
+    expect(sparseDoc.getElementById('CLASSMAP')).not.toBeNull();
+    for (const target of optionalTargets) {
+      expect(sparseDoc.querySelector(`a[href="${target}"]`)).toBeNull();
+      expect(sparseDoc.getElementById(target.slice(1))).toBeNull();
+    }
+  });
 });

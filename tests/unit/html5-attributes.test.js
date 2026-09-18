@@ -82,6 +82,20 @@ describe('HTML5 attribute compliance (sources)', () => {
     expect(html).toContain('<td>');
   });
 
+  for (const attribute of OBSOLETE_ATTRIBUTES) {
+    it(`strips the obsolete ${attribute} attribute from rendered markup`, () => {
+      const html = renderTemplate(
+        `<div id="subject" ${attribute}="legacy-value">content</div>`,
+        {}
+      );
+      const subject = new JSDOM(html).window.document.querySelector('#subject');
+
+      expect(subject).not.toBeNull();
+      expect(subject.hasAttribute(attribute)).toBe(false);
+      expect(subject.textContent).toBe('content');
+    });
+  }
+
   it('preserves valid ordered-list numbering', () => {
     const html = renderTemplate('<ol start="3"><li>Third</li></ol>', {});
     const list = new JSDOM(html).window.document.querySelector('ol');
