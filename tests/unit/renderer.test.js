@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+import { JSDOM } from 'jsdom';
 import { renderTemplate, initializeMustache } from '../../lib/renderer.js';
 
 describe('Mustache Rendering', () => {
@@ -66,6 +67,29 @@ describe('Mustache Rendering', () => {
     expect(result).toContain('<p>safe</p>');
   })
 
+  const forbiddenElements = [
+    ['script', '<script>window.__xss = 1</script>'],
+    ['iframe', '<iframe src="https://evil.example"></iframe>'],
+    ['object', '<object data="https://evil.example/payload"></object>'],
+    ['embed', '<embed src="https://evil.example/payload">'],
+    ['meta', '<meta http-equiv="refresh" content="0;url=https://evil.example">'],
+    ['link', '<link rel="stylesheet" href="https://evil.example/styles.css">'],
+    ['form', '<form action="https://evil.example"><button>Submit</button></form>'],
+    ['input', '<input name="secret" value="credential">'],
+    ['select', '<select name="secret"><option>credential</option></select>'],
+    ['textarea', '<textarea name="secret">credential</textarea>']
+  ];
+
+  for (const [tag, markup] of forbiddenElements) {
+    it(`strips forbidden <${tag}> elements from raw interpolations`, () => {
+      const html = renderTemplate('<section>{{{content}}}</section>', { content: markup });
+      const document = new JSDOM(html).window.document;
+
+      expect(document.querySelector(tag)).toBeNull();
+      expect(document.querySelector('section')).not.toBeNull();
+    });
+  }
+
   it('should handle empty data', () => {
     const template = '{{name}}';
     const result = renderTemplate(template, {});
@@ -110,6 +134,34 @@ describe('templating safety (repository-provided templates are untrusted)', () =
     });
     expect(html).not.toContain('onerror');
     expect(html).toContain('<img');
+  });
+
+  it('normalizes target values before securing new browsing contexts', () => {
+    const html = renderTemplate(
+      '<a href="https://example.com" target="  _BlAnK ">New tab</a>' +
+        '<a href="https://example.com/same" target="_self">Same tab</a>' +
+        '<div target="_blank">Not a link</div>',
+      {}
+    );
+    const document = new JSDOM(html).window.document;
+
+    expect(document.querySelector('a[href="https://example.com"]')?.getAttribute('rel'))
+      .toBe('noopener noreferrer');
+    expect(document.querySelector('a[target="_self"]')?.hasAttribute('rel')).toBe(false);
+    expect(document.querySelector('div[target="_blank"]')?.hasAttribute('rel')).toBe(false);
+  });
+
+  it('removes an explicit opener relationship from links that open a new context', () => {
+    const html = renderTemplate(
+      '<a href="https://example.com" target="_blank" rel="opener nofollow">New tab</a>',
+      {}
+    );
+    const link = new JSDOM(html).window.document.querySelector('a');
+    const relationships = link.getAttribute('rel').split(/\s+/);
+
+    expect(relationships).toContain('noopener');
+    expect(relationships).toContain('noreferrer');
+    expect(relationships).not.toContain('opener');
   });
 
   it('keeps benign structure, style attributes and data attributes intact', () => {

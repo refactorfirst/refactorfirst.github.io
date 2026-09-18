@@ -1,3 +1,6 @@
+export const metadata = { title: 'Feedback - RefactorFirst' };
+
+/** Renders feedback and support links. */
 export default function FeedbackPage() {
   return (
     <section className="content-page">

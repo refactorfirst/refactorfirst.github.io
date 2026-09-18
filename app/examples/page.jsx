@@ -1,5 +1,8 @@
 import Link from 'next/link';
 
+export const metadata = { title: 'Example Reports - RefactorFirst' };
+
+/** Renders links and guidance for example reports. */
 export default function ExamplesPage() {
   return (
     <section className="content-page">

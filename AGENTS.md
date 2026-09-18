@@ -91,6 +91,14 @@ tests/                      # unit/ (Bun), integration/ (Bun + RTL/jsdom), e2e/ 
 3. Write the minimal implementation in `lib/` / `components/` / `app/`
 4. Refactor while keeping tests green
 
+**Accessibility is mandatory** — every feature MUST comply with WCAG 2.2 AA
+and all markup MUST use HTML5-valid elements/attributes (no obsolete
+presentational attributes; presentation lives in CSS). New pages, components
+and template changes must keep the a11y guards green:
+`tests/unit/html5-attributes.test.js`, `tests/unit/report-template-wcag.test.js`,
+`tests/unit/css-a11y.test.js`, `tests/unit/page-titles.test.js` — and add
+coverage there when introducing new markup patterns.
+
 ## Platform-Aware Sections in This Repo
 
 - **CSP** lives in `app/layout.jsx` (`script-src` includes the CDN widget hosts and
@@ -111,4 +119,10 @@ tests/                      # unit/ (Bun), integration/ (Bun + RTL/jsdom), e2e/ 
 
 ## Current Test Count
 
-~294 unit/integration + 112 E2E (three browsers + basePath leg).
+~313 unit/integration + 112 E2E (three browsers + basePath leg).
+
+WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
+tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and
+tests/unit/page-titles.test.js — the report mustache keeps a single h1,
+scoped table headers, captions, labelled canvases and a named nav; obsolete
+presentational attributes are FORBID_ATTR-stripped in lib/renderer.js.

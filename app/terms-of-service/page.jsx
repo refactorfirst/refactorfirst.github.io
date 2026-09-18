@@ -1,3 +1,6 @@
+export const metadata = { title: 'Terms of Service - RefactorFirst' };
+
+/** Renders the RefactorFirst terms of service. */
 export default function TermsOfServicePage() {
   return (
     <section className="content-page">

@@ -1,5 +1,8 @@
 import Link from 'next/link';
 
+export const metadata = { title: 'Documentation - RefactorFirst' };
+
+/** Renders the RefactorFirst documentation overview. */
 export default function DocumentationPage() {
   return (
     <section className="content-page">

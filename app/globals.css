@@ -2,7 +2,10 @@
 
 :root {
   --brand-color: #2a6f97;
-  --brand-accent: #61c0bf;
+  /* Darker accent: white text on it passes WCAG 2.2 AA contrast (1.4.3) and
+     it serves as the visible focus indicator (2.4.11, >= 3:1 against the
+     white page background). */
+  --brand-accent: #1f5273;
   --text-color: #1f2d3d;
   --muted-color: #5c6b7a;
   --bg-color: #ffffff;
@@ -49,7 +52,10 @@ main#app {
   min-height: 60vh;
 }
 
-main:focus {
+/* Skip-link target: suppress the outline only for programmatic (script/
+   click) focus; keyboard-focusable users keep the visible indicator (WCAG
+   2.4.7 / 2.4.11). */
+main:focus:not(:focus-visible) {
   outline: none;
 }
 

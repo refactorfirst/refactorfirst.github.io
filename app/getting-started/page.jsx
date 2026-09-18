@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import WorkflowSample from '../../components/workflow-sample';
 
+export const metadata = { title: 'Getting Started - RefactorFirst' };
+
+/** Renders the repository setup walkthrough. */
 export default function GettingStartedPage() {
   return (
     <section className="content-page">

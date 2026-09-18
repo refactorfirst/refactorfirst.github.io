@@ -69,6 +69,33 @@
         width: 95%;
         margin: 20px auto;
     }
+
+    /* HTML5 replacements for the obsolete presentational attributes the
+       upstream template used (align/border): text alignment, centered
+       blocks and the data-table chrome now come from these classes. */
+    .rf-text-center {
+        text-align: center;
+    }
+
+    .rf-text-left {
+        text-align: left;
+    }
+
+    .rf-text-right {
+        text-align: right;
+    }
+
+    .rf-data-table {
+        border: 5px solid;
+        border-collapse: collapse;
+        margin: 0 auto;
+    }
+
+    .rf-data-table th,
+    .rf-data-table td {
+        border: 1px solid;
+        padding: 2px 6px;
+    }
 </style>
 
 <div class="rf-report" lang="en">
@@ -76,13 +103,13 @@
 
     <!-- Header & Navigation -->
     <div class="rf-header">
-        <h1 align="center">
+        <h1 class="rf-text-center">
             <a href="https://github.com/refactorfirst/refactorfirst" target="_blank">RefactorFirst</a> Report for
             <a href="{{project.repoUrl}}" target="_blank">{{project.name}} {{project.version}}</a>
         </h1>
 
         <!-- GitHub Support Badges -->
-        <div align="center">
+        <div class="rf-text-center">
             <h2>Show RefactorFirst some &#10084;&#65039;</h2>
             <a class="github-button" href="https://github.com/refactorfirst/refactorfirst" data-icon="octicon-star"
                data-size="large" data-show-count="true" aria-label="Star refactorfirst/refactorfirst on GitHub">Star</a>
@@ -99,9 +126,9 @@
                data-size="large" aria-label="Sponsor @jimbethancourt on GitHub">Sponsor</a>
         </div>
 
-        <nav>
+        <nav aria-label="Report sections">
             <ul>
-                <li><a href="#">Classes</a>
+                <li><a href="#CLASSMAP">Classes</a>
                     <ul>
                         <li><a href="#CLASSMAP">Class Map</a></li>
                         {{#classRelationshipsToRemove.hasRelationships}}
@@ -110,7 +137,7 @@
                     </ul>
                 </li>
                 {{#packageMap.hasEdges}}
-                    <li><a href="#">Packages</a>
+                    <li><a href="#PACKAGEMAP">Packages</a>
                         <ul>
                             <li><a href="#PACKAGEMAP">Package Map</a></li>
                             {{#packageRelationshipsToRemove.hasRelationships}}
@@ -120,7 +147,7 @@
                     </li>
                 {{/packageMap.hasEdges}}
                 {{#hasDisharmonies}}
-                    <li><a href="#">Disharmonies</a>
+                    <li><a href="#DISHARMONIES">Disharmonies</a>
                         <ul>
                             {{#disharmonies}}
                                 <li><a href="#{{anchorId}}">{{title}}</a></li>
@@ -129,10 +156,12 @@
                     </li>
                 {{/hasDisharmonies}}
                 {{#classCycles.hasCycles}}
-                    <li><a href="#">Cycles</a>
+                    <li><a href="#CYCLES">Cycles</a>
                         <ul>
                             <li><a href="#CYCLES">Class Cycles</a></li>
+                            {{#classCycles.largestCycle.hasCycleMap}}
                             <li><a href="#CYCLEMAP">Cycle Map</a></li>
+                            {{/classCycles.largestCycle.hasCycleMap}}
                         </ul>
                     </li>
                 {{/classCycles.hasCycles}}
@@ -141,14 +170,14 @@
     </div>
 
     {{#project.analysisFailed}}
-        <div role="alert" align="center">
+        <div role="alert" class="rf-text-center">
             <strong>Analysis incomplete:</strong> RefactorFirst could not finish scanning this project.
             The absence of findings below does not mean the project is clean.
         </div>
     {{/project.analysisFailed}}
 
     <!-- Class Map Section -->
-<h1 align="center"><a id="CLASSMAP">Class Map</a></h1>
+<h2 id="CLASSMAP" class="rf-text-center">Class Map</h2>
 <button style="display: block; margin: 0 auto;" type="button"
         data-popup-3d data-popup="popup-classGraph" data-container="graph-container-classGraph" data-dot-var="classGraph_dot">Show classGraph
     3D Popup
@@ -163,7 +192,7 @@
         <div id="graph-container-classGraph" style="width: 100%; height: 100%;"></div>
     </div>
 
-    <div align="center">
+    <div class="rf-text-center">
         Red lines represent relationships to remove.<br>
         Red nodes represent classes to remove.<br>
         Zoom in / out with your mouse wheel and click/move to drag the image.<br>
@@ -171,50 +200,51 @@
     </div>
 
     {{#classMap.dotThresholdExceeded}}
-        <div align="center">SVG is too big to render quickly</div>
+        <div class="rf-text-center">SVG is too big to render quickly</div>
     {{/classMap.dotThresholdExceeded}}
     {{^classMap.dotThresholdExceeded}}
         <div id="classGraph" style="width: 95%; height: 70vh; margin: auto; border: thin solid black"></div>
     {{/classMap.dotThresholdExceeded}}
 
-    <br/>
-    <hr/>
-    <br/>
-    <br/>
+    <br>
+    <hr>
+    <br>
+    <br>
 
     <!-- Class Relationships To Remove Table -->
     {{#classRelationshipsToRemove.hasRelationships}}
-        <div style="text-align: center;"><a id="CLASSEDGES"><h1>Class Relationship Removal Priority</h1></a></div>
-        <h2 align="center">Refactor Starting with Priority 1</h2>
-        <div style="text-align: center;">
+        <h2 id="CLASSEDGES" class="rf-text-center">Class Relationship Removal Priority</h2>
+        <h3 class="rf-text-center">Refactor Starting with Priority 1</h3>
+        <div class="rf-text-center">
             Current Class Cycle Count: {{classRelationshipsToRemove.cycleCount}}<br>
             Number of Class Relationships to Remove: {{classRelationshipsToRemove.relationshipsToRemoveCount}}<br>
             Classes with <strong>*</strong> should be broken apart<br>
             Removing class relationships below will eliminate class cycles
         </div>
-        <div align="center">
-            <table align="center" border="5px">
+        <div class="rf-text-center">
+            <table class="rf-data-table">
+                <caption>Class relationships to remove, in priority order</caption>
                 <thead>
                 <tr>
-                    <th>Class Relationship</th>
-                    <th>Priority</th>
-                    <th>In Class<br>Cycles</th>
-                    <th>Relationship<br>Strength</th>
-                    <th>Also Removes Pkg<br>Cycle Relationship</th>
-                    <th>In Package<br>Cycles</th>
+                    <th scope="col">Class Relationship</th>
+                    <th scope="col">Priority</th>
+                    <th scope="col">In Class<br>Cycles</th>
+                    <th scope="col">Relationship<br>Strength</th>
+                    <th scope="col">Also Removes Pkg<br>Cycle Relationship</th>
+                    <th scope="col">In Package<br>Cycles</th>
                 </tr>
                 </thead>
                 <tbody>
                 {{#classRelationshipsToRemove.relationships}}
                     <tr>
-                        <td align="left">{{renderedLabel}}</td>
-                        <td align="right">{{priority}}</td>
-                        <td align="right">{{cycleCount}}</td>
-                        <td align="right">{{effortRank}}</td>
-                        <td align="left">{{#alsoRemovesPackageRelationship}}
+                        <td class="rf-text-left">{{renderedLabel}}</td>
+                        <td class="rf-text-right">{{priority}}</td>
+                        <td class="rf-text-right">{{cycleCount}}</td>
+                        <td class="rf-text-right">{{effortRank}}</td>
+                        <td class="rf-text-left">{{#alsoRemovesPackageRelationship}}
                             <strong>true</strong>{{/alsoRemovesPackageRelationship}}{{^alsoRemovesPackageRelationship}}
                             false{{/alsoRemovesPackageRelationship}}</td>
-                        <td align="right">{{packageCycleCount}}</td>
+                        <td class="rf-text-right">{{packageCycleCount}}</td>
                     </tr>
                 {{/classRelationshipsToRemove.relationships}}
                 </tbody>
@@ -222,14 +252,14 @@
         </div>
     {{/classRelationshipsToRemove.hasRelationships}}
 
-    <br/>
-    <hr/>
-    <br/>
-    <br/>
+    <br>
+    <hr>
+    <br>
+    <br>
 
     <!-- Package Map Section -->
     {{#packageMap.hasEdges}}
-        <h1 align="center"><a id="PACKAGEMAP">Package Map</a></h1>
+        <h2 id="PACKAGEMAP" class="rf-text-center">Package Map</h2>
         <button style="display: block; margin: 0 auto;" type="button"
                 data-popup-3d data-popup="popup-packageGraph" data-container="graph-container-packageGraph" data-dot-var="packageGraph_dot">Show
             packageGraph
@@ -246,7 +276,7 @@
             <div id="graph-container-packageGraph" style="width: 100%; height: 100%;"></div>
         </div>
 
-        <div align="center">
+        <div class="rf-text-center">
             Red lines represent relationships to remove.<br>
             Red nodes represent packages to remove.<br>
             Zoom in / out with your mouse wheel and click/move to drag the image.<br>
@@ -254,48 +284,49 @@
         </div>
 
         {{#packageMap.dotThresholdExceeded}}
-            <div align="center">SVG is too big to render quickly</div>
+            <div class="rf-text-center">SVG is too big to render quickly</div>
         {{/packageMap.dotThresholdExceeded}}
         {{^packageMap.dotThresholdExceeded}}
             <div id="packageGraph" style="width: 95%; height: 70vh; margin: auto; border: thin solid black"></div>
         {{/packageMap.dotThresholdExceeded}}
     {{/packageMap.hasEdges}}
 
-    <br/>
-    <hr/>
-    <br/>
-    <br/>
+    <br>
+    <hr>
+    <br>
+    <br>
 
     <!-- Package Relationships To Remove Table -->
     {{#packageRelationshipsToRemove.hasRelationships}}
-        <div style="text-align: center;"><a id="PACKAGEEDGES"><h1>Package Relationship Removal Priority</h1></a></div>
-        <h2 align="center">Refactor Starting with Priority 1</h2>
-        <div style="text-align: center;">
+        <h2 id="PACKAGEEDGES" class="rf-text-center">Package Relationship Removal Priority</h2>
+        <h3 class="rf-text-center">Refactor Starting with Priority 1</h3>
+        <div class="rf-text-center">
             Current Package Cycle Count: {{packageRelationshipsToRemove.cycleCount}}<br>
             Number of Package Relationships to Remove: {{packageRelationshipsToRemove.relationshipsToRemoveCount}}<br>
             Packages and classes with <strong>*</strong> should be broken apart<br>
             Removing package relationships below will eliminate package cycles
         </div>
-        <div align="center">
-            <table align="center" border="5px">
+        <div class="rf-text-center">
+            <table class="rf-data-table">
+                <caption>Package relationships to remove, in priority order</caption>
                 <thead>
                 <tr>
-                    <th>Package Relationship</th>
-                    <th>Priority</th>
-                    <th>In Pkg<br>Cycles</th>
-                    <th>Relationship<br>Strength</th>
-                    <th>Class Relationships to Remove<br>To Break Package Relationship</th>
+                    <th scope="col">Package Relationship</th>
+                    <th scope="col">Priority</th>
+                    <th scope="col">In Pkg<br>Cycles</th>
+                    <th scope="col">Relationship<br>Strength</th>
+                    <th scope="col">Class Relationships to Remove<br>To Break Package Relationship</th>
                 </tr>
                 </thead>
                 <tbody>
                 {{#packageRelationshipsToRemove.relationships}}
                     <tr>
-                        <td align="left">{{{renderedLabel}}}</td>
-                        <td align="right">{{priority}}</td>
-                        <td align="right">{{cycleCount}}</td>
-                        <td align="right">{{effortRank}}</td>
-                        <td align="left">{{#classRelationshipsToBreakPackage}}
-                            {{{.}}}<br/>{{/classRelationshipsToBreakPackage}}</td>
+                        <td class="rf-text-left">{{{renderedLabel}}}</td>
+                        <td class="rf-text-right">{{priority}}</td>
+                        <td class="rf-text-right">{{cycleCount}}</td>
+                        <td class="rf-text-right">{{effortRank}}</td>
+                        <td class="rf-text-left">{{#classRelationshipsToBreakPackage}}
+                            {{{.}}}<br>{{/classRelationshipsToBreakPackage}}</td>
                     </tr>
                 {{/packageRelationshipsToRemove.relationships}}
                 </tbody>
@@ -304,41 +335,51 @@
     {{/packageRelationshipsToRemove.hasRelationships}}
 
     <!-- Disharmonies Sections with Chart.js Canvas -->
+    {{#hasDisharmonies}}
+        <br>
+        <hr>
+        <h2 id="DISHARMONIES" class="rf-text-center">Code Disharmonies</h2>
+    {{/hasDisharmonies}}
     {{#disharmonies}}
-        <br/>
-        <hr/>
-        <br/>
-        <br/>
-        <div style="text-align: center;"><a id="{{anchorId}}"><h1>{{title}}</h1></a></div>
-        <div align="center">
-            <table border="5px">
+        <br>
+        <hr>
+        <br>
+        <br>
+        <h3 id="{{anchorId}}" class="rf-text-center">{{title}}</h3>
+        <div class="rf-text-center">
+            <table class="rf-data-table">
+                <caption>Problem and recommended solution for {{title}}</caption>
+                <tbody>
                 <tr>
-                    <td><strong>Problem:</strong></td>
+                    <th scope="row">Problem:</th>
                     <td>{{problem}}</td>
                 </tr>
                 <tr>
-                    <td><strong>Solution:</strong></td>
+                    <th scope="row">Solution:</th>
                     <td>{{{solution}}}</td>
                 </tr>
+                </tbody>
             </table>
         </div>
 
         <!-- Chart.js Canvas -->
-        <div class="chart-container" align="center">
+        <div class="chart-container rf-text-center">
             <div style="position: relative; height: 500px; width: 100%; margin: 0 auto;">
-                <canvas id="chart_{{anchorId}}"></canvas>
+                <canvas id="chart_{{anchorId}}" role="img"
+                        aria-label="Bubble chart ranking {{title}} findings by priority and effort">Bubble chart visualizing the {{title}} findings: one bubble per class, ranked by priority and estimated effort.</canvas>
             </div>
         </div>
 
-        <br/>
+        <br>
 
-        <h2 align="center">{{title}} by the numbers: (Refactor Starting with Priority 1)</h2>
-        <div align="center">
-            <table align="center" border="5px">
+        <h4 class="rf-text-center">{{title}} by the numbers: (Refactor Starting with Priority 1)</h4>
+        <div class="rf-text-center">
+            <table class="rf-data-table">
+                <caption>{{title}} findings, in priority order</caption>
                 <thead>
                 <tr>
                     {{#table.headers}}
-                        <th>{{.}}</th>
+                        <th scope="col">{{.}}</th>
                     {{/table.headers}}
                 </tr>
                 </thead>
@@ -346,7 +387,7 @@
                 {{#table.rows}}
                     <tr>
                         {{#cells}}
-                            <td align="{{align}}">{{{content}}}</td>
+                            <td class="rf-text-{{align}}">{{{content}}}</td>
                         {{/cells}}
                     </tr>
                 {{/table.rows}}
@@ -355,32 +396,33 @@
         </div>
     {{/disharmonies}}
 
-    <br/>
-    <hr/>
-    <br/>
-    <br/>
+    <br>
+    <hr>
+    <br>
+    <br>
 
     <!-- Cycles Summary Table & Cycle Map -->
     {{#classCycles.hasCycles}}
-        <div style="text-align: center;"><a id="CYCLES"><h1>Class Cycles</h1></a></div>
-        <h2 align="center">Class Cycles by the numbers:</h2>
-        <div align="center">
-            <table align="center" border="5px">
+        <h2 id="CYCLES" class="rf-text-center">Class Cycles</h2>
+        <h3 class="rf-text-center">Class Cycles by the numbers:</h3>
+        <div class="rf-text-center">
+            <table class="rf-data-table">
+                <caption>Class cycles summary</caption>
                 <thead>
                 <tr>
-                    <th>Cycle Name</th>
-                    <th>Priority</th>
-                    <th>Class Count</th>
-                    <th>Relationship Count</th>
+                    <th scope="col">Cycle Name</th>
+                    <th scope="col">Priority</th>
+                    <th scope="col">Class Count</th>
+                    <th scope="col">Relationship Count</th>
                 </tr>
                 </thead>
                 <tbody>
                 {{#classCycles.summary}}
                     <tr>
-                        <td align="left">{{cycleName}}</td>
-                        <td align="right">{{priority}}</td>
-                        <td align="right">{{classCount}}</td>
-                        <td align="right">{{relationshipCount}}</td>
+                        <td class="rf-text-left">{{cycleName}}</td>
+                        <td class="rf-text-right">{{priority}}</td>
+                        <td class="rf-text-right">{{classCount}}</td>
+                        <td class="rf-text-right">{{relationshipCount}}</td>
                     </tr>
                 {{/classCycles.summary}}
                 </tbody>
@@ -388,8 +430,8 @@
         </div>
 
         {{#classCycles.largestCycle.hasCycleMap}}
-            <h2 align="center"><a id="CYCLEMAP">Largest Class Cycle : {{classCycles.largestCycle.cycleName}}</a></h2>
-            <h3 align="center">Limiting number of cycles displayed to 1 to keep page load time fast</h3>
+            <h3 id="CYCLEMAP" class="rf-text-center">Largest Class Cycle : {{classCycles.largestCycle.cycleName}}</h3>
+            <h4 class="rf-text-center">Limiting number of cycles displayed to 1 to keep page load time fast</h4>
 
             <button style="display: block; margin: 0 auto;" type="button"
                     data-popup-3d data-popup="popup-{{classCycles.largestCycle.cycleIdentifier}}" data-container="graph-container-{{classCycles.largestCycle.cycleIdentifier}}" data-dot-var="{{classCycles.largestCycle.cycleIdentifier}}_dot">
@@ -410,19 +452,20 @@
                  style="width: 95%; height: 70vh; margin: auto; border: thin solid black"></div>
 
             <!-- Cycle Breakdown Table -->
-            <div align="center">
-                <table align="center" border="5px">
+            <div class="rf-text-center">
+                <table class="rf-data-table">
+                    <caption>Classes and relationships in the largest cycle</caption>
                     <thead>
                     <tr>
-                        <th>Classes</th>
-                        <th>Relationships</th>
+                        <th scope="col">Classes</th>
+                        <th scope="col">Relationships</th>
                     </tr>
                     </thead>
                     <tbody>
                     {{#classCycles.largestCycle.breakdown}}
                         <tr>
-                            <td align="left">{{{className}}}</td>
-                            <td align="left">{{{edgesHtml}}}</td>
+                            <td class="rf-text-left">{{{className}}}</td>
+                            <td class="rf-text-left">{{{edgesHtml}}}</td>
                         </tr>
                     {{/classCycles.largestCycle.breakdown}}
                     </tbody>
@@ -433,7 +476,7 @@
 
     <footer>
         <div class="clear">
-            <hr/>
+            <hr>
         </div>
         <span id="publishDate">Last Published: {{project.scanTimestamp}}</span>
     </footer>
