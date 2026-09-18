@@ -18,7 +18,7 @@ const OBSOLETE_ATTRIBUTES = [
   'align', 'alink', 'background', 'bgcolor', 'border', 'char', 'charoff',
   'clear', 'compact', 'frame', 'frameborder', 'hspace', 'link',
   'marginheight', 'marginwidth', 'noshade', 'noresize', 'rules', 'scrolling',
-  'start', 'text', 'valign', 'vlink', 'vspace'
+  'text', 'valign', 'vlink', 'vspace'
 ];
 
 // Every file that contributes markup: the report template, the workflow
@@ -69,6 +69,13 @@ describe('HTML5 attribute compliance (sources)', () => {
     // Content itself survives — only the obsolete attributes are dropped.
     expect(html).toContain('<table>');
     expect(html).toContain('<td>');
+  });
+
+  it('preserves valid ordered-list numbering', () => {
+    const html = renderTemplate('<ol start="3"><li>Third</li></ol>', {});
+    const list = new JSDOM(html).window.document.querySelector('ol');
+
+    expect(list?.getAttribute('start')).toBe('3');
   });
 });
 

@@ -15,8 +15,8 @@ is a **Next.js static export** (`bun run build` produces `out/`, which any stati
   platform account is captured as the issue author and validated server-side by the platform's CI
 - Reports and submissions work for repositories hosted on the same platform as the deployment (GitHub, GitLab or
   Bitbucket)
-- **Accessible**: the site and the rendered reports comply with **WCAG 2.2 AA** (semantic HTML5, visible focus
-  indicators, AA color contrast, per-page titles, table captions and scoped headers, labeled controls and landmarks)
+- **Accessible**: the site and rendered reports target **WCAG 2.2 AA**, with automated checks for selected requirements
+  such as semantic HTML5, color contrast, per-page titles, table semantics, labeled controls and landmarks
 - Works with a plain static file server: `python3 -m http.server 8000`
 
 ---
@@ -374,7 +374,7 @@ bun run test:e2e:basepath     # NEXT_PUBLIC_BASE_PATH=/preview leg (chromium)
 
 ### Accessibility (WCAG 2.2 AA)
 
-This application complies with **WCAG 2.2 Level AA**, and every change must keep it that way: the dedicated guards in
+This application targets **WCAG 2.2 Level AA**. Dedicated guards cover selected requirements:
 `tests/unit/html5-attributes.test.js`, `tests/unit/report-template-wcag.test.js`, `tests/unit/css-a11y.test.js` and
 `tests/unit/page-titles.test.js` verify HTML5-valid markup (no obsolete presentational attributes), semantic heading
 hierarchy, table captions and scoped headers, chart alternative text, landmark names, color contrast, focus visibility,

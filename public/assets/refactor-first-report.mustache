@@ -159,7 +159,9 @@
                     <li><a href="#CYCLES">Cycles</a>
                         <ul>
                             <li><a href="#CYCLES">Class Cycles</a></li>
+                            {{#classCycles.largestCycle.hasCycleMap}}
                             <li><a href="#CYCLEMAP">Cycle Map</a></li>
+                            {{/classCycles.largestCycle.hasCycleMap}}
                         </ul>
                     </li>
                 {{/classCycles.hasCycles}}

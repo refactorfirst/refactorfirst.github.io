@@ -92,17 +92,27 @@ describe('report template WCAG 2.2 AA (rendered with fixture data)', () => {
   });
 
   it('in-page navigation links resolve to actual targets', () => {
-    const violations = [];
-    for (const anchor of doc.querySelectorAll('a[href^="#"]')) {
-      const target = anchor.getAttribute('href');
-      if (target === '#') {
-        violations.push(`placeholder link "${anchor.textContent.trim()}"`);
-        continue;
+    const fixtureWithoutCycleMap = structuredClone(fixture);
+    fixtureWithoutCycleMap.classCycles.largestCycle.hasCycleMap = false;
+    const docWithoutCycleMap = new JSDOM(
+      renderTemplate(template, fixtureWithoutCycleMap)
+    ).window.document;
+
+    for (const renderedDoc of [doc, docWithoutCycleMap]) {
+      const violations = [];
+      for (const anchor of renderedDoc.querySelectorAll('a[href^="#"]')) {
+        const target = anchor.getAttribute('href');
+        if (target === '#') {
+          violations.push(`placeholder link "${anchor.textContent.trim()}"`);
+          continue;
+        }
+        if (!renderedDoc.getElementById(target.slice(1))) {
+          violations.push(`unresolved anchor ${target}`);
+        }
       }
-      if (!doc.getElementById(target.slice(1))) {
-        violations.push(`unresolved anchor ${target}`);
-      }
+      expect(violations).toEqual([]);
     }
-    expect(violations).toEqual([]);
+
+    expect(docWithoutCycleMap.querySelector('a[href="#CYCLEMAP"]')).toBeNull();
   });
 });

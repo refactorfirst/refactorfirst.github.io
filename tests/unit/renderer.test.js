@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+import { JSDOM } from 'jsdom';
 import { renderTemplate, initializeMustache } from '../../lib/renderer.js';
 
 describe('Mustache Rendering', () => {
@@ -110,6 +111,21 @@ describe('templating safety (repository-provided templates are untrusted)', () =
     });
     expect(html).not.toContain('onerror');
     expect(html).toContain('<img');
+  });
+
+  it('normalizes target values before securing new browsing contexts', () => {
+    const html = renderTemplate(
+      '<a href="https://example.com" target="  _BlAnK ">New tab</a>' +
+        '<a href="https://example.com/same" target="_self">Same tab</a>' +
+        '<div target="_blank">Not a link</div>',
+      {}
+    );
+    const document = new JSDOM(html).window.document;
+
+    expect(document.querySelector('a[href="https://example.com"]')?.getAttribute('rel'))
+      .toBe('noopener noreferrer');
+    expect(document.querySelector('a[target="_self"]')?.hasAttribute('rel')).toBe(false);
+    expect(document.querySelector('div[target="_blank"]')?.hasAttribute('rel')).toBe(false);
   });
 
   it('keeps benign structure, style attributes and data attributes intact', () => {
