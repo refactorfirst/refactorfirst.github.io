@@ -11,6 +11,8 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
 **Key Features:**
 - Search over curated repository listing (`repositories.txt`)
 - Reports rendered with Mustache.js (bundled template is authoritative)
+- Enhanced report tables: sticky headers, pagination (>20 rows), sortable
+  columns, in-table search, CSV export, click/keyboard cell copy with toasts
 - Repository submission via pre-filled platform issues — no login, apps or tokens
 - Fully static deploy; deep links handled via generateStaticParams + `404.html`
 
@@ -60,12 +62,17 @@ app/                        # Next.js App Router (static export)
 components/                 # client components: report-view, repo-list,
                             # repo-submission-form, search-combobox,
                             # hero-search, menu-search, menu-toggle,
-                            # workflow-sample, platform-config, sentry-provider
+                            # workflow-sample, platform-config, sentry-provider,
+                            # toast-notification (copy feedback live region)
 lib/                        # shared logic (client + RSC): routes, fetcher,
                             # renderer, search, utils, host, rate-limiter,
                             # cache-manager, error-handler, repo-submission,
-                            # report-view, static-params, widget-loader; the
-                            # Node-side listing loader is lib/repositories.js
+                            # report-view, static-params, widget-loader,
+                            # table-operations (filter/sort/paginate/CSV/copy +
+                            # TABLE_CONFIG + REPORT_TABLES descriptors),
+                            # table-enhancer (binds toolbar/sort/pagination/
+                            # copy onto the rendered report DOM); the Node-side
+                            # listing loader is lib/repositories.js
 public/                     # static files copied verbatim into out/:
   repositories.txt          #   synced from the repo root (sync-repositories.mjs)
   assets/                   #   mustache template, logo
@@ -117,12 +124,36 @@ coverage there when introducing new markup patterns.
   `sentry-dsn`, `platform-base-url`) plus `NEXT_PUBLIC_HOSTING_ENVIRONMENT`
   / `NEXT_PUBLIC_BASE_PATH` at build time.
 
+## Report Tables (Enhanced)
+
+- Every data table in the report (class/package relationships, disharmony
+  findings, cycle summary, cycle breakdown) is enhanced: sticky `thead th`
+  (the template overrides mvp.css `overflow-x: auto` on tables, which would
+  otherwise break viewport stickiness), toolbar (search + match live region +
+  CSV export), sortable th buttons with `aria-sort`, pagination below 20+
+  row tables, and click/Enter/Space cell copy with toast feedback.
+- Pipeline: `prepareReportData(data, tableStates, TABLE_CONFIG)` in
+  lib/renderer.js applies **filter → sort → paginate** per table and injects
+  `tableUi` blocks the mustache template renders; `enhanceTables` in
+  lib/table-enhancer.js binds the controls and reports state changes back to
+  components/report-view.jsx, which re-renders (widgets only gate the first
+  render; the search input's focus/caret is restored after each re-render).
+- Search `<input>`s are injected by table-enhancer — `<input>` is FORBID in
+  the renderer's sanitization allow-list, so it must never appear in the
+  mustache template.
+- CSV export honors the current filter + sort but ignores pagination;
+  filenames are `refactorfirst-<table>-<ISO timestamp>.csv`.
+
 ## Current Test Count
 
-~313 unit/integration + 112 E2E (three browsers + basePath leg).
+~464 unit/integration + 160 E2E (156 across three browsers + 4 basePath leg).
 
 WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
 tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and
 tests/unit/page-titles.test.js — the report mustache keeps a single h1,
 scoped table headers, captions, labelled canvases and a named nav; obsolete
-presentational attributes are FORBID_ATTR-stripped in lib/renderer.js.
+presentational attributes are FORBID_ATTR-stripped in lib/renderer.js. The
+report-template-wcag guard also asserts sticky-header CSS, per-table
+toolbars/aria-labelled export buttons and pagination navs, valid `aria-sort`
+on every enhanced th, sortable keyboard-operable header buttons and live
+match-count regions.

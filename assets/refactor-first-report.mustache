@@ -89,12 +89,161 @@
         border: 5px solid;
         border-collapse: collapse;
         margin: 0 auto;
+        /* mvp.css gives every table overflow-x: auto, which would make the
+           table itself the scroll container and prevent the sticky header
+           from pinning to the viewport while the page scrolls. */
+        overflow: visible;
     }
 
     .rf-data-table th,
     .rf-data-table td {
         border: 1px solid;
         padding: 2px 6px;
+    }
+
+    /* Enhanced tables: sticky headers pinned to the viewport while their
+       table scrolls, plus sortable-header, toolbar, pagination and copy
+       affordances (plan: implement-paginated-tables-with-sticky-headers). */
+    .rf-data-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        /* A solid, contrasting background keeps scrolled rows from showing
+           through and keeps the header text readable (the base stylesheet
+           colours table header text near-white); the inset shadow restores
+           the bottom border that border-collapse drops from sticky cells. */
+        background: #2a6f97;
+        color: #fff;
+        box-shadow: inset 0 -1px 0 #1f5273;
+    }
+
+    .rf-sort-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+    }
+
+    .rf-sort-btn:hover,
+    .rf-sort-btn:focus-visible {
+        text-decoration: underline;
+    }
+
+    .rf-sort-btn:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+    }
+
+    .rf-sort-indicator {
+        display: inline-block;
+        min-width: 1em;
+        margin-left: 0.25rem;
+    }
+
+    .rf-table-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin: 0.5rem auto;
+        max-width: 95%;
+    }
+
+    .rf-table-toolbar .rf-copy-hint {
+        font-size: 0.85rem;
+        margin: 0;
+    }
+
+    .rf-table-search label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .rf-table-search input {
+        padding: 0.3rem 0.5rem;
+        min-width: 14rem;
+    }
+
+    .rf-table-search .rf-search-clear {
+        padding: 0.2rem 0.55rem;
+        cursor: pointer;
+    }
+
+    .rf-table-match {
+        font-size: 0.9rem;
+    }
+
+    .rf-export-btn {
+        padding: 0.3rem 0.75rem;
+        border: 1px solid #2a6f97;
+        border-radius: 6px;
+        background: #2a6f97;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    .rf-export-btn:focus-visible,
+    .rf-page-btn:focus-visible {
+        outline: 2px solid #1f5273;
+        outline-offset: 2px;
+    }
+
+    .rf-table-pagination {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        justify-content: center;
+        margin: 0.75rem 0;
+    }
+
+    .rf-page-btn {
+        padding: 0.35rem 0.75rem;
+        /* Explicit colours on both states: the base stylesheet gives plain
+           buttons near-white text, which would be invisible on a white
+           background. */
+        border: 1px solid #2a6f97;
+        border-radius: 6px;
+        background: #fff;
+        color: #1f2937;
+        cursor: pointer;
+    }
+
+    .rf-page-btn:hover:not([disabled]) {
+        background: #e8f0f6;
+    }
+
+    .rf-page-btn[disabled] {
+        background: #f3f4f6;
+        border-color: #c6d2dc;
+        color: #6b7280;
+        cursor: default;
+    }
+
+    .rf-data-table td[data-rf-copy] {
+        cursor: copy;
+    }
+
+    .rf-data-table td[data-rf-copy]:focus-visible {
+        outline: 2px solid #2a6f97;
+        outline-offset: -2px;
+    }
+
+    @media (max-width: 640px) {
+        .rf-table-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .rf-table-search input {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+        }
     }
 </style>
 
@@ -222,16 +371,31 @@
             Removing class relationships below will eliminate class cycles
         </div>
         <div class="rf-text-center">
-            <table class="rf-data-table">
+            {{#classRelationshipsToRemove.tableUi.enhanced}}
+            <div class="rf-table-toolbar" data-rf-toolbar="class-relationships">
+                {{#classRelationshipsToRemove.tableUi.searchable}}
+                <div class="rf-table-search" data-rf-search-slot="class-relationships"></div>
+                {{/classRelationshipsToRemove.tableUi.searchable}}
+                <span class="rf-table-match" role="status" data-rf-match="class-relationships">{{classRelationshipsToRemove.tableUi.matchStatus}}</span>
+                {{#classRelationshipsToRemove.tableUi.copyable}}
+                <span class="rf-copy-hint">Click a cell (or press Enter on it) to copy its text.</span>
+                {{/classRelationshipsToRemove.tableUi.copyable}}
+                {{#classRelationshipsToRemove.tableUi.exportable}}
+                <button type="button" class="rf-export-btn" data-rf-export="class-relationships"
+                        aria-label="Export the class relationships table as CSV">Export CSV</button>
+                {{/classRelationshipsToRemove.tableUi.exportable}}
+            </div>
+            {{/classRelationshipsToRemove.tableUi.enhanced}}
+            <table class="rf-data-table" data-rf-table="class-relationships">
                 <caption>Class relationships to remove, in priority order</caption>
                 <thead>
                 <tr>
-                    <th scope="col">Class Relationship</th>
-                    <th scope="col">Priority</th>
-                    <th scope="col">In Class<br>Cycles</th>
-                    <th scope="col">Relationship<br>Strength</th>
-                    <th scope="col">Also Removes Pkg<br>Cycle Relationship</th>
-                    <th scope="col">In Package<br>Cycles</th>
+                    <th scope="col"{{#classRelationshipsToRemove.tableUi.sortable}} aria-sort="{{classRelationshipsToRemove.tableUi.colSort.0}}"{{/classRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="renderedLabel">Class Relationship <span class="rf-sort-indicator" aria-hidden="true">{{classRelationshipsToRemove.tableUi.colIndicator.0}}</span></button></th>
+                    <th scope="col"{{#classRelationshipsToRemove.tableUi.sortable}} aria-sort="{{classRelationshipsToRemove.tableUi.colSort.1}}"{{/classRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="priority">Priority <span class="rf-sort-indicator" aria-hidden="true">{{classRelationshipsToRemove.tableUi.colIndicator.1}}</span></button></th>
+                    <th scope="col"{{#classRelationshipsToRemove.tableUi.sortable}} aria-sort="{{classRelationshipsToRemove.tableUi.colSort.2}}"{{/classRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="cycleCount">In Class<br>Cycles <span class="rf-sort-indicator" aria-hidden="true">{{classRelationshipsToRemove.tableUi.colIndicator.2}}</span></button></th>
+                    <th scope="col"{{#classRelationshipsToRemove.tableUi.sortable}} aria-sort="{{classRelationshipsToRemove.tableUi.colSort.3}}"{{/classRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="effortRank">Relationship<br>Strength <span class="rf-sort-indicator" aria-hidden="true">{{classRelationshipsToRemove.tableUi.colIndicator.3}}</span></button></th>
+                    <th scope="col"{{#classRelationshipsToRemove.tableUi.sortable}} aria-sort="{{classRelationshipsToRemove.tableUi.colSort.4}}"{{/classRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="alsoRemovesPackageRelationship">Also Removes Pkg<br>Cycle Relationship <span class="rf-sort-indicator" aria-hidden="true">{{classRelationshipsToRemove.tableUi.colIndicator.4}}</span></button></th>
+                    <th scope="col"{{#classRelationshipsToRemove.tableUi.sortable}} aria-sort="{{classRelationshipsToRemove.tableUi.colSort.5}}"{{/classRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="packageCycleCount">In Package<br>Cycles <span class="rf-sort-indicator" aria-hidden="true">{{classRelationshipsToRemove.tableUi.colIndicator.5}}</span></button></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -249,6 +413,13 @@
                 {{/classRelationshipsToRemove.relationships}}
                 </tbody>
             </table>
+            {{#classRelationshipsToRemove.tableUi.paginated}}
+            <nav class="rf-table-pagination" data-rf-pagination="class-relationships" aria-label="Pages of the class relationships table">
+                <button type="button" class="rf-page-btn" data-rf-page="class-relationships" data-page-dir="prev"{{#classRelationshipsToRemove.tableUi.isFirstPage}} disabled{{/classRelationshipsToRemove.tableUi.isFirstPage}}>Previous</button>
+                <span class="rf-page-status">{{classRelationshipsToRemove.tableUi.pageStatus}}</span>
+                <button type="button" class="rf-page-btn" data-rf-page="class-relationships" data-page-dir="next"{{#classRelationshipsToRemove.tableUi.isLastPage}} disabled{{/classRelationshipsToRemove.tableUi.isLastPage}}>Next</button>
+            </nav>
+            {{/classRelationshipsToRemove.tableUi.paginated}}
         </div>
     {{/classRelationshipsToRemove.hasRelationships}}
 
@@ -307,15 +478,30 @@
             Removing package relationships below will eliminate package cycles
         </div>
         <div class="rf-text-center">
-            <table class="rf-data-table">
+            {{#packageRelationshipsToRemove.tableUi.enhanced}}
+            <div class="rf-table-toolbar" data-rf-toolbar="package-relationships">
+                {{#packageRelationshipsToRemove.tableUi.searchable}}
+                <div class="rf-table-search" data-rf-search-slot="package-relationships"></div>
+                {{/packageRelationshipsToRemove.tableUi.searchable}}
+                <span class="rf-table-match" role="status" data-rf-match="package-relationships">{{packageRelationshipsToRemove.tableUi.matchStatus}}</span>
+                {{#packageRelationshipsToRemove.tableUi.copyable}}
+                <span class="rf-copy-hint">Click a cell (or press Enter on it) to copy its text.</span>
+                {{/packageRelationshipsToRemove.tableUi.copyable}}
+                {{#packageRelationshipsToRemove.tableUi.exportable}}
+                <button type="button" class="rf-export-btn" data-rf-export="package-relationships"
+                        aria-label="Export the package relationships table as CSV">Export CSV</button>
+                {{/packageRelationshipsToRemove.tableUi.exportable}}
+            </div>
+            {{/packageRelationshipsToRemove.tableUi.enhanced}}
+            <table class="rf-data-table" data-rf-table="package-relationships">
                 <caption>Package relationships to remove, in priority order</caption>
                 <thead>
                 <tr>
-                    <th scope="col">Package Relationship</th>
-                    <th scope="col">Priority</th>
-                    <th scope="col">In Pkg<br>Cycles</th>
-                    <th scope="col">Relationship<br>Strength</th>
-                    <th scope="col">Class Relationships to Remove<br>To Break Package Relationship</th>
+                    <th scope="col"{{#packageRelationshipsToRemove.tableUi.sortable}} aria-sort="{{packageRelationshipsToRemove.tableUi.colSort.0}}"{{/packageRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="package-relationships" data-sort-key="renderedLabel">Package Relationship <span class="rf-sort-indicator" aria-hidden="true">{{packageRelationshipsToRemove.tableUi.colIndicator.0}}</span></button></th>
+                    <th scope="col"{{#packageRelationshipsToRemove.tableUi.sortable}} aria-sort="{{packageRelationshipsToRemove.tableUi.colSort.1}}"{{/packageRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="package-relationships" data-sort-key="priority">Priority <span class="rf-sort-indicator" aria-hidden="true">{{packageRelationshipsToRemove.tableUi.colIndicator.1}}</span></button></th>
+                    <th scope="col"{{#packageRelationshipsToRemove.tableUi.sortable}} aria-sort="{{packageRelationshipsToRemove.tableUi.colSort.2}}"{{/packageRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="package-relationships" data-sort-key="cycleCount">In Pkg<br>Cycles <span class="rf-sort-indicator" aria-hidden="true">{{packageRelationshipsToRemove.tableUi.colIndicator.2}}</span></button></th>
+                    <th scope="col"{{#packageRelationshipsToRemove.tableUi.sortable}} aria-sort="{{packageRelationshipsToRemove.tableUi.colSort.3}}"{{/packageRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="package-relationships" data-sort-key="effortRank">Relationship<br>Strength <span class="rf-sort-indicator" aria-hidden="true">{{packageRelationshipsToRemove.tableUi.colIndicator.3}}</span></button></th>
+                    <th scope="col"{{#packageRelationshipsToRemove.tableUi.sortable}} aria-sort="{{packageRelationshipsToRemove.tableUi.colSort.4}}"{{/packageRelationshipsToRemove.tableUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="package-relationships" data-sort-key="classRelationshipsToBreakPackage">Class Relationships to Remove<br>To Break Package Relationship <span class="rf-sort-indicator" aria-hidden="true">{{packageRelationshipsToRemove.tableUi.colIndicator.4}}</span></button></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -331,6 +517,13 @@
                 {{/packageRelationshipsToRemove.relationships}}
                 </tbody>
             </table>
+            {{#packageRelationshipsToRemove.tableUi.paginated}}
+            <nav class="rf-table-pagination" data-rf-pagination="package-relationships" aria-label="Pages of the package relationships table">
+                <button type="button" class="rf-page-btn" data-rf-page="package-relationships" data-page-dir="prev"{{#packageRelationshipsToRemove.tableUi.isFirstPage}} disabled{{/packageRelationshipsToRemove.tableUi.isFirstPage}}>Previous</button>
+                <span class="rf-page-status">{{packageRelationshipsToRemove.tableUi.pageStatus}}</span>
+                <button type="button" class="rf-page-btn" data-rf-page="package-relationships" data-page-dir="next"{{#packageRelationshipsToRemove.tableUi.isLastPage}} disabled{{/packageRelationshipsToRemove.tableUi.isLastPage}}>Next</button>
+            </nav>
+            {{/packageRelationshipsToRemove.tableUi.paginated}}
         </div>
     {{/packageRelationshipsToRemove.hasRelationships}}
 
@@ -374,13 +567,33 @@
 
         <h4 class="rf-text-center">{{title}} by the numbers: (Refactor Starting with Priority 1)</h4>
         <div class="rf-text-center">
-            <table class="rf-data-table">
+            {{#ui.enhanced}}
+            <div class="rf-table-toolbar" data-rf-toolbar="{{ui.tableId}}">
+                {{#ui.searchable}}
+                <div class="rf-table-search" data-rf-search-slot="{{ui.tableId}}"></div>
+                {{/ui.searchable}}
+                <span class="rf-table-match" role="status" data-rf-match="{{ui.tableId}}">{{ui.matchStatus}}</span>
+                {{#ui.copyable}}
+                <span class="rf-copy-hint">Click a cell (or press Enter on it) to copy its text.</span>
+                {{/ui.copyable}}
+                {{#ui.exportable}}
+                <button type="button" class="rf-export-btn" data-rf-export="{{ui.tableId}}"
+                        aria-label="Export the {{title}} findings table as CSV">Export CSV</button>
+                {{/ui.exportable}}
+            </div>
+            {{/ui.enhanced}}
+            <table class="rf-data-table" data-rf-table="{{ui.tableId}}">
                 <caption>{{title}} findings, in priority order</caption>
                 <thead>
                 <tr>
-                    {{#table.headers}}
-                        <th scope="col">{{.}}</th>
-                    {{/table.headers}}
+                    {{#table.headerObjs}}
+                        <th scope="col" aria-sort="{{sortState}}"><button type="button" class="rf-sort-btn" data-rf-sort="{{tableId}}" data-sort-key="{{key}}">{{label}} <span class="rf-sort-indicator" aria-hidden="true">{{indicator}}</span></button></th>
+                    {{/table.headerObjs}}
+                    {{^table.headerObjs}}
+                        {{#table.headers}}
+                            <th scope="col">{{.}}</th>
+                        {{/table.headers}}
+                    {{/table.headerObjs}}
                 </tr>
                 </thead>
                 <tbody>
@@ -393,6 +606,13 @@
                 {{/table.rows}}
                 </tbody>
             </table>
+            {{#ui.paginated}}
+            <nav class="rf-table-pagination" data-rf-pagination="{{ui.tableId}}" aria-label="Pages of the {{title}} findings table">
+                <button type="button" class="rf-page-btn" data-rf-page="{{ui.tableId}}" data-page-dir="prev"{{#ui.isFirstPage}} disabled{{/ui.isFirstPage}}>Previous</button>
+                <span class="rf-page-status">{{ui.pageStatus}}</span>
+                <button type="button" class="rf-page-btn" data-rf-page="{{ui.tableId}}" data-page-dir="next"{{#ui.isLastPage}} disabled{{/ui.isLastPage}}>Next</button>
+            </nav>
+            {{/ui.paginated}}
         </div>
     {{/disharmonies}}
 
@@ -406,14 +626,29 @@
         <h2 id="CYCLES" class="rf-text-center">Class Cycles</h2>
         <h3 class="rf-text-center">Class Cycles by the numbers:</h3>
         <div class="rf-text-center">
-            <table class="rf-data-table">
+            {{#classCycles.summaryUi.enhanced}}
+            <div class="rf-table-toolbar" data-rf-toolbar="class-cycles-summary">
+                {{#classCycles.summaryUi.searchable}}
+                <div class="rf-table-search" data-rf-search-slot="class-cycles-summary"></div>
+                {{/classCycles.summaryUi.searchable}}
+                <span class="rf-table-match" role="status" data-rf-match="class-cycles-summary">{{classCycles.summaryUi.matchStatus}}</span>
+                {{#classCycles.summaryUi.copyable}}
+                <span class="rf-copy-hint">Click a cell (or press Enter on it) to copy its text.</span>
+                {{/classCycles.summaryUi.copyable}}
+                {{#classCycles.summaryUi.exportable}}
+                <button type="button" class="rf-export-btn" data-rf-export="class-cycles-summary"
+                        aria-label="Export the class cycles summary table as CSV">Export CSV</button>
+                {{/classCycles.summaryUi.exportable}}
+            </div>
+            {{/classCycles.summaryUi.enhanced}}
+            <table class="rf-data-table" data-rf-table="class-cycles-summary">
                 <caption>Class cycles summary</caption>
                 <thead>
                 <tr>
-                    <th scope="col">Cycle Name</th>
-                    <th scope="col">Priority</th>
-                    <th scope="col">Class Count</th>
-                    <th scope="col">Relationship Count</th>
+                    <th scope="col"{{#classCycles.summaryUi.sortable}} aria-sort="{{classCycles.summaryUi.colSort.0}}"{{/classCycles.summaryUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-cycles-summary" data-sort-key="cycleName">Cycle Name <span class="rf-sort-indicator" aria-hidden="true">{{classCycles.summaryUi.colIndicator.0}}</span></button></th>
+                    <th scope="col"{{#classCycles.summaryUi.sortable}} aria-sort="{{classCycles.summaryUi.colSort.1}}"{{/classCycles.summaryUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-cycles-summary" data-sort-key="priority">Priority <span class="rf-sort-indicator" aria-hidden="true">{{classCycles.summaryUi.colIndicator.1}}</span></button></th>
+                    <th scope="col"{{#classCycles.summaryUi.sortable}} aria-sort="{{classCycles.summaryUi.colSort.2}}"{{/classCycles.summaryUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-cycles-summary" data-sort-key="classCount">Class Count <span class="rf-sort-indicator" aria-hidden="true">{{classCycles.summaryUi.colIndicator.2}}</span></button></th>
+                    <th scope="col"{{#classCycles.summaryUi.sortable}} aria-sort="{{classCycles.summaryUi.colSort.3}}"{{/classCycles.summaryUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="class-cycles-summary" data-sort-key="relationshipCount">Relationship Count <span class="rf-sort-indicator" aria-hidden="true">{{classCycles.summaryUi.colIndicator.3}}</span></button></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -427,6 +662,13 @@
                 {{/classCycles.summary}}
                 </tbody>
             </table>
+            {{#classCycles.summaryUi.paginated}}
+            <nav class="rf-table-pagination" data-rf-pagination="class-cycles-summary" aria-label="Pages of the class cycles summary table">
+                <button type="button" class="rf-page-btn" data-rf-page="class-cycles-summary" data-page-dir="prev"{{#classCycles.summaryUi.isFirstPage}} disabled{{/classCycles.summaryUi.isFirstPage}}>Previous</button>
+                <span class="rf-page-status">{{classCycles.summaryUi.pageStatus}}</span>
+                <button type="button" class="rf-page-btn" data-rf-page="class-cycles-summary" data-page-dir="next"{{#classCycles.summaryUi.isLastPage}} disabled{{/classCycles.summaryUi.isLastPage}}>Next</button>
+            </nav>
+            {{/classCycles.summaryUi.paginated}}
         </div>
 
         {{#classCycles.largestCycle.hasCycleMap}}
@@ -453,12 +695,27 @@
 
             <!-- Cycle Breakdown Table -->
             <div class="rf-text-center">
-                <table class="rf-data-table">
+                {{#classCycles.largestCycle.breakdownUi.enhanced}}
+                <div class="rf-table-toolbar" data-rf-toolbar="largest-cycle-breakdown">
+                    {{#classCycles.largestCycle.breakdownUi.searchable}}
+                    <div class="rf-table-search" data-rf-search-slot="largest-cycle-breakdown"></div>
+                    {{/classCycles.largestCycle.breakdownUi.searchable}}
+                    <span class="rf-table-match" role="status" data-rf-match="largest-cycle-breakdown">{{classCycles.largestCycle.breakdownUi.matchStatus}}</span>
+                    {{#classCycles.largestCycle.breakdownUi.copyable}}
+                    <span class="rf-copy-hint">Click a cell (or press Enter on it) to copy its text.</span>
+                    {{/classCycles.largestCycle.breakdownUi.copyable}}
+                    {{#classCycles.largestCycle.breakdownUi.exportable}}
+                    <button type="button" class="rf-export-btn" data-rf-export="largest-cycle-breakdown"
+                            aria-label="Export the largest cycle breakdown table as CSV">Export CSV</button>
+                    {{/classCycles.largestCycle.breakdownUi.exportable}}
+                </div>
+                {{/classCycles.largestCycle.breakdownUi.enhanced}}
+                <table class="rf-data-table" data-rf-table="largest-cycle-breakdown">
                     <caption>Classes and relationships in the largest cycle</caption>
                     <thead>
                     <tr>
-                        <th scope="col">Classes</th>
-                        <th scope="col">Relationships</th>
+                        <th scope="col"{{#classCycles.largestCycle.breakdownUi.sortable}} aria-sort="{{classCycles.largestCycle.breakdownUi.colSort.0}}"{{/classCycles.largestCycle.breakdownUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="largest-cycle-breakdown" data-sort-key="className">Classes <span class="rf-sort-indicator" aria-hidden="true">{{classCycles.largestCycle.breakdownUi.colIndicator.0}}</span></button></th>
+                        <th scope="col"{{#classCycles.largestCycle.breakdownUi.sortable}} aria-sort="{{classCycles.largestCycle.breakdownUi.colSort.1}}"{{/classCycles.largestCycle.breakdownUi.sortable}}><button type="button" class="rf-sort-btn" data-rf-sort="largest-cycle-breakdown" data-sort-key="edgesHtml">Relationships <span class="rf-sort-indicator" aria-hidden="true">{{classCycles.largestCycle.breakdownUi.colIndicator.1}}</span></button></th>
                     </tr>
                     </thead>
                     <tbody>
@@ -470,6 +727,13 @@
                     {{/classCycles.largestCycle.breakdown}}
                     </tbody>
                 </table>
+                {{#classCycles.largestCycle.breakdownUi.paginated}}
+                <nav class="rf-table-pagination" data-rf-pagination="largest-cycle-breakdown" aria-label="Pages of the largest cycle breakdown table">
+                    <button type="button" class="rf-page-btn" data-rf-page="largest-cycle-breakdown" data-page-dir="prev"{{#classCycles.largestCycle.breakdownUi.isFirstPage}} disabled{{/classCycles.largestCycle.breakdownUi.isFirstPage}}>Previous</button>
+                    <span class="rf-page-status">{{classCycles.largestCycle.breakdownUi.pageStatus}}</span>
+                    <button type="button" class="rf-page-btn" data-rf-page="largest-cycle-breakdown" data-page-dir="next"{{#classCycles.largestCycle.breakdownUi.isLastPage}} disabled{{/classCycles.largestCycle.breakdownUi.isLastPage}}>Next</button>
+                </nav>
+                {{/classCycles.largestCycle.breakdownUi.paginated}}
             </div>
         {{/classCycles.largestCycle.hasCycleMap}}
     {{/classCycles.hasCycles}}

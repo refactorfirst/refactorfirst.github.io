@@ -1,21 +1,26 @@
 'use client';
 
 // Report page client component. Fetches the bundled Mustache template and
-// the repository's refactor-first.json, renders into a ref'd container and
-// enhances the result with the CDN widgets (Chart.js bubbles, vizdom WASM
-// inline graphs, sigma/3D popups). Widget scripts are loaded via next/script
-// and report readiness through lib/widget-loader.js.
+// the repository's refactor-first.json once, then re-renders through
+// prepareReportData whenever per-table UI state (page/sort/search) changes.
+// lib/table-enhancer.js binds controls in the rendered DOM and reports table
+// actions back here; copy feedback surfaces through the toast region.
+// Widget scripts are loaded via next/script and report readiness through
+// lib/widget-loader.js.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import { withBasePath } from '../lib/base-path';
 import { detectHostingEnvironment, getPlatformBaseUrl, readMetaTag } from '../lib/host';
 import { fetchReport } from '../lib/fetcher';
-import { renderTemplate } from '../lib/renderer';
+import { renderTemplate, prepareReportData } from '../lib/renderer';
 import { enhanceReport } from '../lib/report-view';
+import { enhanceTables } from '../lib/table-enhancer';
 import { renderErrorPage, logError } from '../lib/error-handler';
 import { markWidgetReady, waitForWidget } from '../lib/widget-loader';
+import ToastRegion, { useToastNotifications } from './toast-notification';
+import { TABLE_CONFIG } from '../lib/table-operations';
 
 const CLASSIC_WIDGETS = [
   { name: 'chart', src: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js' },
@@ -40,19 +45,44 @@ export default function ReportView({
   branch: branchProp,
   environment: environmentProp,
   platformBaseUrl: platformBaseUrlProp,
-  widgetSettleMs = 5000
+  widgetSettleMs = 5000,
+  toastDurationMs = TABLE_CONFIG.copy.toastDuration
 }) {
   const containerRef = useRef(null);
   const searchParams = useSearchParams();
   const [attempt, setAttempt] = useState(0);
+  const [payload, setPayload] = useState(null);
+  const [tableStates, setTableStates] = useState({});
+  const widgetsSettledRef = useRef(false);
+  const pendingFocusRef = useRef(null);
+  const { toasts, show: showToast, dismiss: dismissToast } = useToastNotifications({
+    duration: toastDurationMs
+  });
 
   const branch = branchProp || searchParams.get('branch') || undefined;
 
+  const handleTableAction = useCallback((tableId, patch, meta) => {
+    if (meta?.restoreFocus) {
+      pendingFocusRef.current = { tableId };
+    }
+    setTableStates(current => ({
+      ...current,
+      [tableId]: { ...current[tableId], ...patch }
+    }));
+  }, []);
+
+  const handleCopy = useCallback((ok, text) => {
+    showToast(ok ? `Copied ${text}` : 'Could not copy this cell to the clipboard');
+  }, [showToast]);
+
+  // Fetch the template + report JSON once per report (no refetch on table
+  // interactions).
   useEffect(() => {
     const controller = new AbortController();
     const container = containerRef.current;
 
     async function run() {
+      setPayload(null);
       container.innerHTML = '<p class="loading" role="status">Loading report&hellip;</p>';
       try {
         // The bundled template is authoritative — repository-provided
@@ -77,18 +107,8 @@ export default function ReportView({
         });
 
         if (controller.signal.aborted) return;
-
-        // Give the widgets that enhanceReport uses synchronously a moment to
-        // arrive; everything else degrades gracefully when missing.
-        await Promise.race([
-          Promise.all(ENHANCE_WIDGETS.map(name => waitForWidget(name, { timeoutMs: widgetSettleMs }))),
-          new Promise(resolve => setTimeout(resolve, widgetSettleMs))
-        ]);
-        if (controller.signal.aborted) return;
-
-        container.innerHTML = renderTemplate(template, data);
-        container.dataset.resolvedBranch = resolvedBranch;
-        await enhanceReport(container, data);
+        setTableStates({});
+        setPayload({ template, data, resolvedBranch });
       } catch (error) {
         if (controller.signal.aborted || error.name === 'AbortError') return;
         logError(error, { route: 'report', username, repository, branch });
@@ -98,11 +118,71 @@ export default function ReportView({
 
     run();
     return () => controller.abort();
-  }, [username, repository, branch, environmentProp, platformBaseUrlProp, widgetSettleMs, attempt]);
+  }, [username, repository, branch, environmentProp, platformBaseUrlProp, attempt]);
+
+  // Render effect: re-renders the report whenever the payload arrives or the
+  // per-table UI state changes. Widgets only gate the first render.
+  useEffect(() => {
+    if (!payload) return undefined;
+    let cancelled = false;
+    const container = containerRef.current;
+
+    async function run() {
+      try {
+        if (!widgetsSettledRef.current) {
+          // Give the widgets that enhanceReport uses synchronously a moment
+          // to arrive; everything else degrades gracefully when missing.
+          await Promise.race([
+            Promise.all(ENHANCE_WIDGETS.map(name => waitForWidget(name, { timeoutMs: widgetSettleMs }))),
+            new Promise(resolve => setTimeout(resolve, widgetSettleMs))
+          ]);
+          widgetsSettledRef.current = true;
+        }
+        if (cancelled) return;
+
+        container.innerHTML = renderTemplate(
+          payload.template,
+          prepareReportData(payload.data, tableStates)
+        );
+        container.dataset.resolvedBranch = payload.resolvedBranch;
+        await enhanceReport(container, payload.data);
+        enhanceTables(container, {
+          data: payload.data,
+          tableStates,
+          onTableAction: handleTableAction,
+          onCopy: handleCopy
+        });
+
+        // Type-to-filter re-renders the input; restore focus + caret so the
+        // user can keep typing.
+        const pendingFocus = pendingFocusRef.current;
+        if (pendingFocus) {
+          pendingFocusRef.current = null;
+          const input = container.querySelector(
+            `input[data-rf-search="${pendingFocus.tableId}"]`);
+          if (input) {
+            input.focus();
+            const end = input.value.length;
+            if (typeof input.setSelectionRange === 'function') {
+              input.setSelectionRange(end, end);
+            }
+          }
+        }
+      } catch (error) {
+        if (cancelled) return;
+        logError(error, { route: 'report', username, repository, branch });
+        renderErrorPage(container, error, { onRetry: () => setAttempt(a => a + 1) });
+      }
+    }
+
+    run();
+    return () => { cancelled = true; };
+  }, [payload, tableStates, widgetSettleMs, username, repository, branch, handleTableAction, handleCopy]);
 
   return (
     <>
       <div ref={containerRef} id="report-container" />
+      <ToastRegion toasts={toasts} onDismiss={dismissToast} />
       {CLASSIC_WIDGETS.map(widget => (
         <Script
           key={widget.name}
