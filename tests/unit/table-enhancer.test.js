@@ -7,11 +7,14 @@ function buildRoot({ rows = 3 } = {}) {
   const host = document.createElement('div');
   host.innerHTML = `
     <div class="rf-table-toolbar" data-rf-toolbar="class-relationships">
-      <div class="rf-table-search" data-rf-search-slot="class-relationships"></div>
       <span class="rf-table-match" role="status" data-rf-match="class-relationships"></span>
-      <button type="button" class="rf-export-btn" data-rf-export="class-relationships"
-              aria-label="Export the class relationships table as CSV">Export CSV</button>
+      <div class="rf-table-actions">
+        <div class="rf-table-search" data-rf-search-slot="class-relationships"></div>
+        <button type="button" class="rf-export-btn" data-rf-export="class-relationships"
+                aria-label="Export the class relationships table as CSV">Export CSV</button>
+      </div>
     </div>
+    <div class="rf-table-scroll" data-rf-scroll="class-relationships">
     <table class="rf-data-table" data-rf-table="class-relationships">
       <caption>Class relationships to remove, in priority order</caption>
       <thead>
@@ -25,6 +28,7 @@ function buildRoot({ rows = 3 } = {}) {
           <tr><td class="rf-text-left">Class${i} -&gt; Target${i}</td><td class="rf-text-right">${i + 1}</td></tr>`).join('')}
       </tbody>
     </table>
+    </div>
     <nav class="rf-table-pagination" data-rf-pagination="class-relationships" aria-label="Pages of the class relationships table">
       <button type="button" class="rf-page-btn" data-rf-page="class-relationships" data-page-dir="prev">Previous</button>
       <span class="rf-page-status">Page 1 of 2</span>
@@ -97,10 +101,11 @@ describe('search injection', () => {
     expect(actions[0].meta).toEqual({ restoreFocus: true });
   });
 
-  it('provides a clear button that resets the current search term', () => {
+  it('provides an "x" clear button that resets the current search term', () => {
     setup({ tableStates: { 'class-relationships': { search: 'assert' } } });
     const clear = root.querySelector('.rf-search-clear');
     expect(clear).not.toBeNull();
+    expect(clear.textContent).toBe('×');
     expect(clear.getAttribute('aria-label')).toContain('Clear');
     const input = root.querySelector('input[type="search"]');
     expect(input.value).toBe('assert');
@@ -173,6 +178,29 @@ describe('CSV export', () => {
     expect(lines[1]).toBe('Class1 -> Target1,2,1,2,false,0');
     delete global.URL.createObjectURL;
     delete global.URL.revokeObjectURL;
+  });
+});
+
+describe('horizontal scrollbar on overflow', () => {
+  it('enables horizontal scrolling only when the table is wider than the wrapper', () => {
+    setup();
+    const wrapper = root.querySelector('[data-rf-scroll="class-relationships"]');
+
+    Object.defineProperty(wrapper, 'scrollWidth', { value: 1200, configurable: true });
+    Object.defineProperty(wrapper, 'clientWidth', { value: 900, configurable: true });
+    enhanceTables(root, { data: demoData(), debounceMs: 0 });
+    expect(wrapper.classList.contains('rf-scroll-x-enabled')).toBe(true);
+
+    Object.defineProperty(wrapper, 'scrollWidth', { value: 900, configurable: true });
+    enhanceTables(root, { data: demoData(), debounceMs: 0 });
+    expect(wrapper.classList.contains('rf-scroll-x-enabled')).toBe(false);
+  });
+
+  it('leaves wrappers without overflow untouched (viewport sticky keeps working)', () => {
+    setup();
+    const wrapper = root.querySelector('[data-rf-scroll="class-relationships"]');
+    // jsdom reports scrollWidth === clientWidth === 0: no false positive.
+    expect(wrapper.classList.contains('rf-scroll-x-enabled')).toBe(false);
   });
 });
 

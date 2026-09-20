@@ -182,6 +182,18 @@ describe('enhanced tables: sticky headers CSS (plan Phase 2)', () => {
     expect(rule[1]).toMatch(/background:\s*#[0-9a-fA-F]{3,6}/);
     expect(rule[1]).toMatch(/color:\s*#[0-9a-fA-F]{3,6}/);
   });
+
+  it('puts the outer table border on the scroll wrapper, not the scrolled table', () => {
+    // When a table overflows, .rf-table-scroll clips/scrolls it — a border on
+    // the <table> itself would scroll away with the content, so the visible
+    // bounding box must live on the wrapper instead.
+    const wrapperRule = template.match(/\.rf-table-scroll\s*\{([^}]*)\}/s);
+    expect(wrapperRule).not.toBeNull();
+    expect(wrapperRule[1]).toMatch(/border:\s*5px\s+solid/);
+    const nestedRule = template.match(/\.rf-table-scroll\s+\.rf-data-table\s*\{([^}]*)\}/s);
+    expect(nestedRule).not.toBeNull();
+    expect(nestedRule[1]).toMatch(/border:\s*none/);
+  });
 });
 
 describe('enhanced tables: toolbar and controls (plan Phase 4)', () => {

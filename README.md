@@ -302,10 +302,14 @@ interactive — all WCAG 2.2 AA and keyboard-operable, with no extra dependencie
 - **Sorting** — click a column header (or focus it and press Enter/Space) to sort the whole table ascending; click
   again for descending. `aria-sort` reflects the current direction, sorting happens before pagination, and the sort is
   kept while navigating pages.
-- **Search/filter** — the filter box above each table narrows rows case-insensitively across all columns (debounced),
-  with the match count announced via a live region and a Clear button to reset.
+- **Search/filter** — the filter box sits at the right edge of the table (next to Export) and narrows rows
+  case-insensitively across all columns (debounced), with the match count announced via a live region and an **×**
+  button to reset.
 - **CSV export** — "Export CSV" downloads the entire table (current filter and sort applied, pagination ignored) with
   proper escaping; the filename includes the table name and a timestamp.
+- **Horizontal scrolling** — when a table is wider than the screen its wrapper gains a horizontal scrollbar
+  (`rf-scroll-x-enabled`, toggled by measurement in `lib/table-enhancer.js`); the scrollbar is deliberately conditional
+  because an unconditional `overflow-x` would break the viewport-sticky table header.
 - **Copy cells** — click any cell (or focus it and press Enter/Space) to copy its text; an auto-dismissing toast
   confirms the copy. Falls back gracefully when the Clipboard API is unavailable.
 

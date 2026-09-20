@@ -127,11 +127,19 @@ coverage there when introducing new markup patterns.
 ## Report Tables (Enhanced)
 
 - Every data table in the report (class/package relationships, disharmony
-  findings, cycle summary, cycle breakdown) is enhanced: sticky `thead th`
-  (the template overrides mvp.css `overflow-x: auto` on tables, which would
-  otherwise break viewport stickiness), toolbar (search + match live region +
-  CSV export), sortable th buttons with `aria-sort`, pagination below 20+
-  row tables, and click/Enter/Space cell copy with toast feedback.
+  findings, cycle summary, cycle breakdown) is enhanced: sticky `thead th`,
+  toolbar (match live region + copy hint left; search + CSV export right —
+  the `.rf-table-block` wrapper shrink-wraps the table and the toolbar uses
+  `contain: inline-size` so controls align with the table's right edge),
+  sortable th buttons with `aria-sort`, pagination below 20+ row tables, and
+  click/Enter/Space cell copy with toast feedback. The filter's clear control
+  is an × button (accessible name "Clear the … table filter").
+- Horizontal scrollbar: tables wider than the viewport get `overflow-x: auto`
+  via the `rf-scroll-x-enabled` class, toggled by `lib/table-enhancer.js`
+  after measuring `wrapper.scrollWidth > clientWidth` (re-measured on each
+  re-render and on window resize). It MUST stay conditional — any overflow
+  ancestor becomes the sticky constraint container and breaks the
+  viewport-sticky `thead th`.
 - Pipeline: `prepareReportData(data, tableStates, TABLE_CONFIG)` in
   lib/renderer.js applies **filter → sort → paginate** per table and injects
   `tableUi` blocks the mustache template renders; `enhanceTables` in

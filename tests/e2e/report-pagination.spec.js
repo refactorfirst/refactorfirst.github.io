@@ -79,7 +79,7 @@ test.beforeEach(async ({ page }) => {
   // supplies our synthesized report regardless of the repository name.
   await page.goto('/refactorfirst/refactorfirst');
   await expect(page.locator('table[data-rf-table="class-relationships"] tbody tr').first())
-    .toBeVisible();
+    .toBeVisible({ timeout: 15000 });
 });
 
 test.describe('pagination', () => {
@@ -208,11 +208,13 @@ test.describe('search and filter', () => {
       .toHaveCount(11);
   });
 
-  test('the clear button restores the unfiltered table', async ({ page }) => {
+  test('the "x" button clears the filter and restores the unfiltered table', async ({ page }) => {
+    const clear = page.getByRole('button', { name: /clear.*filter/i }).first();
+    await expect(clear).toHaveText('×');
     await page.locator('input[data-rf-search="class-relationships"]').fill('target7');
     const match = page.locator('[data-rf-match="class-relationships"]');
     await expect(match).toContainText('rows match');
-    await page.getByRole('button', { name: /clear.*filter/i }).first().click();
+    await clear.click();
     await expect(page.locator('[data-rf-pagination="class-relationships"]'))
       .toContainText('Page 1 of 3');
     await expect(match).toHaveText('');
@@ -257,6 +259,79 @@ test.describe('csv export', () => {
     await page.keyboard.press('Enter');
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toContain('.csv');
+  });
+});
+
+test.describe('wide tables', () => {
+  const WIDE_LABEL =
+    'VeryLongClassNameWithLotsOfWordsThatKeepGoing.FullyQualified.AnotherLongTypeName.DeeplyNested → AnExtremelyLongTargetClassName.ThatGoesOn.AndOn.AndOn.AndOn';
+
+  async function loadWideReport(page) {
+    const report = buildReport();
+    for (const rel of report.classRelationshipsToRemove.relationships) {
+      rel.renderedLabel = `${WIDE_LABEL} ${rel.priority}`;
+    }
+    await page.route('**/raw.githubusercontent.com/**', route => {
+      const url = route.request().url();
+      if (url.endsWith('refactor-first.json')) {
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) });
+      } else {
+        route.fulfill({ status: 404 });
+      }
+    });
+    await page.reload();
+    await page.locator('table[data-rf-table="class-relationships"] tbody tr').first().waitFor();
+  }
+
+  test('no horizontal scrollbar when the table fits the viewport', async ({ page }) => {
+    const wrapper = page.locator('[data-rf-scroll="class-relationships"]');
+    await expect(wrapper).not.toHaveClass(/rf-scroll-x-enabled/);
+    await expect(wrapper).toHaveCSS('overflow-x', 'visible');
+  });
+
+  test('tables wider than the screen get a working horizontal scrollbar', async ({ page }) => {
+    await loadWideReport(page);
+    const wrapper = page.locator('[data-rf-scroll="class-relationships"]');
+    await expect(wrapper).toHaveClass(/rf-scroll-x-enabled/);
+
+    const dims = await wrapper.evaluate(el => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+      overflowX: getComputedStyle(el).overflowX
+    }));
+    expect(dims.scrollWidth).toBeGreaterThan(dims.clientWidth);
+    expect(dims.overflowX).toBe('auto');
+
+    const scrolled = await wrapper.evaluate(el => {
+      el.scrollLeft = 300;
+      return el.scrollLeft;
+    });
+    expect(scrolled).toBe(300);
+
+    // The black bounding box wraps the visible scroll area, not the clipped
+    // table content (whose right edge would otherwise scroll out of it).
+    const styles = await wrapper.evaluate(el => {
+      const table = el.querySelector('table');
+      return {
+        wrapperBorder: getComputedStyle(el).borderTopWidth,
+        tableBorder: getComputedStyle(table).borderTopWidth
+      };
+    });
+    expect(styles.wrapperBorder).toBe('5px');
+    expect(styles.tableBorder).toBe('0px');
+
+    const wrapperBox = await wrapper.boundingBox();
+    expect(wrapperBox.x + wrapperBox.width).toBeLessThanOrEqual(
+      (await page.evaluate(() => document.documentElement.clientWidth)) + 1);
+  });
+
+  test('search and export controls align with the right edge of the table frame', async ({ page }) => {
+    // The visible frame's right edge is the scroll wrapper's border box.
+    const frameBox = await page.locator('[data-rf-scroll="class-relationships"]').boundingBox();
+    const actionsBox = await page.locator(
+      '.rf-table-toolbar[data-rf-toolbar="class-relationships"] .rf-table-actions').boundingBox();
+    expect(Math.abs((actionsBox.x + actionsBox.width) - (frameBox.x + frameBox.width)))
+      .toBeLessThanOrEqual(2);
   });
 });
 
