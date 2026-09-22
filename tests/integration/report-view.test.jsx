@@ -276,6 +276,11 @@ describe('ReportView', () => {
 // through ReportView state + enhanceTables.
 // ---------------------------------------------------------------------------
 
+// Tests that drive several table interactions incur a full report re-render
+// per interaction; under `bun test --coverage` instrumentation that exceeds
+// bun's 5s default per-test timeout.
+const SLOW_TEST_MS = 20000;
+
 function tableRows(utils, tableId) {
   return [...utils.container.querySelectorAll(
     `table[data-rf-table="${tableId}"] tbody tr`)];
@@ -328,7 +333,7 @@ describe('enhanced report tables: pagination', () => {
     fireEvent.click(paginationNav(utils, 'class-relationships').querySelector('[data-page-dir="prev"]'));
     await waitForPage(utils, 'class-relationships', 'Page 1 of 3');
     expect(tableRows(utils, 'class-relationships')[0].textContent).toBe(firstPageFirstCell);
-  });
+  }, SLOW_TEST_MS);
 
   test('disabled pagination buttons cannot be activated', async () => {
     respondJsonFor(sampleJson);
@@ -363,7 +368,7 @@ describe('enhanced report tables: sorting', () => {
     expect(prioritiesOf()).toEqual([...Array(20).keys()].map(i => 47 - i));
     expect(headerCell(utils, 'class-relationships', 'priority')
       .querySelector('.rf-sort-indicator').textContent).toBe('▼');
-  });
+  }, SLOW_TEST_MS);
 
   test('applies the sort across the whole dataset and keeps it while paging', async () => {
     respondJsonFor(sampleJson);
@@ -385,7 +390,7 @@ describe('enhanced report tables: sorting', () => {
       .map(row => Number(row.children[1].textContent.trim()));
     expect(priorities[0]).toBe(27);
     expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort')).toBe('descending');
-  });
+  }, SLOW_TEST_MS);
 
   test('a different column switches the sort key', async () => {
     respondJsonFor(sampleJson);
@@ -564,7 +569,7 @@ describe('enhanced report tables: CSV export', () => {
 
     delete globalThis.URL.createObjectURL;
     delete globalThis.URL.revokeObjectURL;
-  });
+  }, SLOW_TEST_MS);
 
   test('export buttons carry descriptive aria-labels', async () => {
     respondJsonFor(sampleJson);
