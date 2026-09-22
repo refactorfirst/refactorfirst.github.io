@@ -44,6 +44,12 @@ const BRIDGE_WIDGETS = ['/widgets/vizdom-bridge.js', '/widgets/three-spritetext-
 // gracefully at popup-open time.
 const ENHANCE_WIDGETS = ['chart', 'vizdom'];
 
+/**
+ * Fetches and renders a repository report with interactive table controls.
+ *
+ * @param {object} props - Report location and optional runtime overrides.
+ * @returns {import('react').ReactElement} The report container and widget scripts.
+ */
 export default function ReportView({
   username,
   repository,
@@ -90,6 +96,7 @@ export default function ReportView({
     const controller = new AbortController();
     const container = containerRef.current;
 
+    /** Fetches the trusted template and the selected repository report. */
     async function run() {
       setPayload(null);
       container.innerHTML = '<p class="loading" role="status">Loading report&hellip;</p>';
@@ -139,6 +146,7 @@ export default function ReportView({
     let cancelled = false;
     const container = containerRef.current;
 
+    /** Renders the current table state and restores stateful report widgets. */
     async function run() {
       try {
         if (!widgetsSettledRef.current) {
