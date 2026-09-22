@@ -13,6 +13,20 @@ mock.module('next/script', () => ({ default: () => null }));
 
 import { render, waitFor, cleanup, installRtlDom } from './rtl';
 import { jsx as _jsx } from 'react/jsx-runtime';
+
+let resolveEnhanceReport;
+const enhanceTablesCalls = [];
+
+mock.module('../../lib/report-view.js', () => ({
+  enhanceReport: () => new Promise(resolve => { resolveEnhanceReport = resolve; }),
+  bindPopupHandlers: () => {},
+  stashStatefulDom: () => new Map(),
+  graftStatefulDom: () => {}
+}));
+mock.module('../../lib/table-enhancer.js', () => ({
+  enhanceTables: (...args) => enhanceTablesCalls.push(args)
+}));
+
 import ReportView from '../../components/report-view';
 import { resetWidgetRegistry } from '../../lib/widget-loader';
 
@@ -28,6 +42,8 @@ describe('ReportView fetch lifecycle', () => {
   beforeEach(() => {
     resetWidgetRegistry();
     mockFetch = spyOn(global, 'fetch');
+    resolveEnhanceReport = undefined;
+    enhanceTablesCalls.length = 0;
   });
   afterEach(() => {
     mockFetch.mockRestore();
@@ -107,5 +123,29 @@ describe('ReportView fetch lifecycle', () => {
     await Promise.resolve(); // flush microtasks
     // No crash, and the unmounted container never received an error page
     expect(utils.container.querySelector('.error-page')).toBeNull();
+  });
+
+  test('does not bind table handlers after unmount while report enhancement is pending', async () => {
+    mockFetch.mockImplementation(requested => {
+      const url = String(requested);
+      if (url.endsWith('assets/refactor-first-report.mustache')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<p>{{project.name}}</p>') });
+      }
+      if (url.endsWith('.refactorfirst/refactor-first.json')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ project: { name: 'Example' } }) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+    const utils = render(_jsx(ReportView, {
+      username: 'alice', repository: 'one', widgetSettleMs: 0
+    }));
+
+    await waitFor(() => expect(resolveEnhanceReport).toBeTypeOf('function'));
+    utils.unmount();
+    resolveEnhanceReport();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(enhanceTablesCalls).toHaveLength(0);
   });
 });
