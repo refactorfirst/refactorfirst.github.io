@@ -143,8 +143,8 @@ describe('bindPopupHandlers (template uses data attributes, no inline handlers)'
   it('opens a popup when a 2D button is clicked', () => {
     bindPopupHandlers(document.getElementById('app'));
     document.querySelector('[data-popup-2d]').click();
-    expect(document.getElementById('overlay').style.display).toBe('none');
-    expect(document.getElementById('popup-classGraph').style.display).toBe('none');
+    expect(document.getElementById('overlay').style.display).toBe('block');
+    expect(document.getElementById('popup-classGraph').style.display).toBe('block');
   });
 
   it('closes popups from the close button and the overlay', () => {

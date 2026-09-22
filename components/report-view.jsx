@@ -57,7 +57,11 @@ export default function ReportView({
   environment: environmentProp,
   platformBaseUrl: platformBaseUrlProp,
   widgetSettleMs = 5000,
-  toastDurationMs = TABLE_CONFIG.copy.toastDuration
+  toastDurationMs = TABLE_CONFIG.copy.toastDuration,
+  // Test seams (bun's mock.module leaks across test files, so lifecycle
+  // tests inject Deferred/spying implementations instead of module mocks).
+  enhanceReportImpl = enhanceReport,
+  enhanceTablesImpl = enhanceTables
 }) {
   const containerRef = useRef(null);
   const searchParams = useSearchParams();
@@ -173,7 +177,7 @@ export default function ReportView({
         container.dataset.resolvedBranch = payload.resolvedBranch;
 
         if (payloadChanged) {
-          await enhanceReport(container, payload.data);
+          await enhanceReportImpl(container, payload.data);
           if (cancelled) return;
           lastEnhancedPayloadRef.current = payload;
         } else {
@@ -182,7 +186,7 @@ export default function ReportView({
           // them is cheap (unlike charts/graph layout, which the graft saved).
           bindPopupHandlers(container);
         }
-        enhanceTables(container, {
+        enhanceTablesImpl(container, {
           data: payload.data,
           tableStates,
           onTableAction: handleTableAction,
@@ -213,7 +217,8 @@ export default function ReportView({
 
     run();
     return () => { cancelled = true; };
-  }, [payload, tableStates, widgetSettleMs, username, repository, branch, handleTableAction, handleCopy]);
+  }, [payload, tableStates, widgetSettleMs, username, repository, branch,
+    handleTableAction, handleCopy, enhanceReportImpl, enhanceTablesImpl]);
 
   return (
     <>
