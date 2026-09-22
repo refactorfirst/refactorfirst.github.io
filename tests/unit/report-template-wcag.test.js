@@ -183,6 +183,16 @@ describe('enhanced tables: sticky headers CSS (plan Phase 2)', () => {
     expect(rule[1]).toMatch(/color:\s*#[0-9a-fA-F]{3,6}/);
   });
 
+  it('centres the filter label, text box and clear button on one line', () => {
+    // The search slot holds an inline-flex label (text + input) and the
+    // clear button as inline siblings: without flex centring their boxes
+    // sit on a shared baseline and visibly misalign.
+    const rule = template.match(/\.rf-table-search\s*\{([^}]*)\}/s);
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/display:\s*flex/);
+    expect(rule[1]).toMatch(/align-items:\s*center/);
+  });
+
   it('puts the outer table border on the scroll wrapper, not the scrolled table', () => {
     // When a table overflows, .rf-table-scroll clips/scrolls it — a border on
     // the <table> itself would scroll away with the content, so the visible

@@ -178,10 +178,12 @@
        table itself would scroll away with the content instead of boxing
        the visible area. Unwrapped tables (problem/solution) keep their
        own border.
-       Horizontal scrollbar appears only when the table overflows: adding
-       overflow unconditionally would make the wrapper a scroll container
-       and break the viewport-sticky table header, so
-       lib/table-enhancer.js toggles .rf-scroll-x-enabled after measuring. */
+        Horizontal scrollbar appears only when the table overflows: adding
+        overflow unconditionally would make the wrapper a scroll container
+        and break the viewport-sticky table header, so
+        lib/table-enhancer.js toggles .rf-scroll-x-enabled after measuring —
+        and pins the header of scrolling tables anyway by translating the
+        header cells with the viewport scroll offset. */
     .rf-table-scroll {
         max-width: 100%;
         border: 5px solid;
@@ -199,6 +201,15 @@
     .rf-table-toolbar .rf-copy-hint {
         font-size: 0.85rem;
         margin: 0;
+    }
+
+    /* Keep the label, text box and clear button on one centred line — as
+       plain inline siblings their boxes would sit on a shared baseline and
+       visibly misalign vertically. */
+    .rf-table-search {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
     }
 
     .rf-table-search label {

@@ -139,13 +139,23 @@ coverage there when introducing new markup patterns.
   after measuring `wrapper.scrollWidth > clientWidth` (re-measured on each
   re-render and on window resize). It MUST stay conditional — any overflow
   ancestor becomes the sticky constraint container and breaks the
-  viewport-sticky `thead th`.
+  viewport-sticky `thead th`. Scrolling tables keep their header pinned
+  anyway: `refreshStickyHeaders` in lib/table-enhancer.js compensates by
+  translating every `thead th` down by the viewport scroll offset (clamped to
+  the table's bottom edge) on window scroll/resize; narrow tables keep pure
+  CSS stickiness and stale transforms are cleared when overflow goes away.
 - Pipeline: `prepareReportData(data, tableStates, TABLE_CONFIG)` in
   lib/renderer.js applies **filter → sort → paginate** per table and injects
   `tableUi` blocks the mustache template renders; `enhanceTables` in
   lib/table-enhancer.js binds the controls and reports state changes back to
   components/report-view.jsx, which re-renders (widgets only gate the first
   render; the search input's focus/caret is restored after each re-render).
+  The expensive `enhanceReport` pipeline (Chart.js charts, WASM DOT layout)
+  runs only when the payload changes — table-state re-renders stash the live
+  chart canvases / graph containers before the innerHTML swap and graft them
+  back into the fresh DOM (`statefulElementIds`/`stashStatefulDom`/
+  `graftStatefulDom` in lib/report-view.js), re-binding only the cheap popup
+  handlers.
 - Search `<input>`s are injected by table-enhancer — `<input>` is FORBID in
   the renderer's sanitization allow-list, so it must never appear in the
   mustache template.
@@ -154,7 +164,7 @@ coverage there when introducing new markup patterns.
 
 ## Current Test Count
 
-~464 unit/integration + 160 E2E (156 across three browsers + 4 basePath leg).
+~485 unit/integration + 175 E2E (171 across three browsers + 4 basePath leg).
 
 WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
 tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and

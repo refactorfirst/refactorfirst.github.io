@@ -460,6 +460,72 @@ describe('enhanced report tables: search and filter', () => {
   });
 });
 
+describe('enhanced report tables: stateful widgets survive interactions', () => {
+  test('table interactions must not rebuild charts or WASM graphs', async () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const parsed = [];
+    window.Vizdom = {
+      DotParser: class {
+        parse() {
+          parsed.push(true);
+          return {
+            to_directed: () => ({
+              layout: () => ({
+                to_svg: () => ({ to_string: () => '<svg class="fullscreen-svg"><g/></svg>' })
+              })
+            })
+          };
+        }
+      }
+    };
+    markWidgetReady('chart');
+    markWidgetReady('vizdom');
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    const { fireEvent } = await import('@testing-library/react');
+
+    expect(created.length).toBeGreaterThan(0);
+    expect(parsed.length).toBeGreaterThan(0);
+    const liveCanvas = utils.container.querySelector('canvas#chart_GOD');
+    const liveGraph = utils.container.querySelector('#classGraph');
+    const chartCount = created.length;
+    const parseCount = parsed.length;
+
+    // A table interaction re-renders the report but must graft the live
+    // widget nodes back instead of re-running the chart/graph pipeline.
+    fireEvent.click(paginationNav(utils, 'class-relationships').querySelector('[data-page-dir="next"]'));
+    await waitForPage(utils, 'class-relationships', 'Page 2 of 3');
+
+    expect(created.length).toBe(chartCount);
+    expect(parsed.length).toBe(parseCount);
+    expect(utils.container.querySelector('canvas#chart_GOD')).toBe(liveCanvas);
+    expect(utils.container.querySelector('#classGraph')).toBe(liveGraph);
+    expect(utils.container.querySelector('#classGraph svg')).not.toBeNull();
+  });
+
+  test('popup buttons keep working after a table interaction re-render', async () => {
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    const { fireEvent } = await import('@testing-library/react');
+
+    fireEvent.click(paginationNav(utils, 'class-relationships').querySelector('[data-page-dir="next"]'));
+    await waitForPage(utils, 'class-relationships', 'Page 2 of 3');
+
+    // Popup buttons were recreated with the DOM; handlers must be re-bound.
+    const popupButton = utils.container.querySelector('[data-popup-2d]');
+    expect(popupButton).not.toBeNull();
+    fireEvent.click(popupButton);
+    expect(document.getElementById('overlay').style.display).toBe('block');
+    hideAllPopups();
+  });
+});
+
+async function hideAllPopups() {
+  const { hidePopup } = await import('../../lib/report-view.js');
+  hidePopup();
+}
+
 describe('enhanced report tables: CSV export', () => {
   test('downloads the full dataset in the current sort order as CSV', async () => {
     respondJsonFor(sampleJson);

@@ -7,7 +7,10 @@ import {
   showPopup,
   hidePopup,
   bindPopupHandlers,
-  enhanceReport
+  enhanceReport,
+  statefulElementIds,
+  stashStatefulDom,
+  graftStatefulDom
 } from '../../lib/report-view.js';
 
 describe('exposeGraphDots', () => {
@@ -159,6 +162,93 @@ describe('bindPopupHandlers (template uses data attributes, no inline handlers)'
     document.body.innerHTML = '<main id="app"><button type="button" data-popup-2d data-popup="missing" data-container="missing" data-dot-var="nope">x</button></main>';
     bindPopupHandlers(document.getElementById('app'));
     expect(() => document.querySelector('button').click()).not.toThrow();
+  });
+});
+
+describe('stateful DOM preservation across table-state re-renders', () => {
+  const data = {
+    disharmonies: [
+      { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 3 }] } },
+      { anchorId: 'BRAIN', title: 'Brain Methods' } // no chart: not stateful
+    ],
+    classMap: { dot: 'strict digraph C {}', dotThresholdExceeded: false },
+    packageMap: { dot: 'strict digraph P {}', dotThresholdExceeded: false, hasEdges: true },
+    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dot: 'x', dotThresholdExceeded: false } }
+  };
+
+  describe('statefulElementIds', () => {
+    it('lists chart canvases and rendered graph containers only', () => {
+      expect(statefulElementIds(data)).toEqual([
+        'chart_GOD', 'classGraph', 'packageGraph', 'cycle_0'
+      ]);
+    });
+
+    it('skips graphs whose dot threshold was exceeded or which lack edges', () => {
+      expect(statefulElementIds({
+        classMap: { dot: 'x', dotThresholdExceeded: true },
+        packageMap: { dot: 'x', dotThresholdExceeded: false, hasEdges: false },
+        classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dotThresholdExceeded: true } }
+      })).toEqual([]);
+    });
+
+    it('tolerates a report without any graphs or charts', () => {
+      expect(statefulElementIds({})).toEqual([]);
+    });
+  });
+
+  describe('stashStatefulDom + graftStatefulDom', () => {
+    function buildReport() {
+      document.body.innerHTML = `
+        <main id="app">
+          <canvas id="chart_GOD" width="640" height="320"></canvas>
+          <div id="classGraph"><svg class="fullscreen-svg"><g/></svg></div>
+          <div id="packageGraph"><svg class="fullscreen-svg"><g/></svg></div>
+          <div id="cycle_0"></div>
+        </main>`;
+      return document.getElementById('app');
+    }
+
+    it('stashes the live nodes and grafts them back into a fresh render', () => {
+      const oldRoot = buildReport();
+      const liveCanvas = oldRoot.querySelector('#chart_GOD');
+      const liveGraph = oldRoot.querySelector('#classGraph');
+      const stash = stashStatefulDom(oldRoot, data);
+
+      // Simulate the innerHTML re-render: same markup, fresh nodes.
+      buildReport();
+      const newRoot = document.getElementById('app');
+      expect(newRoot.querySelector('#chart_GOD')).not.toBe(liveCanvas);
+
+      graftStatefulDom(newRoot, stash);
+      expect(newRoot.querySelector('#chart_GOD')).toBe(liveCanvas);
+      expect(newRoot.querySelector('#classGraph')).toBe(liveGraph);
+      // The rendered SVG content travels with the grafted node.
+      expect(newRoot.querySelector('#classGraph svg')).not.toBeNull();
+    });
+
+    it('ignores stateful ids that are absent from the old tree', () => {
+      document.body.innerHTML = '<main id="app"><div id="classGraph"></div></main>';
+      const stash = stashStatefulDom(document.getElementById('app'), data);
+      expect(stash.size).toBe(1);
+
+      buildReport();
+      const newRoot = document.getElementById('app');
+      const freshCanvas = newRoot.querySelector('#chart_GOD');
+      graftStatefulDom(newRoot, stash);
+      // Nothing stashed for chart_GOD: the fresh placeholder stays.
+      expect(newRoot.querySelector('#chart_GOD')).toBe(freshCanvas);
+      expect(newRoot.querySelector('#classGraph').childNodes.length).toBe(0);
+    });
+
+    it('leaves the new tree untouched for stashed ids without a placeholder', () => {
+      const oldRoot = buildReport();
+      const stash = stashStatefulDom(oldRoot, data);
+      document.body.innerHTML = '<main id="app"><section>shrunk report</section></main>';
+      const newRoot = document.getElementById('app');
+      graftStatefulDom(newRoot, stash);
+      expect(newRoot.textContent).toContain('shrunk report');
+      expect(newRoot.querySelector('#chart_GOD')).toBeNull();
+    });
   });
 });
 

@@ -204,6 +204,92 @@ describe('horizontal scrollbar on overflow', () => {
   });
 });
 
+describe('sticky headers while horizontally scrolling', () => {
+  // Once overflow-x turns the wrapper into a scroll container, the CSS
+  // viewport-sticky header no longer pins; the enhancer pins it with a
+  // translateY transform driven by window scroll instead.
+  function makeWide() {
+    const wrapper = root.querySelector('[data-rf-scroll="class-relationships"]');
+    Object.defineProperty(wrapper, 'scrollWidth', { value: 1200, configurable: true });
+    Object.defineProperty(wrapper, 'clientWidth', { value: 900, configurable: true });
+    setup();
+    expect(wrapper.classList.contains('rf-scroll-x-enabled')).toBe(true);
+    return wrapper;
+  }
+
+  function stubGeometry(tableTop, { tableHeight = 400, headerHeight = 40, headerTop } = {}) {
+    const table = root.querySelector('table');
+    const thead = table.querySelector('thead');
+    table.getBoundingClientRect = () => ({ top: tableTop, height: tableHeight });
+    thead.getBoundingClientRect = () => ({ top: headerTop ?? tableTop, height: headerHeight });
+  }
+
+  function scrollWindow() {
+    window.dispatchEvent(new window.Event('scroll'));
+  }
+
+  it('pins the header to the viewport top with a translateY transform', () => {
+    makeWide();
+    stubGeometry(-120);
+    scrollWindow();
+    const th = root.querySelector('thead th');
+    expect(th.style.transform).toBe('translateY(120px)');
+  });
+
+  it('applies the same transform to every header cell', () => {
+    makeWide();
+    stubGeometry(-75);
+    scrollWindow();
+    const headers = root.querySelectorAll('thead th');
+    expect(headers.length).toBe(2);
+    for (const th of headers) {
+      expect(th.style.transform).toBe('translateY(75px)');
+    }
+  });
+
+  it('clamps the header at the bottom of the table', () => {
+    makeWide();
+    stubGeometry(-1000, { tableHeight: 400, headerHeight: 40 });
+    scrollWindow();
+    expect(root.querySelector('thead th').style.transform).toBe('translateY(360px)');
+  });
+
+  it('pins to the viewport top even with a caption above the header', () => {
+    // The table's caption sits between the table's top edge and the thead;
+    // pinning must follow the header, not the table top.
+    makeWide();
+    stubGeometry(-124.5, { headerTop: -100 });
+    scrollWindow();
+    expect(root.querySelector('thead th').style.transform).toBe('translateY(100px)');
+  });
+
+  it('keeps the header at its resting position above the table', () => {
+    makeWide();
+    stubGeometry(50);
+    scrollWindow();
+    expect(root.querySelector('thead th').style.transform).toBe('');
+  });
+
+  it('does not transform headers when horizontal scrolling is disabled', () => {
+    setup();
+    stubGeometry(-120);
+    scrollWindow();
+    expect(root.querySelector('thead th').style.transform).toBe('');
+  });
+
+  it('clears the transform when the table stops overflowing on re-measure', () => {
+    const wrapper = makeWide();
+    stubGeometry(-120);
+    scrollWindow();
+    expect(root.querySelector('thead th').style.transform).toBe('translateY(120px)');
+
+    Object.defineProperty(wrapper, 'scrollWidth', { value: 900, configurable: true });
+    enhanceTables(root, { data: demoData(), debounceMs: 0 });
+    expect(wrapper.classList.contains('rf-scroll-x-enabled')).toBe(false);
+    expect(root.querySelector('thead th').style.transform).toBe('');
+  });
+});
+
 describe('copy cell content', () => {
   it('marks body cells as focusable copy targets', () => {
     setup();

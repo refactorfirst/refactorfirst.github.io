@@ -15,7 +15,12 @@ import { withBasePath } from '../lib/base-path';
 import { detectHostingEnvironment, getPlatformBaseUrl, readMetaTag } from '../lib/host';
 import { fetchReport } from '../lib/fetcher';
 import { renderTemplate, prepareReportData } from '../lib/renderer';
-import { enhanceReport } from '../lib/report-view';
+import {
+  enhanceReport,
+  bindPopupHandlers,
+  stashStatefulDom,
+  graftStatefulDom
+} from '../lib/report-view';
 import { enhanceTables } from '../lib/table-enhancer';
 import { renderErrorPage, logError } from '../lib/error-handler';
 import { markWidgetReady, waitForWidget } from '../lib/widget-loader';
@@ -55,6 +60,10 @@ export default function ReportView({
   const [tableStates, setTableStates] = useState({});
   const widgetsSettledRef = useRef(false);
   const pendingFocusRef = useRef(null);
+  // The last payload that went through the full (expensive) enhanceReport
+  // pipeline; table-state-only re-renders skip it and graft the live chart
+  // canvases / graph SVGs into the fresh DOM instead.
+  const lastEnhancedPayloadRef = useRef(null);
   const { toasts, show: showToast, dismiss: dismissToast } = useToastNotifications({
     duration: toastDurationMs
   });
@@ -121,7 +130,10 @@ export default function ReportView({
   }, [username, repository, branch, environmentProp, platformBaseUrlProp, attempt]);
 
   // Render effect: re-renders the report whenever the payload arrives or the
-  // per-table UI state changes. Widgets only gate the first render.
+  // per-table UI state changes. Widgets only gate the first render. The
+  // enhanceReport pipeline (Chart.js charts, WASM DOT layout) runs once per
+  // payload; table-state re-renders carry the live stateful nodes over to
+  // the fresh DOM and only re-bind the cheap popup/table handlers.
   useEffect(() => {
     if (!payload) return undefined;
     let cancelled = false;
@@ -140,12 +152,27 @@ export default function ReportView({
         }
         if (cancelled) return;
 
+        const payloadChanged = lastEnhancedPayloadRef.current !== payload;
+        // Stash live chart canvases and rendered graphs before the innerHTML
+        // swap throws the old DOM away (no-op on first render — there is
+        // nothing stateful in the loading placeholder).
+        const stash = payloadChanged ? null : stashStatefulDom(container, payload.data);
+
         container.innerHTML = renderTemplate(
           payload.template,
           prepareReportData(payload.data, tableStates)
         );
         container.dataset.resolvedBranch = payload.resolvedBranch;
-        await enhanceReport(container, payload.data);
+
+        if (payloadChanged) {
+          await enhanceReport(container, payload.data);
+          lastEnhancedPayloadRef.current = payload;
+        } else {
+          graftStatefulDom(container, stash);
+          // Popup buttons are fresh nodes after every re-render; binding
+          // them is cheap (unlike charts/graph layout, which the graft saved).
+          bindPopupHandlers(container);
+        }
         enhanceTables(container, {
           data: payload.data,
           tableStates,

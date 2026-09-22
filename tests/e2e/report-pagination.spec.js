@@ -325,6 +325,26 @@ test.describe('wide tables', () => {
       (await page.evaluate(() => document.documentElement.clientWidth)) + 1);
   });
 
+  test('wide tables keep their header pinned to the viewport while scrolling', async ({ page }) => {
+    await loadWideReport(page);
+    const wrapper = page.locator('[data-rf-scroll="class-relationships"]');
+    await expect(wrapper).toHaveClass(/rf-scroll-x-enabled/);
+
+    const firstHeader = page.locator(
+      'table[data-rf-table="class-relationships"] thead th').first();
+    const table = page.locator('table[data-rf-table="class-relationships"]');
+    await table.locator('tbody tr').last().scrollIntoViewIfNeeded();
+
+    // The JS pin kicks in on the (asynchronously dispatched) scroll event.
+    await expect(firstHeader).toHaveCSS('transform', /^matrix\(/);
+
+    const headerBox = await firstHeader.boundingBox();
+    expect(headerBox.y).toBeGreaterThanOrEqual(0);
+    expect(headerBox.y).toBeLessThan(2);
+    const tableBox = await table.boundingBox();
+    expect(headerBox.y).toBeLessThan(tableBox.y + tableBox.height);
+  });
+
   test('search and export controls align with the right edge of the table frame', async ({ page }) => {
     // The visible frame's right edge is the scroll wrapper's border box.
     const frameBox = await page.locator('[data-rf-scroll="class-relationships"]').boundingBox();
@@ -332,6 +352,98 @@ test.describe('wide tables', () => {
       '.rf-table-toolbar[data-rf-toolbar="class-relationships"] .rf-table-actions').boundingBox();
     expect(Math.abs((actionsBox.x + actionsBox.width) - (frameBox.x + frameBox.width)))
       .toBeLessThanOrEqual(2);
+  });
+});
+
+test.describe('stateful widgets survive table interactions', () => {
+  // Reports with charts/graphs: table interactions re-render the whole
+  // report DOM, but the live Chart.js canvas and vizdom-rendered graph must
+  // be grafted into the fresh markup (not rebuilt), and popup handlers must
+  // be re-bound on the recreated buttons.
+  function buildStatefulReport() {
+    const report = buildReport();
+    report.project.hasAnyDisharmony = true;
+    report.classMap = {
+      graphId: 'classGraph',
+      classCount: 3,
+      relationshipCount: 2,
+      dotThreshold: 4000,
+      dotThresholdExceeded: false,
+      dot: 'strict digraph G {\nSource0 -> Target0 [ label = "2" weight = "2" ];\nSource1 -> Target1 [ label = "1" weight = "1" ];\n}',
+      hasEdges: true
+    };
+    report.hasDisharmonies = true;
+    report.disharmonies = [{
+      type: 'God Class',
+      anchorId: 'GOD',
+      title: 'God Classes',
+      methodLevel: false,
+      problem: 'God Classes take on too much responsibility,',
+      solution: 'Extract related islands of functionality into separate classes.',
+      maxPriority: 2,
+      chart: {
+        canvasId: 'chart_GOD',
+        bubbles: [{
+          id: 'Source0.java', label: 'Source0.java', x: 1, y: 2, r: 24,
+          priority: 1, effortRank: 1, changePronenessRank: 2,
+          color: 'rgba(235, 64, 52, 0.75)', borderColor: 'rgb(235, 64, 52)'
+        }],
+        xaxisLabel: 'Effort to refactor',
+        yaxisLabel: 'Relative churn (impact)'
+      },
+      table: {
+        headers: ['Class', 'Priority'],
+        rows: [{ cells: [
+          { content: '<code>com.example.Source0</code>', align: 'left' },
+          { content: '1', align: 'right' }
+        ] }]
+      }
+    }];
+    return report;
+  }
+
+  async function loadStatefulReport(page) {
+    const report = buildStatefulReport();
+    await page.route('**/raw.githubusercontent.com/**', route => {
+      const url = route.request().url();
+      if (url.endsWith('refactor-first.json')) {
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) });
+      } else {
+        route.fulfill({ status: 404 });
+      }
+    });
+    await page.reload();
+    await page.locator('table[data-rf-table="class-relationships"] tbody tr').first().waitFor();
+  }
+
+  test('charts, graphs and popups survive a table interaction re-render', async ({ page }) => {
+    await loadStatefulReport(page);
+    await expect(page.locator('#classGraph svg')).toBeVisible();
+    await expect(page.locator('canvas#chart_GOD')).toBeAttached();
+
+    // Tag the live widget nodes; a rebuilt DOM would come back untagged or
+    // with different nodes.
+    await page.evaluate(() => {
+      document.querySelector('canvas#chart_GOD').dataset.e2eGraft = 'chart-live';
+      document.querySelector('#classGraph').dataset.e2eGraft = 'graph-live';
+    });
+
+    const nav = page.locator('[data-rf-pagination="class-relationships"]');
+    await nav.getByRole('button', { name: 'Next' }).click();
+    await expect(nav).toContainText('Page 2 of 3');
+
+    const markers = await page.evaluate(() => ({
+      chart: document.querySelector('canvas#chart_GOD')?.dataset.e2eGraft ?? null,
+      graph: document.querySelector('#classGraph')?.dataset.e2eGraft ?? null,
+      graphHasSvg: Boolean(document.querySelector('#classGraph svg'))
+    }));
+    expect(markers).toEqual({ chart: 'chart-live', graph: 'graph-live', graphHasSvg: true });
+
+    // Popup buttons were recreated with the DOM: handlers must still work.
+    await page.getByRole('button', { name: 'Show classGraph 2D' }).click();
+    await expect(page.locator('#overlay')).toBeVisible();
+    await page.locator('#popup-classGraph .close-btn').click();
+    await expect(page.locator('#overlay')).toBeHidden();
   });
 });
 

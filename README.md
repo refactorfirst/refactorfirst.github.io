@@ -309,7 +309,9 @@ interactive — all WCAG 2.2 AA and keyboard-operable, with no extra dependencie
   proper escaping; the filename includes the table name and a timestamp.
 - **Horizontal scrolling** — when a table is wider than the screen its wrapper gains a horizontal scrollbar
   (`rf-scroll-x-enabled`, toggled by measurement in `lib/table-enhancer.js`); the scrollbar is deliberately conditional
-  because an unconditional `overflow-x` would break the viewport-sticky table header.
+  because an unconditional `overflow-x` would break the viewport-sticky table header. Scrolling tables keep their
+  header pinned anyway: `lib/table-enhancer.js` translates the header cells down by the viewport scroll offset
+  (clamped to the table's bottom edge) on every window scroll/resize.
 - **Copy cells** — click any cell (or focus it and press Enter/Space) to copy its text; an auto-dismissing toast
   confirms the copy. Falls back gracefully when the Clipboard API is unavailable.
 
