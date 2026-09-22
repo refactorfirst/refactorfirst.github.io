@@ -174,6 +174,7 @@ export default function ReportView({
 
         if (payloadChanged) {
           await enhanceReport(container, payload.data);
+          if (cancelled) return;
           lastEnhancedPayloadRef.current = payload;
         } else {
           graftStatefulDom(container, stash);

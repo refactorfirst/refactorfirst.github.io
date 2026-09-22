@@ -93,7 +93,7 @@ While maintaining the existing template structure and security model.
 
 | File | Change |
 |---||
-| `assets/refactor-first-report.mustache` | Add CSS for sticky headers, add pagination control markup, add clickable column headers with sort indicators, add search input and export button above each table, add copy functionality to table cells, add ARIA attributes for all new interactive elements |
+| `assets/refactor-first-report.mustache` | Add CSS for sticky headers, add pagination control markup, add clickable column headers with sort indicators, add a search-control slot and export button above each table, add copy functionality to table cells, add ARIA attributes for all new interactive elements |
 | `lib/renderer.js` | Add pagination, sorting, and filtering logic before Mustache rendering for large tables, inject pagination, sort, and filter state into template data |
 | `components/report-view.jsx` | Wire up pagination, sort, search, export, and copy controls to state management for client-side navigation |
 | `tests/unit/table-operations.test.js` | Unit tests for pagination, sorting, filtering, CSV export, and copy functionality (edge cases, data integrity, CSV escaping, clipboard fallback) |
