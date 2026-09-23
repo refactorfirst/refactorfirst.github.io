@@ -149,6 +149,7 @@ export default function ReportView({
     if (!payload) return undefined;
     let cancelled = false;
     const container = containerRef.current;
+    let widgetSettleTimer;
 
     /** Renders the current table state and restores stateful report widgets. */
     async function run() {
@@ -158,8 +159,14 @@ export default function ReportView({
           // to arrive; everything else degrades gracefully when missing.
           await Promise.race([
             Promise.all(ENHANCE_WIDGETS.map(name => waitForWidget(name, { timeoutMs: widgetSettleMs }))),
-            new Promise(resolve => setTimeout(resolve, widgetSettleMs))
+            new Promise(resolve => {
+              widgetSettleTimer = setTimeout(resolve, widgetSettleMs);
+            })
           ]);
+          // The race is settled — the fallback no longer needs to fire, so
+          // release its handle (and the closure it retains) early.
+          clearTimeout(widgetSettleTimer);
+          widgetSettleTimer = undefined;
           widgetsSettledRef.current = true;
         }
         if (cancelled) return;
@@ -216,7 +223,12 @@ export default function ReportView({
     }
 
     run();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Cancel a still-pending settle fallback so its timer cannot fire after
+      // the effect is torn down. (No-op once the race has settled.)
+      clearTimeout(widgetSettleTimer);
+    };
   }, [payload, tableStates, widgetSettleMs, username, repository, branch,
     handleTableAction, handleCopy, enhanceReportImpl, enhanceTablesImpl]);
 

@@ -270,6 +270,79 @@ describe('ReportView', () => {
   });
 });
 
+// Widget gate: the render effect races widget readiness against a fallback
+// setTimeout. The fallback handle must be cleared when the race settles and
+// again if the effect is torn down first, instead of keeping the closure
+// (and its references) alive until widgetSettleMs elapses.
+describe('widget settle fallback timer', () => {
+  const SETTLE_MS = 4321; // distinctive delay so the fallback is identifiable
+
+  function trackTimers() {
+    const realSet = globalThis.setTimeout;
+    const realClear = globalThis.clearTimeout;
+    const created = [];
+    const cleared = new Set();
+    globalThis.setTimeout = (fn, delay, ...args) => {
+      const handle = realSet(fn, delay, ...args);
+      created.push({ handle, delay });
+      return handle;
+    };
+    globalThis.clearTimeout = handle => {
+      cleared.add(handle);
+      return realClear(handle);
+    };
+    return {
+      handlesFor: delay => created.filter(t => t.delay === delay).map(t => t.handle),
+      isCleared: handle => cleared.has(handle),
+      restore() {
+        globalThis.setTimeout = realSet;
+        globalThis.clearTimeout = realClear;
+      }
+    };
+  }
+
+  test('clears the fallback timer once the race settles', async () => {
+    const timers = trackTimers();
+    try {
+      // Widgets already ready, so waitForWidget resolves synchronously and
+      // creates no timers; the only SETTLE_MS timer is the race fallback.
+      markWidgetReady('chart');
+      markWidgetReady('vizdom');
+      respondJsonFor(sampleJson);
+      await renderReport({ widgetSettleMs: SETTLE_MS });
+
+      const handles = timers.handlesFor(SETTLE_MS);
+      expect(handles).toHaveLength(1);
+      expect(timers.isCleared(handles[0])).toBe(true);
+    } finally {
+      timers.restore();
+    }
+  });
+
+  test('clears a still-pending fallback timer when the effect is torn down', async () => {
+    const timers = trackTimers();
+    try {
+      respondJsonFor(sampleJson); // widgets never become ready
+      const utils = render(_jsx(ReportView, {
+        username: 'junit-team',
+        repository: 'junit4',
+        widgetSettleMs: SETTLE_MS
+      }));
+      // waitForWidget timers (chart, vizdom) + the race fallback, in order.
+      await waitFor(() => {
+        expect(timers.handlesFor(SETTLE_MS).length).toBeGreaterThanOrEqual(3);
+      });
+      const fallbackTimer = timers.handlesFor(SETTLE_MS).at(-1);
+      expect(timers.isCleared(fallbackTimer)).toBe(false);
+
+      utils.unmount();
+      expect(timers.isCleared(fallbackTimer)).toBe(true);
+    } finally {
+      timers.restore();
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Enhanced tables (plan: implement-paginated-tables-with-sticky-headers):
 // pagination, sorting, search/filter, CSV export and copy-to-clipboard wired
