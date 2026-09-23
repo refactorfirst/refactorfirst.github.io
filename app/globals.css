@@ -461,3 +461,50 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+/* Toast notifications (copy feedback on report tables). Rendered by
+   components/toast-notification.jsx as a persistent aria-live region. */
+.rf-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  pointer-events: none;
+  max-width: min(90vw, 40rem);
+}
+
+.rf-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  background: #1f2933;
+  color: #fff;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
+.rf-toast-message {
+  overflow-wrap: anywhere;
+}
+
+.rf-toast-dismiss {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem 0.45rem;
+}
+
+.rf-toast-dismiss:focus-visible {
+  outline: 2px solid var(--brand-color);
+  outline-offset: 2px;
+}

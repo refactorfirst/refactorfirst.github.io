@@ -1,8 +1,7 @@
 // Phase 5 race conditions: ReportView must abort in-flight report fetches
 // when it unmounts or when its route props change, and must issue a fresh
 // fetch on remount (Technical Appendix §9).
-import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
-import { mock } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, spyOn, mock } from 'bun:test';
 
 mock.module('next/navigation', () => ({
   usePathname: () => '/alice/one',
@@ -13,6 +12,7 @@ mock.module('next/script', () => ({ default: () => null }));
 
 import { render, waitFor, cleanup, installRtlDom } from './rtl';
 import { jsx as _jsx } from 'react/jsx-runtime';
+
 import ReportView from '../../components/report-view';
 import { resetWidgetRegistry } from '../../lib/widget-loader';
 
@@ -107,5 +107,38 @@ describe('ReportView fetch lifecycle', () => {
     await Promise.resolve(); // flush microtasks
     // No crash, and the unmounted container never received an error page
     expect(utils.container.querySelector('.error-page')).toBeNull();
+  });
+
+  test('does not bind table handlers after unmount while report enhancement is pending', async () => {
+    // bun's mock.module leaks across test files, so control the render
+    // pipeline through ReportView's injected implementations instead.
+    let resolveEnhanceReport;
+    const enhanceTablesCalls = [];
+    const enhanceReportImpl =
+      () => new Promise(resolve => { resolveEnhanceReport = resolve; });
+    const enhanceTablesImpl = (...args) => enhanceTablesCalls.push(args);
+
+    mockFetch.mockImplementation(requested => {
+      const url = String(requested);
+      if (url.endsWith('assets/refactor-first-report.mustache')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<p>{{project.name}}</p>') });
+      }
+      if (url.endsWith('.refactorfirst/refactor-first.json')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ project: { name: 'Example' } }) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+    const utils = render(_jsx(ReportView, {
+      username: 'alice', repository: 'one', widgetSettleMs: 0,
+      enhanceReportImpl, enhanceTablesImpl
+    }));
+
+    await waitFor(() => expect(resolveEnhanceReport).toBeTypeOf('function'));
+    utils.unmount();
+    resolveEnhanceReport();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(enhanceTablesCalls).toHaveLength(0);
   });
 });

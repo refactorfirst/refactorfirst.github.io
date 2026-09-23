@@ -16,3 +16,10 @@ if (existsSync('assets/refactor-first-report.mustache')) {
     'public/assets/refactor-first-report.mustache');
   console.log('sync-repositories: assets/refactor-first-report.mustache -> public/assets/');
 }
+
+// The logo is served from public/assets/ — keep the served copy in sync
+// with the source.
+if (existsSync('assets/logo.png')) {
+  copyFileSync('assets/logo.png', 'public/assets/logo.png');
+  console.log('sync-repositories: assets/logo.png -> public/assets/');
+}

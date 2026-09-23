@@ -10,7 +10,8 @@ is a **Next.js static export** (`bun run build` produces `out/`, which any stati
   branch fallback — the same report the
   [RefactorFirst report viewer](https://github.com/RefactorFirst/RefactorFirst) produces:
   class/package maps (vizdom WASM SVGs with pan/zoom, plus Sigma 2D and 3D force-graph popups), relationship-removal
-  priority tables, Chart.js disharmony bubble charts and class cycle summaries
+  priority tables, Chart.js disharmony bubble charts and class cycle summaries — with
+  [enhanced tables](#enhanced-report-tables) (sticky headers, pagination, sorting, search, CSV export, copy)
 - **Repository submission** via a pre-filled issue on the hosting platform (no login, apps or tokens on this site): your
   platform account is captured as the issue author and validated server-side by the platform's CI
 - Reports and submissions work for repositories hosted on the same platform as the deployment (GitHub, GitLab or
@@ -29,6 +30,7 @@ is a **Next.js static export** (`bun run build` produces `out/`, which any stati
 - [Deploying to Bitbucket](#deploying-to-bitbucket)
 - [Deploying to GitLab](#deploying-to-gitlab)
 - [How repository submission works](#how-repository-submission-works)
+- [Enhanced report tables](#enhanced-report-tables)
 - [Making Changes (Developer Guide)](#making-changes-developer-guide)
 - [Testing](#testing)
 
@@ -286,6 +288,37 @@ GitLab Pages deploys from the `pages` job and serves
 > `templates/user-refactorfirst-gitlab-ci.yml` — a copy-paste pipeline that runs
 > `mvn refactorfirst:jsonReport` on the default branch and commits
 > `.refactorfirst/refactor-first.json` back using the built-in `CI_JOB_TOKEN`.
+
+---
+
+## Enhanced report tables
+
+Large report tables (class/package relationships, disharmony findings, cycle summaries and cycle breakdowns) are
+interactive — all WCAG 2.2 AA and keyboard-operable, with no extra dependencies:
+
+- **Sticky headers** — column headers stay pinned to the top of the viewport while you scroll a table.
+- **Pagination** — tables with more than 20 matching rows paginate at 20 rows per page ("Page X of Y" + Previous/Next
+  buttons; disabled on the first/last page). Small tables render in full without controls.
+- **Sorting** — click a column header (or focus it and press Enter/Space) to sort the whole table ascending; click
+  again for descending. `aria-sort` reflects the current direction, sorting happens before pagination, and the sort is
+  kept while navigating pages.
+- **Search/filter** — the filter box sits at the right edge of the table (next to Export) and narrows rows
+  case-insensitively across all columns (debounced), with the match count announced via a live region and an **×**
+  button to reset.
+- **CSV export** — "Export CSV" downloads the entire table (current filter and sort applied, pagination ignored) with
+  proper escaping; the filename includes the table name and a timestamp.
+- **Horizontal scrolling** — when a table is wider than the screen its wrapper gains a horizontal scrollbar
+  (`rf-scroll-x-enabled`, toggled by measurement in `lib/table-enhancer.js`); the scrollbar is deliberately conditional
+  because an unconditional `overflow-x` would break the viewport-sticky table header. Scrolling tables keep their
+  header pinned anyway: `lib/table-enhancer.js` translates the header cells down by the viewport scroll offset
+  (clamped to the table's bottom edge) on every window scroll/resize.
+- **Copy cells** — click any cell (or focus it and press Enter/Space) to copy its text; an auto-dismissing toast
+  confirms the copy. Falls back gracefully when the Clipboard API is unavailable.
+
+Implementation: pure table operations live in `lib/table-operations.js` (filter → sort → paginate pipeline, CSV
+generation, clipboard helper, `TABLE_CONFIG` defaults: threshold/page size 20, 300&nbsp;ms search debounce, 3&nbsp;s
+toast duration), the rendered DOM is wired by `lib/table-enhancer.js`, and table state re-renders through
+`prepareReportData` in `lib/renderer.js`.
 
 ---
 
