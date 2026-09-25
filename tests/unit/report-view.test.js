@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   exposeGraphDots,
   initBubbleChart,
@@ -7,6 +7,8 @@ import {
   showPopup,
   hidePopup,
   bindPopupHandlers,
+  bindSectionNavLinks,
+  scrollToSectionHash,
   enhanceReport,
   statefulElementIds,
   stashStatefulDom,
@@ -252,6 +254,111 @@ describe('stateful DOM preservation across table-state re-renders', () => {
   });
 });
 
+describe('report section menu links', () => {
+  const originalScrollIntoView = window.Element.prototype.scrollIntoView;
+  let scrolledTo;
+
+  beforeEach(() => {
+    scrolledTo = [];
+    window.Element.prototype.scrollIntoView = function () { scrolledTo.push(this.id); };
+    document.body.innerHTML = `
+      <main id="app">
+        <a href="#outside">Outside the report root</a>
+        <div id="report-root">
+          <nav aria-label="Report sections">
+            <a href="#CLASSMAP">Class Map</a>
+            <a href="#GOD">God Classes</a>
+            <a href="#MISSING">Missing section</a>
+          </nav>
+          <h2 id="CLASSMAP">Class Map</h2>
+          <h3 id="GOD">God Classes</h3>
+        </div>
+      </main>`;
+    history.replaceState(null, '', '/refactorfirst/refactorfirst/');
+  });
+
+  afterEach(() => {
+    window.Element.prototype.scrollIntoView = originalScrollIntoView;
+    history.replaceState(null, '', '/');
+  });
+
+  it('scrolls the referenced section into view and moves focus when a menu link is clicked', () => {
+    bindSectionNavLinks(document.getElementById('report-root'));
+    document.querySelector('a[href="#GOD"]').click();
+    expect(scrolledTo).toEqual(['GOD']);
+    expect(window.location.hash).toBe('#GOD');
+    // Keyboard users continue from the selected section (native fragment
+    // navigation moves the sequential focus starting point too).
+    const target = document.getElementById('GOD');
+    expect(document.activeElement).toBe(target);
+    expect(target.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('scrolls again when the link is clicked while its hash is already current', () => {
+    // Native fragment navigation is a no-op when the URL already has the
+    // fragment, so the handler must scroll explicitly every time.
+    history.replaceState(null, '', '/refactorfirst/refactorfirst/#GOD');
+    bindSectionNavLinks(document.getElementById('report-root'));
+    document.querySelector('a[href="#GOD"]').click();
+    expect(scrolledTo).toEqual(['GOD']);
+  });
+
+  it('survives report re-renders and binds only once', () => {
+    // Table interactions re-render the report with innerHTML; the delegated
+    // listener on the persistent container must keep working on fresh nodes.
+    const root = document.getElementById('report-root');
+    bindSectionNavLinks(root);
+    bindSectionNavLinks(root); // re-render/effect re-run must not double-bind
+    root.innerHTML = `
+      <nav aria-label="Report sections"><a href="#CLASSMAP">Class Map</a></nav>
+      <h2 id="CLASSMAP">Class Map</h2>`;
+    root.querySelector('a[href="#CLASSMAP"]').click();
+    expect(scrolledTo).toEqual(['CLASSMAP']);
+  });
+
+  it('ignores clicks outside the report root', () => {
+    bindSectionNavLinks(document.getElementById('report-root'));
+    document.querySelector('a[href="#outside"]').click();
+    expect(scrolledTo).toEqual([]);
+  });
+
+  it('leaves links pointing at missing sections to default navigation', () => {
+    bindSectionNavLinks(document.getElementById('report-root'));
+    const link = document.querySelector('a[href="#MISSING"]');
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+    link.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(scrolledTo).toEqual([]);
+  });
+
+  it('preserves modified clicks (Ctrl/Cmd/Shift) so new-tab gestures still work', () => {
+    bindSectionNavLinks(document.getElementById('report-root'));
+    const link = document.querySelector('a[href="#GOD"]');
+    for (const mods of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) {
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...mods });
+      link.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(scrolledTo).toEqual([]);
+    expect(window.location.hash).toBe('');
+  });
+
+  it('scrolls to the section referenced by the initial URL hash', () => {
+    // The report renders asynchronously, so the browser cannot honour the
+    // fragment at load time; enhanceReport must scroll once rendered.
+    history.replaceState(null, '', '/refactorfirst/refactorfirst/#CLASSMAP');
+    scrollToSectionHash(window.location.hash);
+    expect(scrolledTo).toEqual(['CLASSMAP']);
+  });
+
+  it('does nothing for an empty, bare or unknown hash', () => {
+    scrollToSectionHash('');
+    scrollToSectionHash('#');
+    scrollToSectionHash('#NOPE');
+    expect(scrolledTo).toEqual([]);
+  });
+});
+
 describe('enhanceReport', () => {
   it('exposes dots, wires popup globals and initializes charts', async () => {
     document.body.innerHTML = `
@@ -279,5 +386,34 @@ describe('enhanceReport', () => {
     expect(typeof window.createForceGraph).toBe('function');
     expect(created.length).toBe(1);
     delete window.Chart;
+  });
+
+  it('binds section menu links and scrolls to the initial URL hash', async () => {
+    const originalScrollIntoView = window.Element.prototype.scrollIntoView;
+    const scrolledTo = [];
+    window.Element.prototype.scrollIntoView = function () { scrolledTo.push(this.id); };
+    try {
+      document.body.innerHTML = `
+        <main id="app">
+          <div id="report-root">
+            <nav aria-label="Report sections">
+              <a href="#CLASSMAP">Class Map</a>
+            </nav>
+            <h2 id="CLASSMAP">Class Map</h2>
+          </div>
+        </main>`;
+      history.replaceState(null, '', '/refactorfirst/refactorfirst/#CLASSMAP');
+
+      await enhanceReport(document.getElementById('report-root'), { project: { name: 'Demo' } });
+      expect(scrolledTo).toContain('CLASSMAP');
+
+      document.querySelector('a[href="#CLASSMAP"]').click();
+      expect(scrolledTo.filter(id => id === 'CLASSMAP').length).toBe(2);
+      expect(window.location.hash).toBe('#CLASSMAP');
+      expect(document.activeElement).toBe(document.getElementById('CLASSMAP'));
+    } finally {
+      window.Element.prototype.scrollIntoView = originalScrollIntoView;
+      history.replaceState(null, '', '/');
+    }
   });
 });
