@@ -416,4 +416,39 @@ describe('enhanceReport', () => {
       history.replaceState(null, '', '/');
     }
   });
+
+  it('scrolls to the initial URL hash only once per report root', async () => {
+    const originalScrollIntoView = window.Element.prototype.scrollIntoView;
+    const scrolledTo = [];
+    window.Element.prototype.scrollIntoView = function () { scrolledTo.push(this.id); };
+    try {
+      document.body.innerHTML = `
+        <main id="app">
+          <div id="report-root">
+            <nav aria-label="Report sections">
+              <a href="#CLASSMAP">Class Map</a>
+            </nav>
+            <h2 id="CLASSMAP">Class Map</h2>
+          </div>
+        </main>`;
+      history.replaceState(null, '', '/refactorfirst/refactorfirst/#CLASSMAP');
+      const root = document.getElementById('report-root');
+
+      await enhanceReport(root, { project: { name: 'Demo' } });
+      expect(scrolledTo).toEqual(['CLASSMAP']);
+
+      // Later enhancements (retry, refetch, branch switch) must preserve
+      // the user's scroll position instead of jumping back to the fragment.
+      scrolledTo.length = 0;
+      await enhanceReport(root, { project: { name: 'Demo' } });
+      expect(scrolledTo).toEqual([]);
+
+      // ...while the menu links keep navigating to sections afterwards.
+      document.querySelector('a[href="#CLASSMAP"]').click();
+      expect(scrolledTo).toEqual(['CLASSMAP']);
+    } finally {
+      window.Element.prototype.scrollIntoView = originalScrollIntoView;
+      history.replaceState(null, '', '/');
+    }
+  });
 });
