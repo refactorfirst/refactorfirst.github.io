@@ -4,10 +4,11 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mock } from 'bun:test';
 
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
 let currentSearch = '';
-mock.module('next/navigation', () => ({
+mock.module('next/navigation', () => sharedNextNavigationMock({
   usePathname: () => '/alice',
-  useRouter: () => ({ push: () => {} }),
   useSearchParams: () => new URLSearchParams(currentSearch)
 }));
 

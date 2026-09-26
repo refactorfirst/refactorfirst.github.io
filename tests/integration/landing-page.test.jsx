@@ -4,8 +4,10 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { mock } from 'bun:test';
 
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
 const pushed = [];
-mock.module('next/navigation', () => ({
+mock.module('next/navigation', () => sharedNextNavigationMock({
   useRouter: () => ({ push: url => pushed.push(url) })
 }));
 

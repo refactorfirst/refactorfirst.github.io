@@ -118,6 +118,29 @@ test('report renders all sections from repository JSON with fallback template', 
   await expect(page.locator('#publishDate')).toContainText('Last Published:');
 });
 
+test('report menu links scroll the referenced section into view', async ({ page }) => {
+  await page.goto('/refactorfirst/refactorfirst');
+  const section = page.getByRole('heading', { name: 'Code Disharmonies', level: 2 });
+  await expect(section).toBeAttached();
+  await expect(section).not.toBeInViewport();
+
+  await page.locator('.rf-report nav a[href="#DISHARMONIES"]').click();
+  await expect(page).toHaveURL(/#DISHARMONIES$/);
+  await expect(section).toBeInViewport();
+
+  // Re-clicking the same link (URL fragment already current) still scrolls.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(section).not.toBeInViewport();
+  await page.locator('.rf-report nav a[href="#DISHARMONIES"]').click();
+  await expect(section).toBeInViewport();
+});
+
+test('deep link with a section fragment scrolls the section into view on load', async ({ page }) => {
+  await page.goto('/refactorfirst/refactorfirst/#GOD');
+  const section = page.getByRole('heading', { name: 'God Classes', level: 3 });
+  await expect(section).toBeInViewport();
+});
+
 test('branch fallback shows report from master', async ({ page }) => {
   let requested = [];
   await page.unroute('**/raw.githubusercontent.com/**');

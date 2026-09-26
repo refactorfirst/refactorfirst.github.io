@@ -3,7 +3,9 @@
 import { describe, test, expect } from 'bun:test';
 import { mock } from 'bun:test';
 
-mock.module('next/navigation', () => ({
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
+mock.module('next/navigation', () => sharedNextNavigationMock({
   useRouter: () => ({ push: () => {} })
 }));
 
