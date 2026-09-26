@@ -17,6 +17,12 @@ import {
   BRANCH_RESOLVED_EVENT
 } from '../lib/breadcrumbs.js';
 
+/**
+ * Renders the current route's breadcrumb trail and tracks the loaded branch.
+ *
+ * @returns {import('react').ReactElement|null} Breadcrumb navigation, or null
+ *   when the route is neither a user listing nor a repository report.
+ */
 export default function Breadcrumbs() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -31,6 +37,13 @@ export default function Breadcrumbs() {
   }
 
   useEffect(() => {
+    /**
+     * Updates the branch label for announcements matching the current report.
+     *
+     * @param {CustomEvent<{username: string, repository: string, branch: string}>} event
+     *   Report identity and the branch that successfully loaded.
+     * @returns {void}
+     */
     const onBranchResolved = event => {
       if (!reportMatchesFor(pathname || '/', event.detail)) return;
       const { branch } = event.detail;

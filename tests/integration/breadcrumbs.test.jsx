@@ -21,12 +21,25 @@ import { announceResolvedBranch } from '../../lib/breadcrumbs.js';
 
 installRtlDom();
 
+/**
+ * Sets the mocked route and mounts the breadcrumb component for assertions.
+ *
+ * @param {string} pathname - Path exposed by the navigation mock.
+ * @param {string} [search=''] - Query string exposed by the navigation mock.
+ * @returns {import('@testing-library/react').RenderResult} Rendered test utilities.
+ */
 function renderBreadcrumbs(pathname, search = '') {
   currentPath = pathname;
   currentSearch = search;
   return render(_jsx(Breadcrumbs, {}));
 }
 
+/**
+ * Collects the rendered breadcrumb list items in navigation order.
+ *
+ * @param {HTMLElement} container - Root container returned by the test renderer.
+ * @returns {HTMLLIElement[]} The breadcrumb items within the container.
+ */
 function crumbs(container) {
   return Array.from(
     container.querySelectorAll('nav[aria-label="Breadcrumb"] ol li')

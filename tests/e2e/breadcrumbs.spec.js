@@ -23,6 +23,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+/**
+ * Locates breadcrumb list items within the navigation landmark.
+ *
+ * @param {import('@playwright/test').Locator} nav - Breadcrumb navigation locator.
+ * @returns {import('@playwright/test').Locator} Locator for the ordered trail items.
+ */
 function trail(nav) {
   return nav.locator('ol li');
 }

@@ -21,6 +21,13 @@ export const metadata = {
   icons: { icon: '/assets/logo.png' },
 };
 
+/**
+ * Renders the site shell with navigation, breadcrumbs, and page content.
+ *
+ * @param {object} props - Layout props.
+ * @param {import('react').ReactNode} props.children - Content of the active page.
+ * @returns {import('react').ReactElement} The root HTML document.
+ */
 export default function RootLayout({ children }) {
   const repositories = loadListedRepositories();
   return (
