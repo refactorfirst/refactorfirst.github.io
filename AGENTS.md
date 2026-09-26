@@ -10,6 +10,11 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
 
 **Key Features:**
 - Search over curated repository listing (`repositories.txt`)
+- Breadcrumb trail under the menu (`components/breadcrumbs.jsx` +
+  `lib/breadcrumbs.js`): mirrors `/user/repo/branch` with linked ancestors;
+  the repo crumb never self-links, and ReportView announces the resolved
+  branch (`rf:branch-resolved` event) so the label matches the loaded report
+  (`main` 404 → `master` fallback)
 - Reports rendered with Mustache.js (bundled template is authoritative)
 - Enhanced report tables: sticky headers, pagination (>20 rows), sortable
   columns, in-table search, CSV export, click/keyboard cell copy with toasts
@@ -61,13 +66,15 @@ app/                        # Next.js App Router (static export)
   globals.css               # css/main.css + components.css
 components/                 # client components: report-view, repo-list,
                             # repo-submission-form, search-combobox,
-                            # hero-search, menu-search, menu-toggle,
-                            # workflow-sample, platform-config, sentry-provider,
+                            # hero-search, menu-search, menu-toggle, breadcrumbs
+                            # (route trail under the menu), workflow-sample,
+                            # platform-config, sentry-provider,
                             # toast-notification (copy feedback live region)
 lib/                        # shared logic (client + RSC): routes, fetcher,
                             # renderer, search, utils, host, rate-limiter,
                             # cache-manager, error-handler, repo-submission,
                             # report-view, static-params, widget-loader,
+                            # breadcrumbs,
                             # table-operations (filter/sort/paginate/CSV/copy +
                             # TABLE_CONFIG + REPORT_TABLES descriptors),
                             # table-enhancer (binds toolbar/sort/pagination/
@@ -164,7 +171,7 @@ coverage there when introducing new markup patterns.
 
 ## Current Test Count
 
-~485 unit/integration + 175 E2E (171 across three browsers + 4 basePath leg).
+~543 unit/integration + ~202 E2E (~198 across three browsers + 4 basePath leg).
 
 WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
 tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and

@@ -14,6 +14,7 @@ import Script from 'next/script';
 import { withBasePath } from '../lib/base-path';
 import { detectHostingEnvironment, getPlatformBaseUrl, readMetaTag } from '../lib/host';
 import { fetchReport } from '../lib/fetcher';
+import { announceResolvedBranch } from '../lib/breadcrumbs.js';
 import { renderTemplate, prepareReportData } from '../lib/renderer';
 import {
   enhanceReport,
@@ -127,6 +128,9 @@ export default function ReportView({
         });
 
         if (controller.signal.aborted) return;
+        // Tell the breadcrumb trail which branch actually loaded (a main
+        // 404 falls back to master) so its label matches the report shown.
+        announceResolvedBranch(window, { username, repository, branch: resolvedBranch });
         setTableStates({});
         setPayload({ template, data, resolvedBranch });
       } catch (error) {

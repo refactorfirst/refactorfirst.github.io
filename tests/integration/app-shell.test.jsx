@@ -5,8 +5,10 @@ import { mock } from 'bun:test';
 
 import { sharedNextNavigationMock } from './next-navigation-stub';
 
+let currentPath = '/';
 mock.module('next/navigation', () => sharedNextNavigationMock({
-  useRouter: () => ({ push: () => {} })
+  useRouter: () => ({ push: () => {} }),
+  usePathname: () => currentPath
 }));
 
 import { render, screen, fireEvent, installRtlDom } from './rtl';
@@ -93,6 +95,25 @@ describe('app shell', () => {
     expect(decoded).toContain("script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com");
     expect(html).toContain('name="submission-target"');
     expect(html).toContain('id="app"');
+  });
+
+  test('root layout mounts the breadcrumb trail between the header and main', () => {
+    currentPath = '/alice/some-repo/master';
+    try {
+      const html = renderToStaticMarkup(_jsx(RootLayout, { children: null }));
+      const menuAt = html.indexOf('id="top-menu"');
+      const crumbsAt = html.indexOf('aria-label="Breadcrumb"');
+      const mainAt = html.indexOf('id="app"');
+      expect(menuAt, 'top menu missing').toBeGreaterThan(-1);
+      expect(crumbsAt, 'breadcrumb nav missing').toBeGreaterThan(-1);
+      expect(mainAt, 'main missing').toBeGreaterThan(-1);
+      expect(menuAt).toBeLessThan(crumbsAt);
+      expect(crumbsAt).toBeLessThan(mainAt);
+      expect(html).toContain('/alice/some-repo');
+      expect(html).toContain('master');
+    } finally {
+      currentPath = '/';
+    }
   });
 
   test('menu toggle flips aria-expanded and the open class', () => {

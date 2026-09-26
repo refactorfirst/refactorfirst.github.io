@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import SiteHeader from '../components/site-header';
 import SiteFooter from '../components/site-footer';
+import Breadcrumbs from '../components/breadcrumbs';
 import SentryProvider from '../components/sentry-provider';
 import { loadListedRepositories } from '../lib/repositories.js';
 import './globals.css';
@@ -35,6 +37,12 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <SiteHeader repositories={repositories} />
+        {/* Breadcrumb trail under the menu (report/user routes only). Suspense
+            is required because useSearchParams deopts otherwise (static
+            export; the fallback keeps prerendered HTML crumb-free). */}
+        <Suspense fallback={null}>
+          <Breadcrumbs />
+        </Suspense>
         <main id="app" tabIndex={-1}>{children}</main>
         <SiteFooter />
         <SentryProvider />

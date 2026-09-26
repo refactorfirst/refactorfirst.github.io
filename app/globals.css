@@ -224,6 +224,55 @@ pre {
   color: #fff;
 }
 
+/* ---- Breadcrumbs (user/report trail under the top menu) ---- */
+.breadcrumbs {
+  /* Same column as the top menu: #top-menu is capped by mvp.css at
+     --width-content, so reuse the variable — the two can never drift apart.
+     border-box (not mvp's default content-box) so the horizontal padding
+     insets crumbs exactly like .menu-bar's padding insets the brand; with
+     content-box, symmetric padding on a centered block never moves the
+     content edge. */
+  max-width: var(--width-content);
+  box-sizing: border-box;
+  /* mvp.css gives bare nav a 7rem bottom margin, bold text and a spaced flex
+     row — reset all three so the trail hugs the menu like a sub-bar. */
+  margin: 0 auto;
+  font-weight: normal;
+  display: block;
+  padding: 0 0.8rem;
+  font-size: 0.85rem;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.1rem 0;
+}
+
+/* Path-style separator, pure CSS so it stays decorative for screen readers
+   (the ordered list already conveys the hierarchy). */
+.breadcrumbs li + li::before {
+  content: "/";
+  margin-right: 0.35rem;
+  color: var(--muted-color);
+}
+
+.breadcrumbs a,
+.breadcrumbs [aria-current] {
+  display: inline-block;
+  /* No left padding: the first crumb's glyph edge must sit at the menu
+     column left edge (the flex-gap + separator space the rest). */
+  padding: 0.2rem 0;
+}
+
+.breadcrumbs [aria-current] {
+  color: var(--muted-color);
+}
+
 /* ---- Search results ---- */
 .search-results {
   position: absolute;

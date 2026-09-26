@@ -149,4 +149,21 @@ describe('stylesheet WCAG 2.2 AA', () => {
     );
     expect(verticalPadding * 2 + 1 * 1.5).toBeGreaterThanOrEqual(1.5); // >= 24px
   });
+
+  it('breadcrumb links meet the 24px target size (SC 2.5.8)', () => {
+    const crumbs = rules.get('.breadcrumbs a');
+    expect(crumbs).toBeTruthy();
+    // Rendered height = font-size * line-height + vertical padding; mvp.css
+    // line-height 1.5. 0.85rem * 1.5 + 2 * 0.2rem = 1.675rem = 26.8px >= 24px.
+    const verticalPadding = Number(
+      crumbs.match(/padding:\s*([\d.]+)rem/)[1]
+    );
+    expect(verticalPadding * 2 + 0.85 * 1.5).toBeGreaterThanOrEqual(1.5); // >= 24px
+  });
+
+  it('breadcrumb separators live in CSS, not markup (decorative, SC 1.3.1)', () => {
+    const separator = rules.get('.breadcrumbs li + li::before');
+    expect(separator).toBeTruthy();
+    expect(separator).toMatch(/content:\s*"\/"/);
+  });
 });
