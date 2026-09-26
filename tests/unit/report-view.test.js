@@ -257,11 +257,14 @@ describe('stateful DOM preservation across table-state re-renders', () => {
 describe('report section menu links', () => {
   const originalScrollIntoView = window.Element.prototype.scrollIntoView;
   let scrolledTo;
-  // Records how the delegated handler treated each click, then cancels the
-  // default: jsdom queues anchor navigation in a setTimeout, so a default
-  // left alone fires only after the test resets the URL and surfaces as an
-  // unrelated "Not implemented: navigation" error between tests.
   let preventedByHandler;
+  /**
+   * Records whether the delegated handler canceled a click, then prevents jsdom
+   * from scheduling anchor navigation that could leak into subsequent tests.
+   *
+   * @param {MouseEvent} event - Click observed after the report handler runs.
+   * @returns {void}
+   */
   const defaultObserver = event => {
     preventedByHandler = event.defaultPrevented;
     event.preventDefault();

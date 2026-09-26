@@ -14,6 +14,11 @@ import path from 'node:path';
 
 const INTEGRATION_DIR = path.join(import.meta.dir, '../integration');
 
+/**
+ * Reads integration test files that register a next/navigation module mock.
+ *
+ * @returns {Array<[string, string]>} Pairs of filenames and source contents.
+ */
 function filesMockingNextNavigation() {
   return readdirSync(INTEGRATION_DIR)
     .filter(name => /\.(test|spec)\.jsx?$/.test(name))

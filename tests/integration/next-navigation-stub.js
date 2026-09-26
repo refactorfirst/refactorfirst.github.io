@@ -10,11 +10,23 @@
 // keeps all of them export-shape compatible no matter the load order.
 export const notFoundCalls = [];
 
+/**
+ * Records a notFound call before aborting route rendering with a test sentinel.
+ *
+ * @throws {Error} Always throws NEXT_NOT_FOUND.
+ * @returns {never}
+ */
 export function notFoundStub() {
   notFoundCalls.push(true);
   throw new Error('NEXT_NOT_FOUND');
 }
 
+/**
+ * Builds the shared next/navigation mock with optional test-specific exports.
+ *
+ * @param {object} [overrides={}] - Exports to replace or add to the defaults.
+ * @returns {object} Navigation exports suitable for Bun's mock.module factory.
+ */
 export function sharedNextNavigationMock(overrides = {}) {
   return {
     notFound: notFoundStub,
