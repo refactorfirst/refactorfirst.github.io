@@ -155,6 +155,24 @@ describe('Breadcrumbs', () => {
     expect(items.at(-1).querySelector('[aria-current="page"]')).toBeTruthy();
   });
 
+  test('duplicate crumb labels (user == repository) do not produce duplicate keys', () => {
+    const { spyOn } = require('bun:test');
+    const consoleError = spyOn(console, 'error');
+    try {
+      const { container } = renderBreadcrumbs('/refactorfirst/refactorfirst/master');
+      const items = crumbs(container);
+      expect(items.length).toBe(4);
+      expect(items.map(item => item.textContent))
+        .toEqual(['Home', 'refactorfirst', 'refactorfirst', 'master']);
+      const keyWarnings = consoleError.mock.calls
+        .flat()
+        .filter(arg => String(arg).includes('same key'));
+      expect(keyWarnings).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   test('exposes an ordered list inside a labelled navigation landmark', () => {
     const { container } = renderBreadcrumbs('/alice/some-repo/master');
     const nav = container.querySelector('nav[aria-label="Breadcrumb"]');

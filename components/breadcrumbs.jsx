@@ -62,8 +62,10 @@ export default function Breadcrumbs() {
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">
       <ol>
-        {crumbs.map(crumb => (
-          <li key={crumb.label}>
+        {/* Key by position: crumbs are strictly ordered and labels may
+            repeat when username === repository (e.g. refactorfirst/…). */}
+        {crumbs.map((crumb, index) => (
+          <li key={index}>
             {crumb.current ? (
               <span aria-current="page">{crumb.label}</span>
             ) : crumb.href ? (
