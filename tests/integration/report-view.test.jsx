@@ -21,6 +21,7 @@ import { render, waitFor, cleanup, installRtlDom } from './rtl';
 import { jsx as _jsx } from 'react/jsx-runtime';
 import ReportView from '../../components/report-view';
 import { markWidgetReady, resetWidgetRegistry } from '../../lib/widget-loader';
+import { BRANCH_RESOLVED_EVENT } from '../../lib/breadcrumbs.js';
 
 installRtlDom();
 
@@ -194,6 +195,48 @@ describe('ReportView', () => {
     const { container } = await renderReport();
     expect(container.querySelector('.error-page')).not.toBeNull();
     expect(container.textContent).toContain('Not Found');
+  });
+
+  test('announces the resolved branch once the report loads', async () => {
+    const events = [];
+    const onResolved = event => events.push(event.detail);
+    window.addEventListener(BRANCH_RESOLVED_EVENT, onResolved);
+    try {
+      respondJsonFor(sampleJson);
+      await renderReport();
+      expect(events).toEqual([
+        { username: 'junit-team', repository: 'junit4', branch: 'main' }
+      ]);
+    } finally {
+      window.removeEventListener(BRANCH_RESOLVED_EVENT, onResolved);
+    }
+  });
+
+  test('announces master when the default branch falls back to it', async () => {
+    mockFetch.mockImplementation(requested => {
+      const url = String(requested);
+      if (url.includes('/main/.refactorfirst/refactor-first.json')) {
+        return Promise.resolve({ ok: false, status: 404 });
+      }
+      if (url.includes('/master/.refactorfirst/refactor-first.json')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(sampleJson) });
+      }
+      if (url.endsWith(TEMPLATE_URL)) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(reportTemplate) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+    const events = [];
+    const onResolved = event => events.push(event.detail);
+    window.addEventListener(BRANCH_RESOLVED_EVENT, onResolved);
+    try {
+      await renderReport();
+      expect(events.at(-1)).toEqual(
+        { username: 'junit-team', repository: 'junit4', branch: 'master' }
+      );
+    } finally {
+      window.removeEventListener(BRANCH_RESOLVED_EVENT, onResolved);
+    }
   });
 
   test('ignores any repository-provided template and always uses the bundled one', async () => {

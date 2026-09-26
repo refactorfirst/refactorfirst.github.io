@@ -55,4 +55,23 @@ describe('layout styles (mvp.css section-flex reset)', () => {
     expect(body).toBeTruthy();
     expect(body).toMatch(/margin:\s*0\s+auto\s*;/);
   });
+
+  test('the breadcrumb bar shares the top menu column (#top-menu caps)', () => {
+    // #top-menu is capped by mvp.css at --width-content; reusing the variable
+    // keeps the breadcrumb column and the menu column aligned forever. The
+    // bar must be border-box so its horizontal padding insets crumbs exactly
+    // like .menu-bar's padding insets the brand: with content-box, symmetric
+    // padding on a centered block never moves the content edge.
+    const body = rules.get('.breadcrumbs');
+    expect(body).toBeTruthy();
+    expect(body).toMatch(/max-width:\s*var\(--width-content\)/);
+    expect(body).toMatch(/box-sizing:\s*border-box\s*;/);
+    expect(body).toMatch(/padding:\s*0\s+0\.8rem\s*;/); // matches .menu-bar
+  });
+
+  test('crumb links carry no left padding (glyph edge aligns with the brand)', () => {
+    const link = rules.get('.breadcrumbs a');
+    expect(link).toBeTruthy();
+    expect(link).toMatch(/padding:\s*[\d.]+rem\s+0\s*;/);
+  });
 });
