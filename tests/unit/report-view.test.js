@@ -385,6 +385,38 @@ describe('report section menu links', () => {
     expect(scrolledTo).toEqual(['CLASSMAP']);
   });
 
+  it('falls back to a decoded fragment when the literal ID is absent', () => {
+    const target = document.createElement('h2');
+    target.id = 'Space Name';
+    document.getElementById('report-root').append(target);
+
+    scrollToSectionHash('#Space%20Name');
+    expect(scrolledTo).toEqual(['Space Name']);
+  });
+
+  it('prefers a literal ID over the decoded fragment', () => {
+    const root = document.getElementById('report-root');
+    for (const id of ['Space%20Name', 'Space Name']) {
+      const target = document.createElement('h2');
+      target.id = id;
+      root.append(target);
+    }
+
+    scrollToSectionHash('#Space%20Name');
+    expect(scrolledTo).toEqual(['Space%20Name']);
+  });
+
+  it('handles malformed encoding after checking for a literal ID', () => {
+    const target = document.createElement('h2');
+    target.id = 'bad%ZZ';
+    document.getElementById('report-root').append(target);
+
+    scrollToSectionHash('#bad%ZZ');
+    target.remove();
+    expect(() => scrollToSectionHash('#bad%ZZ')).not.toThrow();
+    expect(scrolledTo).toEqual(['bad%ZZ']);
+  });
+
   it('does nothing for an empty, bare or unknown hash', () => {
     scrollToSectionHash('');
     scrollToSectionHash('#');
