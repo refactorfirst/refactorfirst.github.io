@@ -347,6 +347,24 @@ describe('report section menu links', () => {
     expect(scrolledTo).toEqual([]);
   });
 
+  it('leaves fragment links with an explicit destination to default navigation', () => {
+    bindSectionNavLinks(document.getElementById('report-root'));
+    const link = document.querySelector('a[href="#GOD"]');
+    for (const destination of ['_blank', '_parent', '_top', 'report-window', '']) {
+      link.setAttribute('target', destination);
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      expect(preventedByHandler).toBe(false);
+      expect(scrolledTo).toEqual([]);
+      expect(window.location.hash).toBe('');
+    }
+
+    link.setAttribute('target', '_self');
+    link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(preventedByHandler).toBe(true);
+    expect(scrolledTo).toEqual(['GOD']);
+    expect(window.location.hash).toBe('#GOD');
+  });
+
   it('preserves modified clicks (Ctrl/Cmd/Shift) so new-tab gestures still work', () => {
     bindSectionNavLinks(document.getElementById('report-root'));
     const link = document.querySelector('a[href="#GOD"]');
