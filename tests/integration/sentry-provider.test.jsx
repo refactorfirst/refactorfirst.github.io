@@ -11,11 +11,9 @@ mock.module('next/script', () => ({
     return null;
   }
 }));
-mock.module('next/navigation', () => ({
-  usePathname: () => '/',
-  useRouter: () => ({ push: () => {} }),
-  useSearchParams: () => new URLSearchParams('')
-}));
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
+mock.module('next/navigation', () => sharedNextNavigationMock());
 
 import { createElement as h } from 'react';
 import SentryProvider from '../../components/sentry-provider';

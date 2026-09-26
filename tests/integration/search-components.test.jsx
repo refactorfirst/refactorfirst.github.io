@@ -3,8 +3,10 @@
 // tests/integration/search-flow.test.js type-ahead cases.
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
 
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
 const pushed = [];
-mock.module('next/navigation', () => ({
+mock.module('next/navigation', () => sharedNextNavigationMock({
   useRouter: () => ({
     push: url => pushed.push(url)
   })

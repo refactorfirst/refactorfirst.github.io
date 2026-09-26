@@ -6,10 +6,11 @@ import { mock } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
 let currentSearch = '';
-mock.module('next/navigation', () => ({
+mock.module('next/navigation', () => sharedNextNavigationMock({
   usePathname: () => '/junit-team/junit4',
-  useRouter: () => ({ push: () => {} }),
   useSearchParams: () => new URLSearchParams(currentSearch)
 }));
 mock.module('next/script', () => ({

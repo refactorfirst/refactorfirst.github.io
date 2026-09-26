@@ -3,10 +3,10 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mock } from 'bun:test';
 
-mock.module('next/navigation', () => ({
-  usePathname: () => '/boom',
-  useRouter: () => ({ push: () => {} }),
-  useSearchParams: () => new URLSearchParams('')
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
+mock.module('next/navigation', () => sharedNextNavigationMock({
+  usePathname: () => '/boom'
 }));
 
 import { render, fireEvent, cleanup, installRtlDom } from './rtl';

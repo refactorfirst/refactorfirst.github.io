@@ -257,9 +257,19 @@ describe('stateful DOM preservation across table-state re-renders', () => {
 describe('report section menu links', () => {
   const originalScrollIntoView = window.Element.prototype.scrollIntoView;
   let scrolledTo;
+  // Records how the delegated handler treated each click, then cancels the
+  // default: jsdom queues anchor navigation in a setTimeout, so a default
+  // left alone fires only after the test resets the URL and surfaces as an
+  // unrelated "Not implemented: navigation" error between tests.
+  let preventedByHandler;
+  const defaultObserver = event => {
+    preventedByHandler = event.defaultPrevented;
+    event.preventDefault();
+  };
 
   beforeEach(() => {
     scrolledTo = [];
+    preventedByHandler = null;
     window.Element.prototype.scrollIntoView = function () { scrolledTo.push(this.id); };
     document.body.innerHTML = `
       <main id="app">
@@ -275,9 +285,11 @@ describe('report section menu links', () => {
         </div>
       </main>`;
     history.replaceState(null, '', '/refactorfirst/refactorfirst/');
+    document.body.addEventListener('click', defaultObserver);
   });
 
   afterEach(() => {
+    document.body.removeEventListener('click', defaultObserver);
     window.Element.prototype.scrollIntoView = originalScrollIntoView;
     history.replaceState(null, '', '/');
   });
@@ -319,6 +331,7 @@ describe('report section menu links', () => {
   it('ignores clicks outside the report root', () => {
     bindSectionNavLinks(document.getElementById('report-root'));
     document.querySelector('a[href="#outside"]').click();
+    expect(preventedByHandler).toBe(false);
     expect(scrolledTo).toEqual([]);
   });
 
@@ -327,7 +340,7 @@ describe('report section menu links', () => {
     const link = document.querySelector('a[href="#MISSING"]');
     const event = new MouseEvent('click', { bubbles: true, cancelable: true });
     link.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(false);
+    expect(preventedByHandler).toBe(false);
     expect(scrolledTo).toEqual([]);
   });
 
@@ -337,7 +350,7 @@ describe('report section menu links', () => {
     for (const mods of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) {
       const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...mods });
       link.dispatchEvent(event);
-      expect(event.defaultPrevented).toBe(false);
+      expect(preventedByHandler).toBe(false);
     }
     expect(scrolledTo).toEqual([]);
     expect(window.location.hash).toBe('');

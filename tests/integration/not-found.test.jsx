@@ -4,10 +4,11 @@
 import { describe, test, expect } from 'bun:test';
 import { mock } from 'bun:test';
 
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
 let currentPath = '/';
-mock.module('next/navigation', () => ({
-  usePathname: () => currentPath,
-  useRouter: () => ({ push: () => {} })
+mock.module('next/navigation', () => sharedNextNavigationMock({
+  usePathname: () => currentPath
 }));
 
 import { render, installRtlDom } from './rtl';

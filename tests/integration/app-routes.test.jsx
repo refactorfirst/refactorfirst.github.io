@@ -9,20 +9,13 @@ import { describe, test, expect } from 'bun:test';
 import { mock } from 'bun:test';
 import { loadListedRepositories, listUsernames } from '../../lib/repositories';
 
+import { sharedNextNavigationMock, notFoundCalls } from './next-navigation-stub';
+
 const listing = loadListedRepositories();
 
-// next/navigation notFound: throws a NEXT_HTTP_ERROR_FALLBACK; catch it in a
-// controllable way for assertions.
-const notFoundCalls = [];
-mock.module('next/navigation', () => ({
-  notFound: () => {
-    notFoundCalls.push(true);
-    throw new Error('NEXT_NOT_FOUND');
-  },
-  usePathname: () => '/',
-  useRouter: () => ({ push: () => {} }),
-  useSearchParams: () => new URLSearchParams('')
-}));
+// next/navigation notFound: the shared stub records the call and throws a
+// NEXT_NOT_FOUND sentinel so it can be asserted here.
+mock.module('next/navigation', () => sharedNextNavigationMock());
 
 const userPage = await import('../../app/[username]/page');
 const repoPage = await import('../../app/[username]/[repository]/page');

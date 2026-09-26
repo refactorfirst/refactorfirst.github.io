@@ -3,10 +3,10 @@
 // fetch on remount (Technical Appendix §9).
 import { describe, test, expect, beforeEach, afterEach, spyOn, mock } from 'bun:test';
 
-mock.module('next/navigation', () => ({
-  usePathname: () => '/alice/one',
-  useRouter: () => ({ push: () => {} }),
-  useSearchParams: () => new URLSearchParams('')
+import { sharedNextNavigationMock } from './next-navigation-stub';
+
+mock.module('next/navigation', () => sharedNextNavigationMock({
+  usePathname: () => '/alice/one'
 }));
 mock.module('next/script', () => ({ default: () => null }));
 
