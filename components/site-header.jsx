@@ -4,9 +4,9 @@ import MenuSearch from './menu-search';
 import ThemeToggle from './theme-toggle';
 import { withBasePath } from '../lib/base-path';
 
-// Site header: brand logo, hamburger toggle, main navigation links, the
-// type-ahead menu search and the three-mode color theme toggle pinned to the
-// right side of the bar.
+// Site header: brand logo, hamburger toggle, main navigation links and the
+// type-ahead menu search in the top bar, plus the three-mode color theme
+// toggle on a right-aligned sub-row below the bar.
 export default function SiteHeader({ repositories = [] }) {
   return (
     <>
@@ -34,11 +34,16 @@ export default function SiteHeader({ repositories = [] }) {
             </li>
           </ul>
           <MenuSearch repositories={repositories} />
-          {/* Last flex child: the toggle's right edge sits flush with the
-              menu bar's content edge, mirroring the breadcrumbs' left-edge
-              alignment (plans/css-only-dark-mode.md). */}
-          <ThemeToggle />
         </nav>
+        {/* Theme sub-row below the menu bar: .theme-bar reuses the
+            breadcrumbs' alignment formula (--width-content column, 0.8rem
+            horizontal padding, border-box) so the toggle's right edge sits
+            flush with the menu bar's right content edge, mirroring how the
+            breadcrumb trail aligns with the bar's left edge
+            (plans/css-only-dark-mode.md). */}
+        <div className="theme-bar">
+          <ThemeToggle />
+        </div>
       </header>
     </>
   );

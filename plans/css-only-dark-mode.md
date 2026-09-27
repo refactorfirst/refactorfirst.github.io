@@ -2,9 +2,9 @@
 
 ## Goals
 
-1. Three-mode theme control in the top menu bar — **light / dark / system** —
-   with small images (icons) for each mode.
-2. The control's right edge aligns with the top menu's right content edge at
+1. Three-mode theme control — **light / dark / system** — with small images
+   (icons) for each mode, on a sub-row below the top menu bar.
+2. The control's right edge aligns with the menu bar's right content edge at
    every viewport (mirroring how the breadcrumb trail aligns with the menu's
    left edge).
 3. All *theming* is pure CSS: custom properties + `prefers-color-scheme` +
@@ -18,8 +18,9 @@
 `components/theme-toggle.jsx` (a Server Component — no state, no handlers)
 renders three radios named `rf-theme` (`rf-theme-light`, `rf-theme-dark`,
 `rf-theme-system`, with `system` `defaultChecked`), each wrapped in a labelled
-icon pill (inline SVG: sun / moon / monitor). The toggle is the **last flex
-child of `.menu-bar`**, after `MenuSearch`.
+icon pill (inline SVG: sun / moon / monitor). The toggle sits on the
+**`.theme-bar` sub-row under `.menu-bar`**, inside `#top-menu`, right-aligned
+with the menu bar's content edge.
 
 Why radios: "one of three modes" is exactly a radio group, the checked state
 is queryable from CSS (`:has(#id:checked)`), and switching requires zero JS.
@@ -121,12 +122,15 @@ practices" and "only CSS" conflict here, so the plan resolves it as:
 
 ### Alignment with the menu
 
-The toggle is a normal flex child at the end of `.menu-bar` (which carries
-`padding: 0.3rem 0.8rem`), so its right edge is flush with the menu's content
-edge by construction — the same 0.8rem inset the breadcrumbs mirror on the
-left (`tests/unit/layout-styles.test.js` pins that invariant). Below 900px it
-keeps `order: 2` so it sits beside the hamburger at the right edge. No
-absolute positioning, no magic numbers.
+The toggle lives on a `.theme-bar` sub-row inside `#top-menu`, right after
+`.menu-bar`, and pinned right via `justify-content: flex-end`. The row
+reuses the breadcrumbs' exact alignment formula — `max-width:
+var(--width-content)`, `box-sizing: border-box`, `margin: 0 auto`,
+`padding: 0.2rem 0.8rem 0.45rem` (see `tests/unit/layout-styles.test.js` for
+the breadcrumb invariant this mirrors) — so its right content edge is the
+menu bar's right content edge at every viewport, with no positioning tricks
+or magic numbers; the formula works identically at mobile widths, where the
+sub-row simply follows the wrapped menu bar.
 
 ### Toggle UI / a11y
 
@@ -188,10 +192,10 @@ mustache-rendered).
 
 1. Write the failing unit/integration tests (above).
 2. `components/theme-toggle.jsx` + render it in `components/site-header.jsx`
-   after `MenuSearch`.
+   on a `.theme-bar` sub-row after `.menu-bar`.
 3. globals.css: split color roles, sweep hardcoded colors into variables, add
    the three cascade blocks + mvp variable overrides + dark overrides for the
-   report template's light-only rules + toggle styles (+ mobile order).
+   report template's light-only rules + `.theme-bar`/toggle styles.
 4. `app/layout.jsx`: inline persistence script after `<SiteHeader />` +
    `color-scheme` meta.
 5. Unit/integration green; `npx eslint` clean.
@@ -250,11 +254,11 @@ mustache-rendered).
    were pre-verified (dark bg/text ≈13:1, muted ≈8:1, links ≈7.7:1, focus
     indicator 3.8:1 on the page bg (3.3:1 on surfaces), brand-bg+white 5.5:1,
     error/success ≈8:1).
-10. **Alignment is structural, not geometric** — placing the toggle inside
-    `.menu-bar` (like the search before it) guarantees right-edge alignment
-    at every viewport with zero positioning code; the E2E test pins it with a
-    bounding-box comparison. This mirrors (and is simpler than) the
-    breadcrumbs' `--width-content` trick, which only aligns below ~1263px.
+10. **Alignment is structural, not geometric** — the `.theme-bar` sub-row
+    reuses the breadcrumbs' `--width-content` column + 0.8rem padding formula,
+    so the toggle's right edge is the menu bar's right content edge at every
+    viewport with zero positioning code; the E2E test pins it with a
+    bounding-box comparison, at desktop and mobile widths.
 
 Verdict: the design is sound. The only genuine trade-offs — the persistence
 shim (flagged deviation) and the duplicated dark block (test-guarded) — are

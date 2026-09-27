@@ -1,7 +1,7 @@
-// Dark mode toggle in the top menu: three radio modes (light / dark /
+// Dark mode toggle under the top menu: three radio modes (light / dark /
 // system) rendered as icon pills, with the system preference preselected and
-// the whole control placed after the menu search box so its right edge can
-// align with the top menu's content edge (plans/css-only-dark-mode.md).
+// the whole control on a sub-row below the menu bar whose right edge aligns
+// with the menu's content edge (plans/css-only-dark-mode.md).
 import { describe, test, expect } from 'bun:test';
 import { mock } from 'bun:test';
 
@@ -60,15 +60,20 @@ describe('ThemeToggle', () => {
 });
 
 describe('SiteHeader placement', () => {
-  test('the toggle is the last child of the menu bar, after the search box', () => {
+  test('the toggle sits on a sub-row below the menu bar, inside the header', () => {
     render(_jsx(SiteHeader, { repositories: [] }));
+    const header = document.getElementById('top-menu');
     const bar = document.querySelector('.menu-bar');
-    const children = [...bar.children];
-    const search = bar.querySelector('.menu-search');
-    const toggle = bar.querySelector('.theme-toggle');
+    const themeBar = header.querySelector('.theme-bar');
+    const toggle = themeBar.querySelector('.theme-toggle');
+    expect(themeBar).toBeTruthy();
     expect(toggle).toBeTruthy();
-    expect(children[children.length - 1]).toBe(toggle);
-    expect(children.indexOf(search)).toBeGreaterThan(0);
-    expect(children.indexOf(toggle)).toBeGreaterThan(children.indexOf(search));
+    // The sub-row comes after the menu bar and holds only the toggle.
+    const children = [...header.children];
+    expect(children[children.length - 1]).toBe(themeBar);
+    expect(children.indexOf(themeBar)).toBeGreaterThan(children.indexOf(bar));
+    expect(themeBar.children.length).toBe(1);
+    expect(themeBar.contains(toggle)).toBe(true);
+    expect(bar.contains(toggle)).toBe(false);
   });
 });

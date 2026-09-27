@@ -37,29 +37,28 @@ test('the toggle right edge aligns with the top menu content edge', async ({ pag
     return {
       toggleRight: toggle.right,
       // The menu bar's right *content* edge (its 0.8rem padding insets the
-      // search input exactly like the breadcrumb padding insets crumbs).
+      // search input exactly like the sub-row padding insets the toggle).
       barContentRight: bar.right - parseFloat(style.paddingRight)
     };
   });
   expect(Math.abs(edges.toggleRight - edges.barContentRight)).toBeLessThanOrEqual(1);
 });
 
-test('the toggle stays right-aligned on mobile next to the hamburger', async ({ page }) => {
+test('the toggle sits below the menu bar, right-aligned, at mobile widths', async ({ page }) => {
   test.skip(test.info().project.name !== 'chromium', 'geometry check runs once');
   await page.setViewportSize({ width: 375, height: 800 });
   await page.goto('/');
   const edges = await page.evaluate(() => {
     const bar = document.querySelector('.menu-bar').getBoundingClientRect();
     const toggle = document.querySelector('.theme-toggle').getBoundingClientRect();
-    const hamburger = document.querySelector('.menu-toggle').getBoundingClientRect();
     return {
       toggleRight: toggle.right,
       barContentRight: bar.right - parseFloat(getComputedStyle(document.querySelector('.menu-bar')).paddingRight),
-      hamburgerBeforeToggle: hamburger.right <= toggle.left
+      belowBar: toggle.top >= bar.bottom
     };
   });
   expect(Math.abs(edges.toggleRight - edges.barContentRight)).toBeLessThanOrEqual(1);
-  expect(edges.hamburgerBeforeToggle).toBe(true);
+  expect(edges.belowBar).toBe(true);
 });
 
 test('light OS preference renders light by default', async ({ page }) => {

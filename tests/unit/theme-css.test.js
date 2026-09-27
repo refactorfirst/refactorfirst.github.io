@@ -206,7 +206,7 @@ describe('dark mode cascade structure', () => {
 });
 
 describe('toggle styles', () => {
-  it('the toggle is a flex child of the menu bar with an icon pill per mode', () => {
+  it('the toggle renders icon pills over appearance-none radios', () => {
     expect(rules.get('.theme-toggle')).toMatch(/display:\s*flex/);
     expect(rules.get('.theme-option-input')).toMatch(/appearance:\s*none/);
     expect(rules.get('.theme-option-input')).toMatch(/position:\s*absolute/);
@@ -224,12 +224,19 @@ describe('toggle styles', () => {
     expect(height).toBeGreaterThanOrEqual(1.5);
   });
 
-  it('the toggle stays right-aligned on mobile, next to the hamburger', () => {
-    const mobileSlice = noComments.split('@media (max-width: 900px)')[1];
-    expect(mobileSlice).toBeTruthy();
-    const mobileToggle = mobileSlice.match(/\.theme-toggle\s*\{([^{}]*)\}/);
-    expect(mobileToggle).toBeTruthy();
-    expect(mobileToggle[1]).toMatch(/order:\s*2/);
+  it('the sub-row under the menu bar mirrors the breadcrumb alignment formula', () => {
+    // Same invariant layout-styles.test.js pins for .breadcrumbs: the row
+    // shares #top-menu's --width-content column and the 0.8rem horizontal
+    // padding insets the toggle to the menu bar's right *content* edge at
+    // every viewport. Flex-end pins the control to that edge.
+    const row = rules.get('.theme-bar');
+    expect(row).toBeTruthy();
+    expect(row).toMatch(/display:\s*flex/);
+    expect(row).toMatch(/justify-content:\s*flex-end/);
+    expect(row).toMatch(/max-width:\s*var\(--width-content\)/);
+    expect(row).toMatch(/box-sizing:\s*border-box/);
+    expect(row).toMatch(/margin:\s*0\s+auto/);
+    expect(row).toMatch(/padding:\s*[^;]*0\.8rem[^;]*;/);
   });
 });
 
