@@ -781,5 +781,8 @@ main#app .rf-page-btn:focus-visible {
 }
 
 main#app .rf-data-table td[data-rf-copy]:focus-visible {
-  outline-color: var(--brand-color);
+  /* --brand-accent (the focus-indicator role), not --brand-color (the
+     accent-background role): #2a6f97 is only 2.9:1 against the dark
+     --surface-color, below the 3:1 of SC 2.4.11. */
+  outline-color: var(--brand-accent);
 }

@@ -75,10 +75,10 @@ split because #2a6f97 as *text* on a dark page fails AA (3.3:1), while as a
 |---|---|---|---|---|
 | `--brand-color` | accent **backgrounds** (CTA, hover fills) | #2a6f97 | #2a6f97 | white text 5.5:1 |
 | `--link-color` (new) | accent **text** (links, wordmark, hero h1) | #2a6f97 | #6fb1d9 | 7.7:1 on dark bg |
-| `--brand-accent` | hover bg + focus indicator | #1f5273 | #2a6f97 | 3.3:1 on dark bg, 5.5:1 vs white |
+| `--brand-accent` | hover bg + focus indicator | #1f5273 | #3178a6 | 3.8:1 on dark bg, 3.3:1 vs surface, 4.8:1 vs white |
 | `--bg-color` / `--surface-color` | page / panels | #ffffff / #f5f8fa | #10161d / #1a2330 | — |
 | `--text-color` / `--muted-color` | text | #1f2d3d / #5c6b7a | #e6edf3 / #9fb0c0 | 13:1 / 8:1 |
-| `--border-color`, `--input-border`, `--card-bg` | chrome (was #dde4ea / #c6d2dc / #fff hardcoded) | as today | #2c3a4d / #566d8f / #1a2330 | input border ≥3:1 vs surface |
+| `--border-color`, `--input-border`, `--card-bg` | chrome (was #dde4ea / #c6d2dc / #fff hardcoded) | as today | #2c3a4d / #5b7396 / #1a2330 | input border ≥3:1 vs surface |
 | `--error-color` / `--success-color` | status text | #c0392b / #1e8449 | #f0928c / #5bbd8b | ~8:1 on dark bg |
 | `--error-bg` / `--error-border` | error page panel | #fdf6f5 / #f0c6c0 | #2b1d1f / #7a4a48 | — |
 
@@ -132,12 +132,14 @@ absolute positioning, no magic numbers.
 
 - Container: `<div role="radiogroup" aria-label="Color theme">` — three
   labelled, native radios (`aria-label` "Light theme" / "Dark theme" /
-  "System preference"), visually hidden via
-  `position: absolute; opacity: 0` (still keyboard-focusable).
+  "System preference"), each visually replaced by its icon pill via
+  `appearance: none; position: absolute; inset: 0` (still keyboard-focusable;
+  the checked input itself renders the brand pill).
 - Each pill: 28×28px label (≥ 24px, SC 2.5.8), inline `stroke="currentColor"`
   SVG icon (`aria-hidden="true"` — the radio label carries the name).
-- Selected state: `:checked + svg` (brand pill, white icon). Focus:
-  `:focus-visible + svg` outline (SC 2.4.7/2.4.11).
+- Selected state: `:checked` background on the input plus
+  `:checked + svg` icon recolor. Focus: the global `:focus-visible` rule
+  outlines the input (SC 2.4.7/2.4.11).
 - `color-scheme` per palette + `<meta name="color-scheme" content="light dark">`
   for native controls, scrollbars and the pre-CSS canvas.
 - No color-transition animation (instant switch; nothing for
@@ -165,9 +167,9 @@ CSS variables in `lib/report-view.js` at render time).
 3. `tests/unit/css-a11y.test.js` — extend the resolver to be palette-aware
    (light values from the base block, dark values from the dark blocks) and
    assert the existing light guarantees **and** their dark equivalents. The
-   palette values are chosen so the file's last-occurrence resolution (used
-   by the unchanged light tests) still passes: dark `--brand-accent`
-   (#2a6f97) must keep ≥3:1 vs white as well as vs the dark background.
+    palette values are chosen so the file's last-occurrence resolution (used
+    by the unchanged light tests) still passes: dark `--brand-accent`
+    (#3178a6) must keep ≥3:1 vs white as well as vs the dark background.
 4. `tests/e2e/dark-mode.spec.js` (against the built export, as always):
    - toggle right edge == `.menu-bar` content right edge (±1px, incl. mobile);
    - three options render with icons, system preselected;
@@ -228,8 +230,8 @@ mustache-rendered).
    `css-a11y.test.js`/`layout-styles.test.js` parse globals.css with a
    flat regex; the plan deliberately keeps single-level `@media` nesting and
    chooses dark values that also satisfy the light assertions under the
-   parser's last-occurrence variable resolution (e.g. dark `--brand-accent`
-   #2a6f97 is ≥3:1 vs white). The new `theme-css.test.js` then adds a
+    parser's last-occurrence variable resolution (e.g. dark `--brand-accent`
+    #3178a6 is ≥3:1 vs white). The new `theme-css.test.js` then adds a
    palette-aware resolver so this fragile coincidence becomes an enforced
    property instead of luck.
 6. **Duplication risk** — the dark block exists twice (media + explicit).
@@ -246,7 +248,8 @@ mustache-rendered).
 9. **Contrast choices are computed, not eyeballed** — every dark palette pair
    is asserted in tests using the same WCAG math as the existing suite; values
    were pre-verified (dark bg/text ≈13:1, muted ≈8:1, links ≈7.7:1, focus
-   indicator 3.3:1, brand-bg+white 5.5:1, error/success ≈8:1).
+    indicator 3.8:1 on the page bg (3.3:1 on surfaces), brand-bg+white 5.5:1,
+    error/success ≈8:1).
 10. **Alignment is structural, not geometric** — placing the toggle inside
     `.menu-bar` (like the search before it) guarantees right-edge alignment
     at every viewport with zero positioning code; the E2E test pins it with a

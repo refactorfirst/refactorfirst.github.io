@@ -196,6 +196,12 @@ describe('dark mode cascade structure', () => {
     // backgrounds; the override must come from the palette.
     const focus = rules.get('main#app .rf-page-btn:focus-visible');
     expect(focus).toMatch(/outline-color:\s*var\(--brand-accent\)/);
+
+    // The cell-copy focus ring must use the focus-indicator role too:
+    // --brand-color (the accent *background*) is only 2.9:1 against the
+    // dark --surface-color, below the 3:1 of SC 2.4.11.
+    const cellCopy = rules.get('main#app .rf-data-table td[data-rf-copy]:focus-visible');
+    expect(cellCopy).toMatch(/outline-color:\s*var\(--brand-accent\)/);
   });
 });
 
