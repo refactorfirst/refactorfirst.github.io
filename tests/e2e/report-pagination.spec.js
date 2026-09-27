@@ -142,35 +142,46 @@ test.describe('pagination', () => {
 });
 
 test.describe('sorting', () => {
-  test('clicking a column header sorts ascending, then descending, with aria-sort', async ({ page }) => {
+  test('initializes the Priority column sorted ascending with a visible up arrow', async ({ page }) => {
+    const table = page.locator('table[data-rf-table="class-relationships"]');
+    const priorityHeader = table.locator('thead th', { has: page.getByRole('button', { name: /Priority/ }) });
+    await expect(priorityHeader).toHaveAttribute('aria-sort', 'ascending');
+    await expect(priorityHeader.locator('.rf-sort-indicator')).toHaveText('▲');
+    const priorities = await table.locator('tbody tr td:nth-child(2)').allInnerTexts()
+      .then(texts => texts.map(Number));
+    expect(priorities).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3]);
+  });
+
+  test('clicking Priority flips the default to descending, then back to ascending', async ({ page }) => {
     const table = page.locator('table[data-rf-table="class-relationships"]');
     const priorityHeader = table.locator('thead th', { has: page.getByRole('button', { name: /Priority/ }) });
     const priorities = () => table.locator('tbody tr td:nth-child(2)').allInnerTexts()
       .then(texts => texts.map(Number));
 
     await priorityHeader.getByRole('button').click();
-    await expect(priorityHeader).toHaveAttribute('aria-sort', 'ascending');
-    expect(await priorities()).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3]);
-
-    await priorityHeader.getByRole('button').click();
     await expect(priorityHeader).toHaveAttribute('aria-sort', 'descending');
     const desc = await priorities();
     expect(desc[0]).toBe(5);
     expect([...desc].reverse()).toEqual([...desc].sort((a, b) => a - b));
+
+    await priorityHeader.getByRole('button').click();
+    await expect(priorityHeader).toHaveAttribute('aria-sort', 'ascending');
+    expect(await priorities()).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3]);
   });
 
   test('sorting is kept while paging through the result set', async ({ page }) => {
     const table = page.locator('table[data-rf-table="class-relationships"]');
     const priorityHeader = table.locator('thead th', { has: page.getByRole('button', { name: /Priority/ }) });
+    // Flipping the ascending default gives a descending order.
     await priorityHeader.getByRole('button').click();
-    await expect(priorityHeader).toHaveAttribute('aria-sort', 'ascending');
+    await expect(priorityHeader).toHaveAttribute('aria-sort', 'descending');
 
     const nav = page.locator('[data-rf-pagination="class-relationships"]');
     await nav.getByRole('button', { name: 'Next' }).click();
     await expect(nav).toContainText('Page 2 of 3');
-    await expect(priorityHeader).toHaveAttribute('aria-sort', 'ascending');
+    await expect(priorityHeader).toHaveAttribute('aria-sort', 'descending');
     const priorities = await table.locator('tbody tr td:nth-child(2)').allInnerTexts();
-    expect(Number(priorities[0])).toBeGreaterThanOrEqual(3);
+    expect(Number(priorities[0])).toBe(3);
   });
 
   test('column headers are keyboard operable', async ({ page }) => {
@@ -224,7 +235,6 @@ test.describe('search and filter', () => {
     const table = page.locator('table[data-rf-table="class-relationships"]');
     const priorityHeader = table.locator('thead th', { has: page.getByRole('button', { name: /Priority/ }) });
     await priorityHeader.getByRole('button').click();
-    await priorityHeader.getByRole('button').click();
     await expect(priorityHeader).toHaveAttribute('aria-sort', 'descending');
     await page.locator('input[data-rf-search="class-relationships"]').fill('target1');
     await expect(page.locator('[data-rf-match="class-relationships"]'))
@@ -247,6 +257,8 @@ test.describe('csv export', () => {
     const lines = csv.trim().split('\n');
     expect(lines[0]).toBe('Class Relationship,Priority,In Class Cycles,Relationship Strength,Also Removes Pkg Cycle Relationship,In Package Cycles');
     expect(lines.length).toBe(CLASS_ROW_COUNT + 1);
+    // The export honours the default sort (priority ascending): the first
+    // priority-1 row is Source0, the last priority-5 row is Source44.
     expect(lines[1]).toContain('Source0 to Target0');
     expect(lines[CLASS_ROW_COUNT]).toContain(`Source${CLASS_ROW_COUNT - 1} to Target${CLASS_ROW_COUNT - 1}`);
   });

@@ -7,6 +7,7 @@ import {
   paginateTableData,
   pageCount,
   sortTableData,
+  resolveSortKey,
   filterTableData,
   stripHtml,
   escapeCsvValue,
@@ -362,12 +363,47 @@ describe('copyCellContent', () => {
   });
 });
 
+describe('resolveSortKey', () => {
+  const columns = [
+    { key: 'renderedLabel', label: 'Class Relationship' },
+    { key: 'priority', label: 'Priority' }
+  ];
+
+  it('returns the key for an exact column key match', () => {
+    expect(resolveSortKey(columns, 'priority')).toBe('priority');
+  });
+
+  it('returns null for a falsy sort key', () => {
+    expect(resolveSortKey(columns, null)).toBeNull();
+    expect(resolveSortKey(columns, undefined)).toBeNull();
+    expect(resolveSortKey(columns, '')).toBeNull();
+  });
+
+  it('falls back to a case-insensitive label match for dynamic tables', () => {
+    const disharmonyColumns = [
+      { key: 'col0', label: 'Class' },
+      { key: 'col1', label: 'Priority' }
+    ];
+    expect(resolveSortKey(disharmonyColumns, 'priority')).toBe('col1');
+    expect(resolveSortKey(disharmonyColumns, 'Priority')).toBe('col1');
+    expect(resolveSortKey(disharmonyColumns, ' priority ')).toBe('col1');
+  });
+
+  it('returns null when neither key nor label matches', () => {
+    expect(resolveSortKey(columns, 'bogus')).toBeNull();
+    expect(resolveSortKey([
+      { key: 'className', label: 'Classes' },
+      { key: 'edgesHtml', label: 'Relationships' }
+    ], 'priority')).toBeNull();
+  });
+});
+
 describe('TABLE_CONFIG defaults', () => {
   it('ships the documented defaults', () => {
     expect(TABLE_CONFIG.pagination.threshold).toBe(20);
     expect(TABLE_CONFIG.pagination.pageSize).toBe(20);
     expect(TABLE_CONFIG.sorting.enabled).toBe(true);
-    expect(TABLE_CONFIG.sorting.defaultSortColumn).toBeNull();
+    expect(TABLE_CONFIG.sorting.defaultSortColumn).toBe('priority');
     expect(TABLE_CONFIG.sorting.defaultSortDirection).toBe('asc');
     expect(TABLE_CONFIG.search.enabled).toBe(true);
     expect(TABLE_CONFIG.search.debounceMs).toBe(300);
