@@ -12,9 +12,10 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
 - Search over curated repository listing (`repositories.txt`)
 - Dark mode, 100% CSS switching (`components/theme-toggle.jsx` +
   `plans/css-only-dark-mode.md`): three radios (light/dark/system) on a
-  right-aligned `.theme-bar` sub-row under the menu bar (the right-edge
-  mirror of the breadcrumbs' left-edge alignment), palettes selected in
-  `app/globals.css` via `:root:has(#rf-theme-…:checked)` +
+  right-aligned `.theme-bar` row below the header, rendered by
+  `app/layout.jsx` between `<SiteHeader>` and the persistence script (the
+  right-edge mirror of the breadcrumbs' left-edge alignment), palettes
+  selected in `app/globals.css` via `:root:has(#rf-theme-…:checked)` +
   `prefers-color-scheme`; an inline pre-paint script in `app/layout.jsx`
   only restores/persists the choice (CSP-hashed by the build). Guards:
   `tests/unit/theme-css.test.js` (the two dark blocks must stay

@@ -685,19 +685,19 @@ pre {
 }
 
 /* ---- Color theme toggle (three radio modes, pure-CSS switching) ---- */
-/* Sub-row under the menu bar: the same alignment formula .breadcrumbs use
-   (--width-content column, 0.8rem horizontal padding, border-box) keeps the
-   toggle's right edge flush with the menu bar's right content edge at every
-   viewport — the right-edge mirror of the breadcrumb trail's left-edge
-   alignment. #top-menu is capped by mvp.css at --width-content, so the row
-   and the menu bar can never drift apart. */
+/* Row below the site header (rendered by app/layout.jsx): the same alignment
+   formula .breadcrumbs use (--width-content column, 0.8rem horizontal
+   padding, border-box) keeps the toggle's right edge flush with the menu
+   bar's right content edge at every viewport — the right-edge mirror of the
+   breadcrumb trail's left-edge alignment. #top-menu is capped by mvp.css at
+   --width-content, so the row and the menu bar can never drift apart. */
 .theme-bar {
   display: flex;
   justify-content: flex-end;
   max-width: var(--width-content);
   box-sizing: border-box;
   margin: 0 auto;
-  padding: 0.2rem 0.8rem 0.45rem;
+  padding: 0.4rem 0.8rem 0.45rem;
 }
 
 /* The radios in components/theme-toggle.jsx are the theme's single source of
@@ -705,7 +705,8 @@ pre {
    visually replaced by its icon pill (appearance: none, absolute, fills the
    28px label) but stays keyboard-focusable — the global :focus-visible rule
    draws the indicator — and the checked pill doubles as the selected state,
-   so no JS is involved in switching. */
+   so no JS is involved in switching. The control renders as a surface chip
+   so it stands out from the page background. */
 .theme-toggle {
   display: flex;
   align-items: center;
@@ -714,7 +715,7 @@ pre {
   padding: 0.15rem;
   border: 1px solid var(--input-border);
   border-radius: var(--radius);
-  background: var(--bg-color);
+  background: var(--surface-color);
 }
 
 .theme-option {
@@ -728,7 +729,7 @@ pre {
 }
 
 .theme-option:hover {
-  background: var(--surface-color);
+  background: var(--btn-hover-bg);
 }
 
 .theme-option-input {

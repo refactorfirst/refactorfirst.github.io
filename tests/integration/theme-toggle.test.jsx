@@ -1,7 +1,8 @@
-// Dark mode toggle under the top menu: three radio modes (light / dark /
+// Dark mode toggle below the site header: three radio modes (light / dark /
 // system) rendered as icon pills, with the system preference preselected and
-// the whole control on a sub-row below the menu bar whose right edge aligns
-// with the menu's content edge (plans/css-only-dark-mode.md).
+// the whole control on a right-aligned .theme-bar row under the header whose
+// right edge aligns with the menu bar's content edge
+// (plans/css-only-dark-mode.md).
 import { describe, test, expect } from 'bun:test';
 import { mock } from 'bun:test';
 
@@ -14,8 +15,9 @@ mock.module('next/navigation', () => sharedNextNavigationMock({
 
 import { render, installRtlDom, within } from './rtl';
 import { jsx as _jsx } from 'react/jsx-runtime';
+import { renderToStaticMarkup } from 'react-dom/server';
 import ThemeToggle from '../../components/theme-toggle';
-import SiteHeader from '../../components/site-header';
+import RootLayout from '../../app/layout';
 
 installRtlDom();
 
@@ -59,21 +61,25 @@ describe('ThemeToggle', () => {
   });
 });
 
-describe('SiteHeader placement', () => {
-  test('the toggle sits on a sub-row below the menu bar, inside the header', () => {
-    render(_jsx(SiteHeader, { repositories: [] }));
-    const header = document.getElementById('top-menu');
-    const bar = document.querySelector('.menu-bar');
-    const themeBar = header.querySelector('.theme-bar');
-    const toggle = themeBar.querySelector('.theme-toggle');
-    expect(themeBar).toBeTruthy();
-    expect(toggle).toBeTruthy();
-    // The sub-row comes after the menu bar and holds only the toggle.
-    const children = [...header.children];
-    expect(children[children.length - 1]).toBe(themeBar);
-    expect(children.indexOf(themeBar)).toBeGreaterThan(children.indexOf(bar));
-    expect(themeBar.children.length).toBe(1);
-    expect(themeBar.contains(toggle)).toBe(true);
-    expect(bar.contains(toggle)).toBe(false);
+describe('Root layout placement', () => {
+  test('the toggle row sits below the header, before main, holding the radios', () => {
+    const html = renderToStaticMarkup(_jsx(RootLayout, { children: null }));
+    const headerStart = html.indexOf('<header');
+    const headerEnd = html.indexOf('</header>');
+    const themeBar = html.indexOf('class="theme-bar"');
+    const main = html.indexOf('<main');
+    expect(themeBar).toBeGreaterThan(headerEnd);
+    expect(themeBar).toBeLessThan(main);
+    // The header itself no longer contains the toggle row.
+    expect(html.slice(headerStart, headerEnd)).not.toContain('theme-bar');
+    // The row holds all three radios (and nothing but the toggle).
+    const rowHtml = html.slice(themeBar, main);
+    expect(rowHtml).toContain('rf-theme-light');
+    expect(rowHtml).toContain('rf-theme-dark');
+    expect(rowHtml).toContain('rf-theme-system');
+    // The persistence bootstrap must come after the radios to restore the
+    // saved choice pre-paint.
+    const shim = html.indexOf("localStorage.getItem('rf-theme')");
+    expect(shim).toBeGreaterThan(themeBar);
   });
 });

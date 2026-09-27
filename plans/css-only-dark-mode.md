@@ -3,7 +3,7 @@
 ## Goals
 
 1. Three-mode theme control — **light / dark / system** — with small images
-   (icons) for each mode, on a sub-row below the top menu bar.
+   (icons) for each mode, on a row below the site header.
 2. The control's right edge aligns with the menu bar's right content edge at
    every viewport (mirroring how the breadcrumb trail aligns with the menu's
    left edge).
@@ -19,8 +19,9 @@
 renders three radios named `rf-theme` (`rf-theme-light`, `rf-theme-dark`,
 `rf-theme-system`, with `system` `defaultChecked`), each wrapped in a labelled
 icon pill (inline SVG: sun / moon / monitor). The toggle sits on the
-**`.theme-bar` sub-row under `.menu-bar`**, inside `#top-menu`, right-aligned
-with the menu bar's content edge.
+**`.theme-bar` row below `#top-menu`**, rendered by `app/layout.jsx` right
+after `<SiteHeader />` (and before the persistence shim, which needs the
+radios parsed), right-aligned with the menu bar's content edge.
 
 Why radios: "one of three modes" is exactly a radio group, the checked state
 is queryable from CSS (`:has(#id:checked)`), and switching requires zero JS.
@@ -122,15 +123,16 @@ practices" and "only CSS" conflict here, so the plan resolves it as:
 
 ### Alignment with the menu
 
-The toggle lives on a `.theme-bar` sub-row inside `#top-menu`, right after
-`.menu-bar`, and pinned right via `justify-content: flex-end`. The row
-reuses the breadcrumbs' exact alignment formula — `max-width:
-var(--width-content)`, `box-sizing: border-box`, `margin: 0 auto`,
-`padding: 0.2rem 0.8rem 0.45rem` (see `tests/unit/layout-styles.test.js` for
-the breadcrumb invariant this mirrors) — so its right content edge is the
-menu bar's right content edge at every viewport, with no positioning tricks
-or magic numbers; the formula works identically at mobile widths, where the
-sub-row simply follows the wrapped menu bar.
+The toggle lives on a `.theme-bar` row rendered by `app/layout.jsx` right
+after `<SiteHeader />`, below the header block, pinned right via
+`justify-content: flex-end`. The row reuses the breadcrumbs' exact alignment
+formula — `max-width: var(--width-content)`, `box-sizing: border-box`,
+`margin: 0 auto`, `padding: 0.4rem 0.8rem 0.45rem` (see
+`tests/unit/layout-styles.test.js` for the breadcrumb invariant this mirrors)
+— so its right content edge is the menu bar's right content edge at every
+viewport, with no positioning tricks or magic numbers; the formula works
+identically at mobile widths, where the row simply follows the wrapped menu
+bar.
 
 ### Toggle UI / a11y
 
@@ -191,8 +193,9 @@ mustache-rendered).
 ## Implementation steps
 
 1. Write the failing unit/integration tests (above).
-2. `components/theme-toggle.jsx` + render it in `components/site-header.jsx`
-   on a `.theme-bar` sub-row after `.menu-bar`.
+2. `components/theme-toggle.jsx` + render it in `app/layout.jsx` on a
+   `.theme-bar` row right after `<SiteHeader />`, before the persistence
+   shim.
 3. globals.css: split color roles, sweep hardcoded colors into variables, add
    the three cascade blocks + mvp variable overrides + dark overrides for the
    report template's light-only rules + `.theme-bar`/toggle styles.
@@ -254,7 +257,7 @@ mustache-rendered).
    were pre-verified (dark bg/text ≈13:1, muted ≈8:1, links ≈7.7:1, focus
     indicator 3.8:1 on the page bg (3.3:1 on surfaces), brand-bg+white 5.5:1,
     error/success ≈8:1).
-10. **Alignment is structural, not geometric** — the `.theme-bar` sub-row
+10. **Alignment is structural, not geometric** — the `.theme-bar` row
     reuses the breadcrumbs' `--width-content` column + 0.8rem padding formula,
     so the toggle's right edge is the menu bar's right content edge at every
     viewport with zero positioning code; the E2E test pins it with a

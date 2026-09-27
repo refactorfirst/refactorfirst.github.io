@@ -3,6 +3,7 @@ import SiteHeader from '../components/site-header';
 import SiteFooter from '../components/site-footer';
 import Breadcrumbs from '../components/breadcrumbs';
 import SentryProvider from '../components/sentry-provider';
+import ThemeToggle from '../components/theme-toggle';
 import { loadListedRepositories } from '../lib/repositories.js';
 import './globals.css';
 
@@ -48,13 +49,25 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <SiteHeader repositories={repositories} />
+        {/* Color theme toggle on a row below the header: .theme-bar reuses
+            the breadcrumbs' alignment formula (--width-content column,
+            0.8rem horizontal padding, border-box) so the toggle's right
+            edge sits flush with the menu bar's right content edge,
+            mirroring how the breadcrumb trail aligns with the bar's left
+            edge (plans/css-only-dark-mode.md). */}
+        <div className="theme-bar">
+          <ThemeToggle />
+        </div>
         {/* Theme persistence shim (plans/css-only-dark-mode.md): switching
             itself is pure CSS (radio + :has() in globals.css); this inline
             script only restores the saved choice into the radios before
-            first paint and records changes. It sets the checked *property*
-            (never the attribute), so React hydration never sees a mismatch.
-            scripts/fix-csp-hashes.mjs hashes it into the CSP at build time;
-            with JS disabled the toggle still works per page view. */}
+            first paint and records changes. It must stay AFTER the
+            .theme-bar markup (the radios have to be parsed before it can
+            check them) and before any meaningful page content. It sets the
+            checked *property* (never the attribute), so React hydration
+            never sees a mismatch. scripts/fix-csp-hashes.mjs hashes it into
+            the CSP at build time; with JS disabled the toggle still works
+            per page view. */}
         <script
           dangerouslySetInnerHTML={{
             __html:

@@ -31,34 +31,38 @@ test('the toggle right edge aligns with the top menu content edge', async ({ pag
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
   const edges = await page.evaluate(() => {
+    const header = document.getElementById('top-menu').getBoundingClientRect();
     const bar = document.querySelector('.menu-bar').getBoundingClientRect();
     const toggle = document.querySelector('.theme-toggle').getBoundingClientRect();
     const style = getComputedStyle(document.querySelector('.menu-bar'));
     return {
       toggleRight: toggle.right,
       // The menu bar's right *content* edge (its 0.8rem padding insets the
-      // search input exactly like the sub-row padding insets the toggle).
-      barContentRight: bar.right - parseFloat(style.paddingRight)
+      // search input exactly like the row padding insets the toggle).
+      barContentRight: bar.right - parseFloat(style.paddingRight),
+      belowHeader: toggle.top >= header.bottom
     };
   });
   expect(Math.abs(edges.toggleRight - edges.barContentRight)).toBeLessThanOrEqual(1);
+  expect(edges.belowHeader).toBe(true);
 });
 
-test('the toggle sits below the menu bar, right-aligned, at mobile widths', async ({ page }) => {
+test('the toggle sits below the header, right-aligned, at mobile widths', async ({ page }) => {
   test.skip(test.info().project.name !== 'chromium', 'geometry check runs once');
   await page.setViewportSize({ width: 375, height: 800 });
   await page.goto('/');
   const edges = await page.evaluate(() => {
+    const header = document.getElementById('top-menu').getBoundingClientRect();
     const bar = document.querySelector('.menu-bar').getBoundingClientRect();
     const toggle = document.querySelector('.theme-toggle').getBoundingClientRect();
     return {
       toggleRight: toggle.right,
       barContentRight: bar.right - parseFloat(getComputedStyle(document.querySelector('.menu-bar')).paddingRight),
-      belowBar: toggle.top >= bar.bottom
+      belowHeader: toggle.top >= header.bottom
     };
   });
   expect(Math.abs(edges.toggleRight - edges.barContentRight)).toBeLessThanOrEqual(1);
-  expect(edges.belowBar).toBe(true);
+  expect(edges.belowHeader).toBe(true);
 });
 
 test('light OS preference renders light by default', async ({ page }) => {
