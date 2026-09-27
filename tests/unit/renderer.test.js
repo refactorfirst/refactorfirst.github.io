@@ -189,10 +189,16 @@ describe('templating safety (repository-provided templates are untrusted)', () =
 // template with paginated rows and tableUi metadata (plan Phase 3).
 // ---------------------------------------------------------------------------
 
+/**
+ * Builds relationship fixtures with out-of-order priorities to exercise sorting.
+ * @param {number} count - Number of relationship rows to generate.
+ * @returns {Array<object>} Synthetic relationship rows.
+ */
 function synthRelationships(count) {
   return Array.from({ length: count }, (_, i) => ({
-    renderedLabel: `Class${String(count - i)} &gt; Class${i}`,
-    priority: (i % 5) + 1,
+    renderedLabel: `Class${String(count - i)} > Class${i}`,
+    // start out of order (4, 5, 1, 2, 3, ...) so sorted assertions are meaningful
+    priority: ((i + 3) % 5) + 1,
     cycleCount: i,
     effortRank: i * 2,
     alsoRemovesPackageRelationship: i % 2 === 0,
@@ -200,6 +206,16 @@ function synthRelationships(count) {
   }));
 }
 
+/**
+ * Builds a report fixture with configurable table sizes and unsorted priorities.
+ * @param {object} [options] - Row counts for each report table.
+ * @param {number} [options.classRows=25] - Class relationship count.
+ * @param {number} [options.pkgRows=5] - Package relationship count.
+ * @param {number} [options.disharmonyRows=30] - Disharmony finding count.
+ * @param {number} [options.cycleRows=21] - Cycle summary row count.
+ * @param {number} [options.breakdownRows=3] - Largest-cycle breakdown row count.
+ * @returns {object} Report data for renderer tests.
+ */
 function synthReport({ classRows = 25, pkgRows = 5, disharmonyRows = 30, cycleRows = 21, breakdownRows = 3 } = {}) {
   return {
     project: { name: 'Demo', version: '1.0' },
@@ -222,7 +238,8 @@ function synthReport({ classRows = 25, pkgRows = 5, disharmonyRows = 30, cycleRo
         rows: Array.from({ length: disharmonyRows }, (_, i) => ({
           cells: [
             { content: `<b>GodClass${disharmonyRows - i}</b>`, align: 'left' },
-            { content: String((i % 3) + 1), align: 'right' }
+            // start out of order (2, 3, 1, ...) so sorted assertions are meaningful
+            { content: String(((i + 1) % 3) + 1), align: 'right' }
           ]
         }))
       }
@@ -230,7 +247,8 @@ function synthReport({ classRows = 25, pkgRows = 5, disharmonyRows = 30, cycleRo
     classCycles: {
       hasCycles: true,
       summary: Array.from({ length: cycleRows }, (_, i) => ({
-        cycleName: `cycle-${i}`, priority: (i % 4) + 1, classCount: i + 1, relationshipCount: i + 1
+        // start out of order (3, 4, 1, 2, ...) so sorted assertions are meaningful
+        cycleName: `cycle-${i}`, priority: ((i + 2) % 4) + 1, classCount: i + 1, relationshipCount: i + 1
       })),
       largestCycle: {
         hasCycleMap: true,
@@ -318,12 +336,72 @@ describe('prepareReportData', () => {
     expect(ui.colIndicator[0]).toBe('');
   });
 
-  it('defaults the sort direction to ascending', () => {
+  it('applies the configured default direction (asc) when none is given', () => {
     const prepared = prepareReportData(synthReport({ classRows: 25 }), {
       'class-relationships': { sortKey: 'priority' }
     });
     expect(prepared.classRelationshipsToRemove.tableUi.sortDir).toBe('asc');
     expect(prepared.classRelationshipsToRemove.relationships[0].priority).toBe(1);
+  });
+
+  it('sorts by priority ascending by default, marking the Priority header', () => {
+    const prepared = prepareReportData(synthReport({ classRows: 25 }));
+    const ui = prepared.classRelationshipsToRemove.tableUi;
+    expect(ui.sortKey).toBe('priority');
+    expect(ui.sortDir).toBe('asc');
+    // column order: renderedLabel, priority, cycleCount, effortRank, alsoRemoves, packageCycleCount
+    expect(ui.colSort).toEqual(['none', 'ascending', 'none', 'none', 'none', 'none']);
+    expect(ui.colIndicator[1]).toBe('▲');
+    expect(ui.colIndicator[0]).toBe('');
+    // visuals match the data: lowest priority number first, in ascending order
+    expect(prepared.classRelationshipsToRemove.relationships.map(row => row.priority))
+      .toEqual([1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4]);
+  });
+
+  it('sorts package relationships and the cycle summary by priority by default', () => {
+    const prepared = prepareReportData(synthReport({ pkgRows: 5, cycleRows: 4 }));
+    expect(prepared.packageRelationshipsToRemove.tableUi.colSort[1]).toBe('ascending');
+    expect(prepared.packageRelationshipsToRemove.tableUi.colIndicator[1]).toBe('▲');
+    expect(prepared.packageRelationshipsToRemove.relationships.map(row => row.priority))
+      .toEqual([1, 2, 3, 4, 5]);
+    expect(prepared.classCycles.summaryUi.sortKey).toBe('priority');
+    expect(prepared.classCycles.summaryUi.colSort).toEqual(['none', 'ascending', 'none', 'none']);
+    expect(prepared.classCycles.summary.map(row => row.priority))
+      .toEqual([1, 2, 3, 4]);
+  });
+
+  it('defaults disharmony findings tables to their Priority column, ascending', () => {
+    const prepared = prepareReportData(synthReport({ disharmonyRows: 6 }));
+    const disharmony = prepared.disharmonies[0];
+    expect(disharmony.ui.sortKey).toBe('col1');
+    expect(disharmony.table.headerObjs[0]).toMatchObject({
+      key: 'col0', label: 'Class', sortState: 'none', indicator: ''
+    });
+    expect(disharmony.table.headerObjs[1]).toMatchObject({
+      key: 'col1', label: 'Priority', sortState: 'ascending', indicator: '▲'
+    });
+    // sorted by priority asc without any explicit table state
+    expect(disharmony.table.rows.map(row => row.cells[1].content))
+      .toEqual(['1', '1', '2', '2', '3', '3']);
+  });
+
+  it('leaves tables without a Priority column in their original order', () => {
+    const prepared = prepareReportData(synthReport({ breakdownRows: 3 }));
+    const ui = prepared.classCycles.largestCycle.breakdownUi;
+    expect(ui.sortKey).toBe('');
+    expect(ui.colSort).toEqual(['none', 'none']);
+    expect(ui.colIndicator).toEqual(['', '']);
+    expect(prepared.classCycles.largestCycle.breakdown.map(row => row.className))
+      .toEqual(['<b>CycleClass0</b>', '<b>CycleClass1</b>', '<b>CycleClass2</b>']);
+  });
+
+  it('still forgoes any default sort when sorting is disabled', () => {
+    const config = structuredClone(TABLE_CONFIG);
+    config.sorting.enabled = false;
+    const prepared = prepareReportData(synthReport({ classRows: 5 }), {}, config);
+    expect(prepared.classRelationshipsToRemove.tableUi.sortKey).toBe('');
+    expect(prepared.classRelationshipsToRemove.relationships[0].renderedLabel)
+      .toContain('Class0');
   });
 
   it('filters before sorting and paginating, carrying match metadata', () => {
@@ -417,5 +495,34 @@ describe('prepareReportData', () => {
     expect(buttons.length).toBe(6);
     const priorityTh = doc.querySelector('th:has([data-sort-key="priority"])');
     expect(priorityTh.getAttribute('aria-sort')).toBe('ascending');
+  });
+
+  it('initializes the Priority headers with an ascending arrow, signalling sortability', () => {
+    const template = readFileSync(
+      path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+    );
+    const prepared = prepareReportData(synthReport({}));
+    const doc = new JSDOM(renderTemplate(template, prepared)).window.document;
+    for (const tableId of [
+      'class-relationships', 'package-relationships', 'class-cycles-summary'
+    ]) {
+      const table = doc.querySelector(`table[data-rf-table="${tableId}"]`);
+      const th = [...table.querySelectorAll('thead th')]
+        .find(cell => cell.querySelector('[data-sort-key="priority"]'));
+      expect(th.getAttribute('aria-sort')).toBe('ascending');
+      expect(th.querySelector('.rf-sort-indicator').textContent).toBe('▲');
+    }
+    // largest-cycle-breakdown has no Priority column: no default arrow
+    const breakdown = doc.querySelector('table[data-rf-table="largest-cycle-breakdown"]');
+    for (const th of breakdown.querySelectorAll('thead th')) {
+      expect(th.getAttribute('aria-sort')).toBe('none');
+      expect(th.querySelector('.rf-sort-indicator').textContent).toBe('');
+    }
+    // disharmony tables: the Priority-labelled dynamic column carries the arrow
+    const disharmony = doc.querySelector('table[data-rf-table="disharmony-GOD"]');
+    const disharmonyThs = [...disharmony.querySelectorAll('thead th')];
+    expect(disharmonyThs[0].getAttribute('aria-sort')).toBe('none');
+    expect(disharmonyThs[1].getAttribute('aria-sort')).toBe('ascending');
+    expect(disharmonyThs[1].querySelector('.rf-sort-indicator').textContent).toBe('▲');
   });
 });

@@ -413,6 +413,17 @@ function headerCell(utils, tableId, sortKey) {
     .find(th => th.querySelector(`[data-sort-key="${sortKey}"]`));
 }
 
+/**
+ * Finds all header cells in a rendered report table, in column order.
+ * @param {object} utils - React Testing Library render result.
+ * @param {string} tableId - Report table identifier.
+ * @returns {Array<HTMLTableCellElement>} Matching table header cells.
+ */
+function headerCells(utils, tableId) {
+  return [...utils.container.querySelectorAll(
+    `table[data-rf-table="${tableId}"] thead th`)];
+}
+
 async function waitForPage(utils, tableId, statusText) {
   await waitFor(() => {
     expect(paginationNav(utils, tableId)?.textContent ?? '').toContain(statusText);
@@ -462,21 +473,58 @@ describe('enhanced report tables: pagination', () => {
 });
 
 describe('enhanced report tables: sorting', () => {
-  test('sorts ascending on first click, descending on second, updating aria-sort', async () => {
+  test('initializes every Priority column sorted ascending with a visible up arrow', async () => {
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+
+    // Static tables: sorted by priority asc out of the box (priority 1 first),
+    // arrow signalling both the active sort and that headers are sortable.
+    for (const tableId of ['class-relationships', 'package-relationships', 'class-cycles-summary']) {
+      const th = headerCell(utils, tableId, 'priority');
+      expect(th.getAttribute('aria-sort')).toBe('ascending');
+      expect(th.querySelector('.rf-sort-indicator').textContent).toBe('▲');
+    }
+    // Rows are actually sorted: priority 1 first.
+    const priorities = tableRows(utils, 'class-relationships')
+      .map(row => Number(row.children[1].textContent.trim()));
+    expect(priorities[0]).toBe(1);
+    expect(priorities[19]).toBe(20);
+    // Disharmony tables carry the arrow on their Priority-labelled column.
+    const godThs = headerCells(utils, 'disharmony-GOD');
+    const godPriority = godThs.find(th => th.querySelector('button')?.textContent.includes('Priority'));
+    expect(godPriority.getAttribute('aria-sort')).toBe('ascending');
+    expect(godPriority.querySelector('.rf-sort-indicator').textContent).toBe('▲');
+    // Tables without a Priority column keep their original order untouched.
+    for (const th of headerCells(utils, 'largest-cycle-breakdown')) {
+      expect(th.getAttribute('aria-sort')).toBe('none');
+    }
+  }, SLOW_TEST_MS);
+
+  test('clicking the default-sorted Priority column flips it to descending', async () => {
     respondJsonFor(sampleJson);
     const utils = await renderReport();
     const { fireEvent } = await import('@testing-library/react');
 
-    const prioritiesOf = () => tableRows(utils, 'class-relationships')
-      .map(row => Number(row.children[1].textContent.trim()));
-
+    expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort'))
+      .toBe('ascending');
     fireEvent.click(headerCell(utils, 'class-relationships', 'priority').querySelector('button'));
     await waitFor(() => {
-      expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort')).toBe('ascending');
+      expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort'))
+        .toBe('descending');
     });
-    expect(prioritiesOf()).toEqual([...Array(20).keys()].map(i => i + 1));
-    expect(headerCell(utils, 'class-relationships', 'priority')
-      .querySelector('.rf-sort-indicator').textContent).toBe('▲');
+  }, SLOW_TEST_MS);
+
+  test('clicking Priority flips the default to descending, then back to ascending', async () => {
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    const { fireEvent } = await import('@testing-library/react');
+
+    /**
+     * Reads the visible class relationship priorities in their current row order.
+     * @returns {number[]} Priorities on the currently rendered page.
+     */
+    const prioritiesOf = () => tableRows(utils, 'class-relationships')
+      .map(row => Number(row.children[1].textContent.trim()));
 
     fireEvent.click(headerCell(utils, 'class-relationships', 'priority').querySelector('button'));
     await waitFor(() => {
@@ -485,6 +533,14 @@ describe('enhanced report tables: sorting', () => {
     expect(prioritiesOf()).toEqual([...Array(20).keys()].map(i => 47 - i));
     expect(headerCell(utils, 'class-relationships', 'priority')
       .querySelector('.rf-sort-indicator').textContent).toBe('▼');
+
+    fireEvent.click(headerCell(utils, 'class-relationships', 'priority').querySelector('button'));
+    await waitFor(() => {
+      expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort')).toBe('ascending');
+    });
+    expect(prioritiesOf()).toEqual([...Array(20).keys()].map(i => i + 1));
+    expect(headerCell(utils, 'class-relationships', 'priority')
+      .querySelector('.rf-sort-indicator').textContent).toBe('▲');
   }, SLOW_TEST_MS);
 
   test('applies the sort across the whole dataset and keeps it while paging', async () => {
@@ -492,10 +548,6 @@ describe('enhanced report tables: sorting', () => {
     const utils = await renderReport();
     const { fireEvent } = await import('@testing-library/react');
 
-    fireEvent.click(headerCell(utils, 'class-relationships', 'priority').querySelector('button'));
-    await waitFor(() => {
-      expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort')).toBe('ascending');
-    });
     fireEvent.click(headerCell(utils, 'class-relationships', 'priority').querySelector('button'));
     await waitFor(() => {
       expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort')).toBe('descending');
@@ -659,10 +711,6 @@ describe('enhanced report tables: CSV export', () => {
     globalThis.URL.revokeObjectURL = mock(() => {});
 
     // Sort by priority descending so the export order is observable.
-    fireEvent.click(headerCell(utils, 'class-relationships', 'priority').querySelector('button'));
-    await waitFor(() => {
-      expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort')).toBe('ascending');
-    });
     fireEvent.click(headerCell(utils, 'class-relationships', 'priority').querySelector('button'));
     await waitFor(() => {
       expect(headerCell(utils, 'class-relationships', 'priority').getAttribute('aria-sort')).toBe('descending');

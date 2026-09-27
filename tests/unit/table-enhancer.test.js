@@ -2,6 +2,7 @@
 // sort, pagination, export and copy controls onto the rendered report DOM.
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
 import { enhanceTables } from '../../lib/table-enhancer.js';
+import { TABLE_CONFIG } from '../../lib/table-operations.js';
 
 function buildRoot({ rows = 3 } = {}) {
   const host = document.createElement('div');
@@ -115,12 +116,20 @@ describe('search injection', () => {
 });
 
 describe('sortable headers', () => {
-  it('requests ascending sort when a new column is clicked', () => {
+  it('toggles the default-sorted priority column to descending on first click', () => {
+    // The renderer applies the configured default (priority ascending) when no
+    // state exists; toggling must start from that effective sort.
     setup();
     root.querySelector('[data-sort-key="priority"]').click();
     expect(actions).toEqual([
-      { id: 'class-relationships', patch: { sortKey: 'priority', sortDir: 'asc', page: 1 }, meta: undefined }
+      { id: 'class-relationships', patch: { sortKey: 'priority', sortDir: 'desc', page: 1 }, meta: undefined }
     ]);
+  });
+
+  it('sorts ascending when a different column is clicked under the default sort', () => {
+    setup();
+    root.querySelector('[data-sort-key="renderedLabel"]').click();
+    expect(actions[0].patch).toEqual({ sortKey: 'renderedLabel', sortDir: 'asc', page: 1 });
   });
 
   it('toggles to descending when the sorted column is clicked again', () => {
@@ -176,6 +185,49 @@ describe('CSV export', () => {
     // all three rows match nothing about 'class1' except row index 1 -> 1 row
     expect(lines.length).toBe(2);
     expect(lines[1]).toBe('Class1 -> Target1,2,1,2,false,0');
+    delete global.URL.createObjectURL;
+    delete global.URL.revokeObjectURL;
+  });
+
+  it('honours the default priority-ascending sort when no sort state exists', async () => {
+    const blobs = [];
+    global.URL.createObjectURL = mock(blob => { blobs.push(blob); return 'blob:x'; });
+    global.URL.revokeObjectURL = mock(() => {});
+    // Start with out-of-order priorities (3, 1, 2): only a real default sort
+    // can put priority 1 first in the export.
+    const data = demoData();
+    data.classRelationshipsToRemove.relationships[0].priority = 3;
+    data.classRelationshipsToRemove.relationships[1].priority = 1;
+    data.classRelationshipsToRemove.relationships[2].priority = 2;
+    setup({ data }); // no table state: the renderer shows priority asc by default
+    root.querySelector('[data-rf-export="class-relationships"]').click();
+    expect(blobs.length).toBe(1);
+    const lines = (await blobs[0].text()).split('\n');
+    expect(lines.length).toBe(4);
+    expect(lines[1]).toBe('Class1 -> Target1,1,1,2,false,0');
+    expect(lines[2]).toBe('Class2 -> Target2,2,2,4,false,0');
+    expect(lines[3]).toBe('Class0 -> Target0,3,0,0,false,0');
+    delete global.URL.createObjectURL;
+    delete global.URL.revokeObjectURL;
+  });
+
+  it('keeps the report order in the export when sorting is disabled', async () => {
+    const blobs = [];
+    global.URL.createObjectURL = mock(blob => { blobs.push(blob); return 'blob:x'; });
+    global.URL.revokeObjectURL = mock(() => {});
+    const config = structuredClone(TABLE_CONFIG);
+    config.sorting.enabled = false;
+    // Priorities out of order (2, 1, 3): any sort attempt would move Class1
+    // to the top, so an unchanged export proves sorting was skipped.
+    const data = demoData();
+    data.classRelationshipsToRemove.relationships[0].priority = 2;
+    data.classRelationshipsToRemove.relationships[1].priority = 1;
+    setup({ data, config });
+    root.querySelector('[data-rf-export="class-relationships"]').click();
+    expect(blobs.length).toBe(1);
+    const lines = (await blobs[0].text()).split('\n');
+    expect(lines[1]).toBe('Class0 -> Target0,2,0,0,false,0');
+    expect(lines[2]).toBe('Class1 -> Target1,1,1,2,false,0');
     delete global.URL.createObjectURL;
     delete global.URL.revokeObjectURL;
   });

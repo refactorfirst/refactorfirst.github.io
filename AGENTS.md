@@ -141,6 +141,13 @@ coverage there when introducing new markup patterns.
   sortable th buttons with `aria-sort`, pagination below 20+ row tables, and
   click/Enter/Space cell copy with toast feedback. The filter's clear control
   is an × button (accessible name "Clear the … table filter").
+- Tables open sorted by their Priority column ascending (▲, priority 1
+  first), signalling both the report's priority ordering and that headers are
+  sortable (`TABLE_CONFIG.sorting` defaults in lib/table-operations.js);
+  `resolveSortKey` maps the semantic `priority` key onto disharmony tables'
+  dynamic `col<n>` keys via a label match, tables without a Priority column
+  keep the original report ordering, and clicking the default-sorted column
+  flips it to descending (sort toggling starts from the effective default).
 - Horizontal scrollbar: tables wider than the viewport get `overflow-x: auto`
   via the `rf-scroll-x-enabled` class, toggled by `lib/table-enhancer.js`
   after measuring `wrapper.scrollWidth > clientWidth` (re-measured on each
