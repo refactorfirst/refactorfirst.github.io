@@ -155,6 +155,10 @@ test.describe('sorting', () => {
   test('clicking Priority flips the default to descending, then back to ascending', async ({ page }) => {
     const table = page.locator('table[data-rf-table="class-relationships"]');
     const priorityHeader = table.locator('thead th', { has: page.getByRole('button', { name: /Priority/ }) });
+    /**
+     * Reads the visible class relationship priorities in their current row order.
+     * @returns {Promise<number[]>} Priorities on the currently rendered page.
+     */
     const priorities = () => table.locator('tbody tr td:nth-child(2)').allInnerTexts()
       .then(texts => texts.map(Number));
 

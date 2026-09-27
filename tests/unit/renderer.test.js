@@ -189,6 +189,11 @@ describe('templating safety (repository-provided templates are untrusted)', () =
 // template with paginated rows and tableUi metadata (plan Phase 3).
 // ---------------------------------------------------------------------------
 
+/**
+ * Builds relationship fixtures with out-of-order priorities to exercise sorting.
+ * @param {number} count - Number of relationship rows to generate.
+ * @returns {Array<object>} Synthetic relationship rows.
+ */
 function synthRelationships(count) {
   return Array.from({ length: count }, (_, i) => ({
     renderedLabel: `Class${String(count - i)} > Class${i}`,
@@ -201,6 +206,16 @@ function synthRelationships(count) {
   }));
 }
 
+/**
+ * Builds a report fixture with configurable table sizes and unsorted priorities.
+ * @param {object} [options] - Row counts for each report table.
+ * @param {number} [options.classRows=25] - Class relationship count.
+ * @param {number} [options.pkgRows=5] - Package relationship count.
+ * @param {number} [options.disharmonyRows=30] - Disharmony finding count.
+ * @param {number} [options.cycleRows=21] - Cycle summary row count.
+ * @param {number} [options.breakdownRows=3] - Largest-cycle breakdown row count.
+ * @returns {object} Report data for renderer tests.
+ */
 function synthReport({ classRows = 25, pkgRows = 5, disharmonyRows = 30, cycleRows = 21, breakdownRows = 3 } = {}) {
   return {
     project: { name: 'Demo', version: '1.0' },

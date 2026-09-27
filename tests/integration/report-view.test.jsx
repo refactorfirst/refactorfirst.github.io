@@ -413,6 +413,12 @@ function headerCell(utils, tableId, sortKey) {
     .find(th => th.querySelector(`[data-sort-key="${sortKey}"]`));
 }
 
+/**
+ * Finds all header cells in a rendered report table, in column order.
+ * @param {object} utils - React Testing Library render result.
+ * @param {string} tableId - Report table identifier.
+ * @returns {Array<HTMLTableCellElement>} Matching table header cells.
+ */
 function headerCells(utils, tableId) {
   return [...utils.container.querySelectorAll(
     `table[data-rf-table="${tableId}"] thead th`)];
@@ -513,6 +519,10 @@ describe('enhanced report tables: sorting', () => {
     const utils = await renderReport();
     const { fireEvent } = await import('@testing-library/react');
 
+    /**
+     * Reads the visible class relationship priorities in their current row order.
+     * @returns {number[]} Priorities on the currently rendered page.
+     */
     const prioritiesOf = () => tableRows(utils, 'class-relationships')
       .map(row => Number(row.children[1].textContent.trim()));
 
