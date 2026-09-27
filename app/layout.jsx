@@ -37,6 +37,10 @@ export default function RootLayout({ children }) {
         <meta name="referrer" content="strict-origin-when-cross-origin" />
         <meta name="submission-target" content="refactorfirst/refactorfirst.github.io" />
         <meta name="sentry-dsn" content="" />
+        {/* Both palettes are supported; declaring it pre-stylesheet keeps
+            native UI (scrollbars, form controls, the pre-CSS canvas) from
+            flashing light for dark-mode users. */}
+        <meta name="color-scheme" content="light dark" />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/mvp.css@1.15.0/mvp.css"
@@ -44,6 +48,19 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <SiteHeader repositories={repositories} />
+        {/* Theme persistence shim (plans/css-only-dark-mode.md): switching
+            itself is pure CSS (radio + :has() in globals.css); this inline
+            script only restores the saved choice into the radios before
+            first paint and records changes. It sets the checked *property*
+            (never the attribute), so React hydration never sees a mismatch.
+            scripts/fix-csp-hashes.mjs hashes it into the CSP at build time;
+            with JS disabled the toggle still works per page view. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){var r;try{r=localStorage.getItem('rf-theme')}catch(e){}if(r==='light'||r==='dark'){var i=document.getElementById('rf-theme-'+r);if(i)i.checked=true}document.addEventListener('change',function(e){var t=e.target;if(t&&t.name==='rf-theme'){try{localStorage.setItem('rf-theme',t.value)}catch(_){}}})})();"
+          }}
+        />
         {/* Breadcrumb trail under the menu (report/user routes only). Suspense
             is required because useSearchParams deopts otherwise (static
             export; the fallback keeps prerendered HTML crumb-free). */}

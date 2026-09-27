@@ -10,6 +10,15 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
 
 **Key Features:**
 - Search over curated repository listing (`repositories.txt`)
+- Dark mode, 100% CSS switching (`components/theme-toggle.jsx` +
+  `plans/css-only-dark-mode.md`): three radios (light/dark/system) as the
+  last `.menu-bar` child, palettes selected in `app/globals.css` via
+  `:root:has(#rf-theme-…:checked)` + `prefers-color-scheme`; an inline
+  pre-paint script in `app/layout.jsx` only restores/persists the choice
+  (CSP-hashed by the build). Guards: `tests/unit/theme-css.test.js` (the
+  two dark blocks must stay byte-identical; all hex colors live in the
+  palette blocks; dark palette passes the same WCAG AA math as
+  `tests/unit/css-a11y.test.js`)
 - Breadcrumb trail under the menu (`components/breadcrumbs.jsx` +
   `lib/breadcrumbs.js`): mirrors `/user/repo/branch` with linked ancestors;
   the repo crumb never self-links, and ReportView announces the resolved
@@ -130,6 +139,14 @@ coverage there when introducing new markup patterns.
 - **Environment config:** meta tags in `app/layout.jsx` (`submission-target`,
   `sentry-dsn`, `platform-base-url`) plus `NEXT_PUBLIC_HOSTING_ENVIRONMENT`
   / `NEXT_PUBLIC_BASE_PATH` at build time.
+- **Theming:** see the dark-mode bullet above — the radios in
+  `components/theme-toggle.jsx` are the single source of truth; never add
+  JS-driven styling. All colors must be custom properties declared only in
+  the four palette blocks (`:root`, `html:root` mvp overrides, and the two
+  identical dark blocks) in `app/globals.css`; mvp.css light overrides must
+  stay on `html:root` (mvp loads after the bundle). Report-template
+  widgets that hardcode light colors are re-driven from `main#app …`
+  rules there (the mustache stays byte-identical).
 
 ## Report Tables (Enhanced)
 
@@ -178,7 +195,7 @@ coverage there when introducing new markup patterns.
 
 ## Current Test Count
 
-~543 unit/integration + ~202 E2E (~198 across three browsers + 4 basePath leg).
+~584 unit/integration + ~229 E2E (~202 across three browsers + 4 basePath leg + 27 dark mode).
 
 WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
 tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and

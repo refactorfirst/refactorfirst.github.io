@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import MenuToggle from './menu-toggle';
 import MenuSearch from './menu-search';
+import ThemeToggle from './theme-toggle';
 import { withBasePath } from '../lib/base-path';
 
-// Site header: brand logo, hamburger toggle, main navigation links and the
-// type-ahead menu search pinned to the right side of the bar.
+// Site header: brand logo, hamburger toggle, main navigation links, the
+// type-ahead menu search and the three-mode color theme toggle pinned to the
+// right side of the bar.
 export default function SiteHeader({ repositories = [] }) {
   return (
     <>
@@ -32,6 +34,10 @@ export default function SiteHeader({ repositories = [] }) {
             </li>
           </ul>
           <MenuSearch repositories={repositories} />
+          {/* Last flex child: the toggle's right edge sits flush with the
+              menu bar's content edge, mirroring the breadcrumbs' left-edge
+              alignment (plans/css-only-dark-mode.md). */}
+          <ThemeToggle />
         </nav>
       </header>
     </>
