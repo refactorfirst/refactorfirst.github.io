@@ -205,6 +205,43 @@ describe('dark mode cascade structure', () => {
   });
 });
 
+describe('popup close button', () => {
+  it('is a red square re-driven from palette variables', () => {
+    // The template ships a bare × button; the red-square chrome must come
+    // from main#app overrides (1,1,1) so both palettes stay compatible.
+    const close = rules.get('main#app .close-btn');
+    expect(close).toBeTruthy();
+    expect(close).toMatch(/background:\s*var\(--popup-close-bg\)/);
+    expect(close).toMatch(/color:\s*var\(--popup-close-fg\)/);
+
+    // SC 2.5.8: the pointer target is at least 24x24 CSS px.
+    const width = Number(close.match(/width:\s*([\d.]+)rem/)[1]);
+    const height = Number(close.match(/height:\s*([\d.]+)rem/)[1]);
+    expect(width).toBeGreaterThanOrEqual(1.5);
+    expect(height).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it('the focus ring floats off the red square onto the popup surface', () => {
+    // A ring hugging the red fill cannot use --brand-accent (blue on red
+    // is ~1:1); offset it so it contrasts with --card-bg instead.
+    const focus = rules.get('main#app .close-btn:focus-visible');
+    expect(focus).toMatch(/outline-color:\s*var\(--brand-accent\)/);
+    expect(focus).toMatch(/outline-offset:\s*2px/);
+  });
+
+  for (const [name, palette] of [['light', lightPalette], ['dark', darkPalette]]) {
+    it(`the white × keeps AA text contrast on the red square (${name})`, () => {
+      expect(contrastOf(palette, '--popup-close-bg', '--popup-close-fg'))
+        .toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`the red square is perceivable against the popup surface (${name})`, () => {
+      expect(contrastOf(palette, '--card-bg', '--popup-close-bg'))
+        .toBeGreaterThanOrEqual(3);
+    });
+  }
+});
+
 describe('toggle styles', () => {
   it('the toggle renders icon pills over appearance-none radios', () => {
     expect(rules.get('.theme-toggle')).toMatch(/display:\s*flex/);
