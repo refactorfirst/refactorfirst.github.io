@@ -224,15 +224,17 @@ describe('toggle styles', () => {
     expect(height).toBeGreaterThanOrEqual(1.5);
   });
 
-  it('the sub-row under the menu bar mirrors the breadcrumb alignment formula', () => {
-    // Same invariant layout-styles.test.js pins for .breadcrumbs: the row
-    // shares #top-menu's --width-content column and the 0.8rem horizontal
-    // padding insets the toggle to the menu bar's right *content* edge at
-    // every viewport. Flex-end pins the control to that edge.
+  it('the row below the header mirrors the breadcrumb alignment formula', () => {
+    // Same invariant layout-styles.test.js pinned for the standalone
+    // .breadcrumbs bar: the row shares #top-menu's --width-content column
+    // and the 0.8rem horizontal padding insets its children to the menu
+    // bar's content edges at every viewport — the toggle on the right, the
+    // breadcrumb trail on the left (flex-grow), vertically centered.
     const row = rules.get('.theme-bar');
     expect(row).toBeTruthy();
     expect(row).toMatch(/display:\s*flex/);
     expect(row).toMatch(/justify-content:\s*flex-end/);
+    expect(row).toMatch(/align-items:\s*center/);
     expect(row).toMatch(/max-width:\s*var\(--width-content\)/);
     expect(row).toMatch(/box-sizing:\s*border-box/);
     expect(row).toMatch(/margin:\s*0\s+auto/);

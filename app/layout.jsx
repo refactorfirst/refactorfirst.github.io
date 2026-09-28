@@ -49,13 +49,20 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <SiteHeader repositories={repositories} />
-        {/* Color theme toggle on a row below the header: .theme-bar reuses
-            the breadcrumbs' alignment formula (--width-content column,
-            0.8rem horizontal padding, border-box) so the toggle's right
-            edge sits flush with the menu bar's right content edge,
-            mirroring how the breadcrumb trail aligns with the bar's left
-            edge (plans/css-only-dark-mode.md). */}
+        {/* Theme bar row below the header: the breadcrumb trail (report/user
+            routes only) on the left and the color theme toggle on the right,
+            vertically centered on one line. The row reuses the breadcrumbs'
+            alignment formula (--width-content column, 0.8rem horizontal
+            padding, border-box), so the first crumb's glyph sits at the menu
+            bar's left content edge and the toggle at its right content edge
+            — the two edges mirror each other (plans/css-only-dark-mode.md).
+            Suspense is required for useSearchParams (static export; the
+            fallback keeps prerendered HTML crumb-free and the toggle still
+            renders — an empty flex slot). */}
         <div className="theme-bar">
+          <Suspense fallback={null}>
+            <Breadcrumbs />
+          </Suspense>
           <ThemeToggle />
         </div>
         {/* Theme persistence shim (plans/css-only-dark-mode.md): switching
@@ -74,12 +81,6 @@ export default function RootLayout({ children }) {
               "(function(){var r;try{r=localStorage.getItem('rf-theme')}catch(e){}if(r==='light'||r==='dark'){var i=document.getElementById('rf-theme-'+r);if(i)i.checked=true}document.addEventListener('change',function(e){var t=e.target;if(t&&t.name==='rf-theme'){try{localStorage.setItem('rf-theme',t.value)}catch(_){}}})})();"
           }}
         />
-        {/* Breadcrumb trail under the menu (report/user routes only). Suspense
-            is required because useSearchParams deopts otherwise (static
-            export; the fallback keeps prerendered HTML crumb-free). */}
-        <Suspense fallback={null}>
-          <Breadcrumbs />
-        </Suspense>
         <main id="app" tabIndex={-1}>{children}</main>
         <SiteFooter />
         <SentryProvider />

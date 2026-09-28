@@ -11,18 +11,20 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
 **Key Features:**
 - Search over curated repository listing (`repositories.txt`)
 - Dark mode, 100% CSS switching (`components/theme-toggle.jsx` +
-  `plans/css-only-dark-mode.md`): three radios (light/dark/system) on a
-  right-aligned `.theme-bar` row below the header, rendered by
-  `app/layout.jsx` between `<SiteHeader>` and the persistence script (the
-  right-edge mirror of the breadcrumbs' left-edge alignment), palettes
-  selected in `app/globals.css` via `:root:has(#rf-theme-…:checked)` +
+  `plans/css-only-dark-mode.md`): three radios (light/dark/system) on the
+  right side of the `.theme-bar` row below the header, rendered by
+  `app/layout.jsx` — the breadcrumb trail shares the row on report routes
+  (crumbs left, toggle right, vertically centered; the right-edge mirror
+  of the breadcrumbs' left-edge alignment) — palettes selected in
+  `app/globals.css` via `:root:has(#rf-theme-…:checked)` +
   `prefers-color-scheme`; an inline pre-paint script in `app/layout.jsx`
   only restores/persists the choice (CSP-hashed by the build). Guards:
   `tests/unit/theme-css.test.js` (the two dark blocks must stay
   byte-identical; all hex colors live in the palette blocks; dark palette
   passes the same WCAG AA math as `tests/unit/css-a11y.test.js`)
-- Breadcrumb trail under the menu (`components/breadcrumbs.jsx` +
-  `lib/breadcrumbs.js`): mirrors `/user/repo/branch` with linked ancestors;
+- Breadcrumb trail on the theme bar row under the menu
+  (`components/breadcrumbs.jsx` + `lib/breadcrumbs.js`): mirrors
+  `/user/repo/branch` with linked ancestors;
   the repo crumb never self-links, and ReportView announces the resolved
   branch (`rf:branch-resolved` event) so the label matches the loaded report
   (`main` 404 → `master` fallback)

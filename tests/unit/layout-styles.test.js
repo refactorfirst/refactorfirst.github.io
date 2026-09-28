@@ -56,17 +56,18 @@ describe('layout styles (mvp.css section-flex reset)', () => {
     expect(body).toMatch(/margin:\s*0\s+auto\s*;/);
   });
 
-  test('the breadcrumb bar shares the top menu column (#top-menu caps)', () => {
-    // #top-menu is capped by mvp.css at --width-content; reusing the variable
-    // keeps the breadcrumb column and the menu column aligned forever. The
-    // bar must be border-box so its horizontal padding insets crumbs exactly
-    // like .menu-bar's padding insets the brand: with content-box, symmetric
-    // padding on a centered block never moves the content edge.
+  test('the breadcrumb trail stretches inside the theme bar row (menu column)', () => {
+    // The trail now shares the .theme-bar row with the color theme toggle:
+    // the row carries the alignment formula (max-width: var(--width-content)
+    // + 0.8rem horizontal padding, guarded in tests/unit/theme-css.test.js),
+    // so .breadcrumbs must not add its own box-model offsets — it grows to
+    // fill the row's left side, keeping the first crumb's glyph at the menu
+    // column's left content edge while the toggle pins to the right edge.
     const body = rules.get('.breadcrumbs');
     expect(body).toBeTruthy();
-    expect(body).toMatch(/max-width:\s*var\(--width-content\)/);
-    expect(body).toMatch(/box-sizing:\s*border-box\s*;/);
-    expect(body).toMatch(/padding:\s*0\s+0\.8rem\s*;/); // matches .menu-bar
+    expect(body).toMatch(/flex:\s*1\s+1\s+auto/);
+    expect(body).not.toMatch(/max-width/);
+    expect(body).not.toMatch(/padding:\s*0\s+0\.8rem/);
   });
 
   test('crumb links carry no left padding (glyph edge aligns with the brand)', () => {

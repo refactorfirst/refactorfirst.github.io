@@ -3,6 +3,14 @@
 // (radio :has() + prefers-color-scheme), and the inline bootstrap script
 // persists the choice across hard loads.
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const SAMPLE_REPORT = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../fixtures/junit4-report.json'),
+  'utf8'
+);
 
 const LIGHT_BG = 'rgb(255, 255, 255)';
 const DARK_BG = 'rgb(16, 22, 29)';
@@ -118,4 +126,39 @@ test('dark mode keeps rendering dark on report pages after navigation', async ({
   await page.goto('/about/');
   expect(await bodyBackground(page)).toBe(DARK_BG);
   expect(await page.evaluate(() => localStorage.getItem('rf-theme'))).toBe('dark');
+});
+
+test('breadcrumbs and the toggle share one vertically centered row on report pages', async ({ page }) => {
+  test.skip(test.info().project.name !== 'chromium', 'geometry check runs once');
+  // Mock GitHub raw content so the report page never hits the network.
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    if (route.request().url().endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: SAMPLE_REPORT });
+    } else {
+      route.continue();
+    }
+  });
+  await page.goto('/refactorfirst/refactorfirst/master/');
+  await page.waitForLoadState('networkidle');
+  const edges = await page.evaluate(() => {
+    const crumb = document.querySelector('nav[aria-label="Breadcrumb"] ol li a');
+    const crumbBox = crumb.getBoundingClientRect();
+    const toggle = document.querySelector('.theme-toggle').getBoundingClientRect();
+    const bar = document.querySelector('.menu-bar').getBoundingClientRect();
+    return {
+      crumbGlyphLeft: crumbBox.left + parseFloat(getComputedStyle(crumb).paddingLeft),
+      brandLeft: document.querySelector('.brand').getBoundingClientRect().left,
+      sameRow: crumbBox.top < toggle.bottom && toggle.top < crumbBox.bottom,
+      centerDelta: Math.abs((crumbBox.top + crumbBox.bottom) / 2 - (toggle.top + toggle.bottom) / 2),
+      toggleRight: toggle.right,
+      barContentRight: bar.right - parseFloat(getComputedStyle(document.querySelector('.menu-bar')).paddingRight)
+    };
+  });
+  // The first crumb's glyph keeps the menu column's left content edge…
+  expect(Math.abs(edges.crumbGlyphLeft - edges.brandLeft)).toBeLessThanOrEqual(1);
+  // …the toggle keeps the right content edge…
+  expect(Math.abs(edges.toggleRight - edges.barContentRight)).toBeLessThanOrEqual(1);
+  // …and the two share one vertically centered line.
+  expect(edges.sameRow).toBe(true);
+  expect(edges.centerDelta).toBeLessThanOrEqual(1);
 });

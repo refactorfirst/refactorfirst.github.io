@@ -1,16 +1,19 @@
 // Dark mode toggle below the site header: three radio modes (light / dark /
 // system) rendered as icon pills, with the system preference preselected and
-// the whole control on a right-aligned .theme-bar row under the header whose
-// right edge aligns with the menu bar's content edge
+// the whole control on a right-aligned .theme-bar row under the header —
+// the row the breadcrumb trail shares on report routes (crumbs left, toggle
+// right), aligned with the menu bar's content edges
 // (plans/css-only-dark-mode.md).
 import { describe, test, expect } from 'bun:test';
 import { mock } from 'bun:test';
 
 import { sharedNextNavigationMock } from './next-navigation-stub';
 
+let currentPath = '/';
+let currentSearch = '';
 mock.module('next/navigation', () => sharedNextNavigationMock({
-  usePathname: () => '/',
-  useSearchParams: () => new URLSearchParams()
+  usePathname: () => currentPath,
+  useSearchParams: () => new URLSearchParams(currentSearch)
 }));
 
 import { render, installRtlDom, within } from './rtl';
@@ -81,5 +84,28 @@ describe('Root layout placement', () => {
     // saved choice pre-paint.
     const shim = html.indexOf("localStorage.getItem('rf-theme')");
     expect(shim).toBeGreaterThan(themeBar);
+  });
+
+  test('on report routes the breadcrumb trail shares the toggle row, to its left', () => {
+    currentPath = '/alice/some-repo/master';
+    currentSearch = '';
+    try {
+      const html = renderToStaticMarkup(_jsx(RootLayout, { children: null }));
+      const themeBar = html.indexOf('class="theme-bar"');
+      const main = html.indexOf('<main');
+      const rowHtml = html.slice(themeBar, main);
+      const crumbs = rowHtml.indexOf('aria-label="Breadcrumb"');
+      const toggle = rowHtml.indexOf('rf-theme-light');
+      expect(crumbs, 'breadcrumb nav missing from the theme bar').toBeGreaterThan(-1);
+      expect(toggle).toBeGreaterThan(-1);
+      // DOM order mirrors the flex row: crumbs first (left), toggle last
+      // (right); the row's flex-grow keeps them on one line.
+      expect(crumbs).toBeLessThan(toggle);
+      // The trail no longer renders outside the row.
+      expect(html.slice(0, themeBar)).not.toContain('aria-label="Breadcrumb"');
+      expect(html.slice(main)).not.toContain('aria-label="Breadcrumb"');
+    } finally {
+      currentPath = '/';
+    }
   });
 });

@@ -21,7 +21,9 @@ renders three radios named `rf-theme` (`rf-theme-light`, `rf-theme-dark`,
 icon pill (inline SVG: sun / moon / monitor). The toggle sits on the
 **`.theme-bar` row below `#top-menu`**, rendered by `app/layout.jsx` right
 after `<SiteHeader />` (and before the persistence shim, which needs the
-radios parsed), right-aligned with the menu bar's content edge.
+radios parsed); on report routes the breadcrumb trail shares the row, to the
+toggle's left, both vertically centered, the toggle pinned to the menu bar's
+right content edge.
 
 Why radios: "one of three modes" is exactly a radio group, the checked state
 is queryable from CSS (`:has(#id:checked)`), and switching requires zero JS.
@@ -124,15 +126,16 @@ practices" and "only CSS" conflict here, so the plan resolves it as:
 ### Alignment with the menu
 
 The toggle lives on a `.theme-bar` row rendered by `app/layout.jsx` right
-after `<SiteHeader />`, below the header block, pinned right via
-`justify-content: flex-end`. The row reuses the breadcrumbs' exact alignment
-formula — `max-width: var(--width-content)`, `box-sizing: border-box`,
-`margin: 0 auto`, `padding: 0.4rem 0.8rem 0.45rem` (see
-`tests/unit/layout-styles.test.js` for the breadcrumb invariant this mirrors)
-— so its right content edge is the menu bar's right content edge at every
-viewport, with no positioning tricks or magic numbers; the formula works
-identically at mobile widths, where the row simply follows the wrapped menu
-bar.
+after `<SiteHeader />`, below the header block. The row owns the alignment
+formula the standalone breadcrumb bar used to carry — `max-width:
+var(--width-content)`, `box-sizing: border-box`, `margin: 0 auto`,
+`padding: 0.4rem 0.8rem 0.45rem` — with `align-items: center` so the
+breadcrumb trail (report/user routes; `flex: 1 1 auto`, no box-model offsets
+of its own) sits on the line's left at the menu bar's left content edge,
+vertically centered against the toggle pinned to the right content edge
+(`justify-content: flex-end` keeps the toggle right on crumb-less pages).
+No positioning tricks or magic numbers; the formula works identically at
+mobile widths, where the row simply follows the wrapped menu bar.
 
 ### Toggle UI / a11y
 
