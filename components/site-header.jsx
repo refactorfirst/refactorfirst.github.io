@@ -4,7 +4,8 @@ import MenuSearch from './menu-search';
 import { withBasePath } from '../lib/base-path';
 
 // Site header: brand logo, hamburger toggle, main navigation links and the
-// type-ahead menu search pinned to the right side of the bar.
+// type-ahead menu search. The color theme toggle lives below the header in
+// app/layout.jsx (.theme-bar row).
 export default function SiteHeader({ repositories = [] }) {
   return (
     <>

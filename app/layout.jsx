@@ -3,6 +3,7 @@ import SiteHeader from '../components/site-header';
 import SiteFooter from '../components/site-footer';
 import Breadcrumbs from '../components/breadcrumbs';
 import SentryProvider from '../components/sentry-provider';
+import ThemeToggle from '../components/theme-toggle';
 import { loadListedRepositories } from '../lib/repositories.js';
 import './globals.css';
 
@@ -37,6 +38,10 @@ export default function RootLayout({ children }) {
         <meta name="referrer" content="strict-origin-when-cross-origin" />
         <meta name="submission-target" content="refactorfirst/refactorfirst.github.io" />
         <meta name="sentry-dsn" content="" />
+        {/* Both palettes are supported; declaring it pre-stylesheet keeps
+            native UI (scrollbars, form controls, the pre-CSS canvas) from
+            flashing light for dark-mode users. */}
+        <meta name="color-scheme" content="light dark" />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/mvp.css@1.15.0/mvp.css"
@@ -44,12 +49,38 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <SiteHeader repositories={repositories} />
-        {/* Breadcrumb trail under the menu (report/user routes only). Suspense
-            is required because useSearchParams deopts otherwise (static
-            export; the fallback keeps prerendered HTML crumb-free). */}
-        <Suspense fallback={null}>
-          <Breadcrumbs />
-        </Suspense>
+        {/* Theme bar row below the header: the breadcrumb trail (report/user
+            routes only) on the left and the color theme toggle on the right,
+            vertically centered on one line. The row reuses the breadcrumbs'
+            alignment formula (--width-content column, 0.8rem horizontal
+            padding, border-box), so the first crumb's glyph sits at the menu
+            bar's left content edge and the toggle at its right content edge
+            — the two edges mirror each other (plans/css-only-dark-mode.md).
+            Suspense is required for useSearchParams (static export; the
+            fallback keeps prerendered HTML crumb-free and the toggle still
+            renders — an empty flex slot). */}
+        <div className="theme-bar">
+          <Suspense fallback={null}>
+            <Breadcrumbs />
+          </Suspense>
+          <ThemeToggle />
+        </div>
+        {/* Theme persistence shim (plans/css-only-dark-mode.md): switching
+            itself is pure CSS (radio + :has() in globals.css); this inline
+            script only restores the saved choice into the radios before
+            first paint and records changes. It must stay AFTER the
+            .theme-bar markup (the radios have to be parsed before it can
+            check them) and before any meaningful page content. It sets the
+            checked *property* (never the attribute), so React hydration
+            never sees a mismatch. scripts/fix-csp-hashes.mjs hashes it into
+            the CSP at build time; with JS disabled the toggle still works
+            per page view. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){var r;try{r=localStorage.getItem('rf-theme')}catch(e){}if(r==='light'||r==='dark'){var i=document.getElementById('rf-theme-'+r);if(i)i.checked=true}document.addEventListener('change',function(e){var t=e.target;if(t&&t.name==='rf-theme'){try{localStorage.setItem('rf-theme',t.value)}catch(_){}}})})();"
+          }}
+        />
         <main id="app" tabIndex={-1}>{children}</main>
         <SiteFooter />
         <SentryProvider />
