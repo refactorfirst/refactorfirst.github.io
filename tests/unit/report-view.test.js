@@ -10,10 +10,51 @@ import {
   bindSectionNavLinks,
   scrollToSectionHash,
   enhanceReport,
+  resolveLegendTextColor,
+  bindThemeChartRedraw,
   statefulElementIds,
   stashStatefulDom,
   graftStatefulDom
 } from '../../lib/report-view.js';
+
+// Theme radios as rendered by components/theme-toggle.jsx in app/layout.jsx.
+// The palette switch itself is pure CSS; these tests only pin what the
+// canvas-drawn chart legend resolves from the radio state.
+function installThemeRadios(mode, osPrefersDark) {
+  document.body.innerHTML = `
+    <input type="radio" name="rf-theme" id="rf-theme-light" ${mode === 'light' ? 'checked' : ''}>
+    <input type="radio" name="rf-theme" id="rf-theme-dark" ${mode === 'dark' ? 'checked' : ''}>
+    <input type="radio" name="rf-theme" id="rf-theme-system" ${mode === 'system' ? 'checked' : ''}>
+    <canvas id="chart_GOD"></canvas>`;
+  if (osPrefersDark === undefined) {
+    delete window.matchMedia; // jsdom default: no media queries at all
+  } else {
+    window.matchMedia = () => ({ matches: osPrefersDark, addEventListener() {} });
+  }
+}
+
+// WCAG relative luminance + contrast ratio (www.w3.org/TR/WCAG22/#dfn-contrast-ratio).
+function relLuminance(r, g, b) {
+  const lin = c => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function contrastAgainst(hex, background) {
+  const channels = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+  if (!channels) return 0;
+  const [r, g, b] = [1, 2, 3].map(i => parseInt(channels[i], 16));
+  const fg = relLuminance(r, g, b);
+  const bg = relLuminance(...background);
+  return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+}
+
+// --bg-color per palette in app/globals.css: the transparent chart canvas
+// sits directly on the page background.
+const LIGHT_BG = [0xff, 0xff, 0xff];
+const DARK_BG = [0x10, 0x16, 0x1d];
 
 describe('exposeGraphDots', () => {
   it('exposes class, package and cycle DOT strings as window globals', () => {
@@ -63,38 +104,164 @@ describe('initBubbleChart', () => {
     expect(config.options.scales.y.title.text).toBe('Relative churn (impact)');
   });
 
-  it('renders legend labels in a gray readable in light and dark mode', () => {
-    const created = [];
-    window.Chart = function (ctx, config) { created.push(config); };
+  it('renders legend labels in a theme-resolved color with >= 4.5:1 contrast', () => {
+    for (const [mode, background] of [['light', LIGHT_BG], ['dark', DARK_BG]]) {
+      installThemeRadios(mode);
+      const created = [];
+      window.Chart = function (ctx, config) { created.push(config); };
+      const canvas = document.getElementById('chart_GOD');
+      initBubbleChart(canvas, 'God Classes', { bubbles: [] });
+      const items = created[0].options.plugins.legend.labels.generateLabels();
+      expect(items.length).toBeGreaterThan(0);
+
+      // Chart.js draws each legend item's text from item.fontColor — with a
+      // custom generateLabels, options.plugins.legend.labels.color is ignored.
+      const legendColor = items[0].fontColor;
+      items.forEach(item => expect(item.fontColor).toBe(legendColor));
+      expect(legendColor).toBe(resolveLegendTextColor());
+      expect(contrastAgainst(legendColor, background)).toBeGreaterThanOrEqual(4.5);
+    }
+    delete window.Chart;
+  });
+});
+
+describe('resolveLegendTextColor', () => {
+  afterEach(() => { delete window.matchMedia; });
+
+  it('resolves a color that passes 4.5:1 on the light background', () => {
+    installThemeRadios('light');
+    expect(contrastAgainst(resolveLegendTextColor(), LIGHT_BG)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('resolves a color that passes 4.5:1 on the dark background', () => {
+    installThemeRadios('dark');
+    expect(contrastAgainst(resolveLegendTextColor(), DARK_BG)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('switches color per theme instead of one compromise gray', () => {
+    installThemeRadios('light');
+    const light = resolveLegendTextColor();
+    installThemeRadios('dark');
+    const dark = resolveLegendTextColor();
+    expect(light).not.toBe(dark);
+  });
+
+  it('follows prefers-color-scheme while the system radio is checked', () => {
+    installThemeRadios('system', true);
+    const osDark = resolveLegendTextColor();
+    installThemeRadios('dark');
+    expect(resolveLegendTextColor()).toBe(osDark);
+
+    installThemeRadios('system', false);
+    const osLight = resolveLegendTextColor();
+    installThemeRadios('light');
+    expect(resolveLegendTextColor()).toBe(osLight);
+  });
+
+  it('falls back to the light color when media queries are unavailable', () => {
+    installThemeRadios('system'); // no window.matchMedia (jsdom default)
+    const color = resolveLegendTextColor();
+    installThemeRadios('light');
+    expect(resolveLegendTextColor()).toBe(color);
+  });
+});
+
+describe('theme-change chart redraw', () => {
+  afterEach(() => {
+    delete window.Chart;
+    delete window.matchMedia;
+  });
+
+  // The document (and thus the idempotent binding guard) is shared across
+  // test files in a full run, so earlier files may already have bound the
+  // radio listener. Reset the guard to force a fresh binding here — that
+  // attaches the prefers-color-scheme listener this test captures. Later
+  // tests use relative counts so extra stacked listeners stay harmless.
+  it('redraws charts when the OS preference flips while system is checked', () => {
+    installThemeRadios('system', false);
+    let mediaListener = null;
+    window.matchMedia = () => ({
+      matches: false,
+      addEventListener(type, listener) { mediaListener = listener; }
+    });
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    expect(mediaListener).not.toBeNull();
+
+    const updates = [];
+    window.Chart = function () { return { update: () => updates.push('redraw') }; };
+    initBubbleChart(document.getElementById('chart_GOD'), 'God Classes', { bubbles: [] });
+    expect(updates.length).toBe(0);
+    mediaListener();
+    expect(updates.length).toBeGreaterThan(0);
+  });
+
+  it('redraws live charts when a theme radio changes', () => {
+    installThemeRadios('system');
+    bindThemeChartRedraw(); // no-op: already bound above (and possibly earlier files)
+    const updates = [];
+    window.Chart = function () { return { update: () => updates.push('redraw') }; };
+    initBubbleChart(document.getElementById('chart_GOD'), 'God Classes', { bubbles: [] });
+    expect(updates.length).toBe(0);
+
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(updates.length).toBeGreaterThan(0);
+  });
+
+  it('replaces the previous chart when the same canvas is re-initialized', () => {
+    installThemeRadios('light');
+    const instances = [];
+    window.Chart = function () {
+      const chart = { destroyed: false, update() {} };
+      chart.destroy = () => { chart.destroyed = true; };
+      instances.push(chart);
+      return chart;
+    };
     const canvas = document.getElementById('chart_GOD');
     initBubbleChart(canvas, 'God Classes', { bubbles: [] });
-    const items = created[0].options.plugins.legend.labels.generateLabels();
-    expect(items.length).toBeGreaterThan(0);
+    initBubbleChart(canvas, 'God Classes', { bubbles: [] });
+    expect(instances.length).toBe(2);
+    expect(instances[0].destroyed).toBe(true);
+    expect(instances[1].destroyed).toBe(false);
+  });
 
-    // One gray for both palettes: the chart canvas is transparent, so legend
-    // text sits on --bg-color (#ffffff light / #10161d dark). No single gray
-    // can pass 4.5:1 on both, so the guard pins the balanced midpoint.
-    // Chart.js draws each legend item's text from item.fontColor — with a
-    // custom generateLabels, options.plugins.legend.labels.color is ignored.
-    const legendColor = items[0].fontColor;
-    items.forEach(item => expect(item.fontColor).toBe(legendColor));
-    const channels = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(legendColor || '');
-    expect(channels).not.toBeNull();
-    const [r, g, b] = [1, 2, 3].map(i => parseInt(channels[i], 16));
-    expect(r).toBe(g);
-    expect(g).toBe(b); // neutral gray, no palette bias
-
-    const luminance = (rs, gs, bs) => {
-      const lin = c => {
-        const s = c / 255;
-        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-      };
-      return 0.2126 * lin(rs) + 0.7152 * lin(gs) + 0.0722 * lin(bs);
+  it('prunes charts whose canvas left the DOM and skips them on redraw', () => {
+    installThemeRadios('system');
+    bindThemeChartRedraw();
+    document.body.innerHTML = `
+      <input type="radio" name="rf-theme" id="rf-theme-light">
+      <input type="radio" name="rf-theme" id="rf-theme-dark" checked>
+      <input type="radio" name="rf-theme" id="rf-theme-system">
+      <canvas id="chart_GOD"></canvas>
+      <canvas id="chart_BRAIN"></canvas>`;
+    let lastChart = null;
+    window.Chart = function () {
+      const updates = [];
+      lastChart = { updates, update: () => updates.push('redraw') };
+      return lastChart;
     };
-    const gray = luminance(r, g, b);
-    const contrast = lum => (Math.max(lum, gray) + 0.05) / (Math.min(lum, gray) + 0.05);
-    expect(contrast(luminance(0xff, 0xff, 0xff))).toBeGreaterThanOrEqual(4);
-    expect(contrast(luminance(0x10, 0x16, 0x1d))).toBeGreaterThanOrEqual(4);
+    initBubbleChart(document.getElementById('chart_GOD'), 'God Classes', { bubbles: [] });
+    const god = lastChart;
+    initBubbleChart(document.getElementById('chart_BRAIN'), 'Brain Methods', { bubbles: [] });
+    const brain = lastChart;
+
+    const trigger = () => {
+      const radio = document.getElementById('rf-theme-light');
+      radio.checked = true;
+      radio.dispatchEvent(new window.Event('change', { bubbles: true }));
+    };
+    trigger();
+    const godRedraws = god.updates.length;
+    const brainRedraws = brain.updates.length;
+    expect(godRedraws).toBeGreaterThan(0);
+    expect(brainRedraws).toBe(godRedraws); // both live: redrawn together
+
+    document.getElementById('chart_BRAIN').remove();
+    trigger();
+    expect(god.updates.length).toBeGreaterThan(godRedraws); // still live
+    expect(brain.updates.length).toBe(brainRedraws); // stale entry pruned, not redrawn
   });
 });
 
@@ -485,6 +652,9 @@ describe('enhanceReport', () => {
     expect(typeof window.hidePopup).toBe('function');
     expect(typeof window.createForceGraph).toBe('function');
     expect(created.length).toBe(1);
+    // Charts must redraw when the theme radios change (legend contrast);
+    // binding is idempotent across enhanceReport runs.
+    expect(document.documentElement.hasAttribute('data-rf-theme-redraw-bound')).toBe(true);
     delete window.Chart;
   });
 
