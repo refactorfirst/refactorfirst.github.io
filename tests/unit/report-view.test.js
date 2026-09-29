@@ -57,6 +57,9 @@ function contrastAgainst(hex, background) {
 const LIGHT_BG = [0xff, 0xff, 0xff];
 const DARK_BG = [0x10, 0x16, 0x1d];
 
+// U+27F6 LONG RIGHTWARDS ARROW: suffix for every chart axis title.
+const LONG_ARROW = '\u27F6';
+
 describe('exposeGraphDots', () => {
   it('exposes class, package and cycle DOT strings as window globals', () => {
     exposeGraphDots({
@@ -101,8 +104,42 @@ describe('initBubbleChart', () => {
     expect(config.type).toBe('bubble');
     expect(config.data.datasets[0].data[0].x).toBe(1);
     expect(config.data.datasets[0].data[0].raw.label).toBe('Foo.java');
-    expect(config.options.scales.x.title.text).toBe('Effort to refactor');
-    expect(config.options.scales.y.title.text).toBe('Relative churn (impact)');
+    expect(config.options.scales.x.title.text).toBe(`Effort to refactor ${LONG_ARROW}`);
+    expect(config.options.scales.y.title.text).toBe(`Relative churn (impact) ${LONG_ARROW}`);
+  });
+
+  it('suffixes fallback axis titles with the long arrow too', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', { bubbles: [] });
+    expect(created[0].options.scales.x.title.text)
+      .toBe(`Effort to refactor ${LONG_ARROW}`);
+    expect(created[0].options.scales.y.title.text)
+      .toBe(`Relative churn (impact) ${LONG_ARROW}`);
+  });
+
+  it('renders axis titles in a theme-resolved color with >= 4.5:1 contrast', () => {
+    for (const [mode, background] of [['light', LIGHT_BG], ['dark', DARK_BG]]) {
+      installThemeRadios(mode);
+      const created = [];
+      window.Chart = function (ctx, config) { created.push(config); };
+      const canvas = document.getElementById('chart_GOD');
+      initBubbleChart(canvas, 'God Classes', {
+        xaxisLabel: 'Effort to refactor',
+        yaxisLabel: 'Relative churn (impact)',
+        bubbles: []
+      });
+      for (const axisName of ['x', 'y']) {
+        const title = created[0].options.scales[axisName].title;
+        // Scriptable option: re-resolved on every chart.update(), so the
+        // theme-change redraw keeps the axis color in sync like the legend.
+        expect(title.color).toBeTypeOf('function');
+        expect(title.color()).toBe(resolveLegendTextColor());
+        expect(contrastAgainst(title.color(), background)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    delete window.Chart;
   });
 
   it('renders legend labels in a theme-resolved color with >= 4.5:1 contrast', () => {
