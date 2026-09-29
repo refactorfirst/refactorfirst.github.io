@@ -62,6 +62,40 @@ describe('initBubbleChart', () => {
     expect(config.options.scales.x.title.text).toBe('Effort to refactor');
     expect(config.options.scales.y.title.text).toBe('Relative churn (impact)');
   });
+
+  it('renders legend labels in a gray readable in light and dark mode', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', { bubbles: [] });
+    const items = created[0].options.plugins.legend.labels.generateLabels();
+    expect(items.length).toBeGreaterThan(0);
+
+    // One gray for both palettes: the chart canvas is transparent, so legend
+    // text sits on --bg-color (#ffffff light / #10161d dark). No single gray
+    // can pass 4.5:1 on both, so the guard pins the balanced midpoint.
+    // Chart.js draws each legend item's text from item.fontColor — with a
+    // custom generateLabels, options.plugins.legend.labels.color is ignored.
+    const legendColor = items[0].fontColor;
+    items.forEach(item => expect(item.fontColor).toBe(legendColor));
+    const channels = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(legendColor || '');
+    expect(channels).not.toBeNull();
+    const [r, g, b] = [1, 2, 3].map(i => parseInt(channels[i], 16));
+    expect(r).toBe(g);
+    expect(g).toBe(b); // neutral gray, no palette bias
+
+    const luminance = (rs, gs, bs) => {
+      const lin = c => {
+        const s = c / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * lin(rs) + 0.7152 * lin(gs) + 0.0722 * lin(bs);
+    };
+    const gray = luminance(r, g, b);
+    const contrast = lum => (Math.max(lum, gray) + 0.05) / (Math.min(lum, gray) + 0.05);
+    expect(contrast(luminance(0xff, 0xff, 0xff))).toBeGreaterThanOrEqual(4);
+    expect(contrast(luminance(0x10, 0x16, 0x1d))).toBeGreaterThanOrEqual(4);
+  });
 });
 
 describe('initDisharmonyCharts', () => {
