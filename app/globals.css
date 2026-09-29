@@ -836,3 +836,76 @@ main#app .rf-data-table td[data-rf-copy]:focus-visible {
      --surface-color, below the 3:1 of SC 2.4.11. */
   outline-color: var(--brand-accent);
 }
+
+main#app .rf-table-search {
+  /* Anchors the overlaid clear control inside the input's right edge. */
+  position: relative;
+}
+
+main#app .rf-table-search .rf-search-label {
+  /* Screen-reader-only: the visible prompt is the input's placeholder. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+main#app .rf-table-search input[type="search"] {
+  /* mvp.css gives inputs a pale border that reads near-invisible on the
+     white page (under 3:1, SC 1.4.11). --muted-color is a full palette
+     role, so the border stays dark in light mode and bright on the dark
+     background. Room for the overlaid ×. */
+  border: 1px solid var(--muted-color);
+  padding-right: 1.9rem;
+  /* mvp.css also endows inputs with margin-bottom: 1rem; the flex slot
+     would grow by that margin, so the overlaid ×'s "50%" anchor point
+     would drop below the input and strand the button at its bottom edge.
+     The slot must hug the input exactly. */
+  margin: 0;
+}
+
+/* We inject our own themed × (palette colours, reveal/clear logic);
+   WebKit's native search-cancel button would otherwise sit beside it. */
+main#app .rf-table-search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+main#app .rf-table-search .rf-search-clear {
+  /* Overlaid on the input's right edge (the enhancer reveals it via the
+     `hidden` attribute only while the box holds a term). 1.6rem clears the
+     24px pointer-target minimum (SC 2.5.8) and fits the input's height. */
+  position: absolute;
+  top: 50%;
+  right: 0.1rem;
+  transform: translateY(-50%);
+  /* mvp.css gives buttons a ~0.5rem top margin, which for an absolutely
+     positioned element shifts the box down off the input's centre line. */
+  margin: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-color);
+}
+
+/* The flex centering must ride on :not([hidden]) — a plain `display` here
+   would override the UA's [hidden] { display: none } and keep the empty
+   state's × on screen. */
+main#app .rf-table-search .rf-search-clear:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+main#app .rf-table-search .rf-search-clear:focus-visible {
+  outline-color: var(--brand-accent);
+  outline-offset: -2px;
+}

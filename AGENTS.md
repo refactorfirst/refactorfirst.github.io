@@ -164,8 +164,11 @@ coverage there when introducing new markup patterns.
   the `.rf-table-block` wrapper shrink-wraps the table and the toolbar uses
   `contain: inline-size` so controls align with the table's right edge),
   sortable th buttons with `aria-sort`, pagination below 20+ row tables, and
-  click/Enter/Space cell copy with toast feedback. The filter's clear control
-  is an × button (accessible name "Clear the … table filter").
+  click/Enter/Space cell copy with toast feedback. The filter prompt lives in
+  the input's placeholder ("Filter table...", with a screen-reader-only
+  label); the clear control is an × button overlaid on the input's right
+  edge (accessible name "Clear the … table filter"), revealed only while the
+  box holds a term and invoked by click or Escape while the box has focus.
 - Tables open sorted by their Priority column ascending (▲, priority 1
   first), signalling both the report's priority ordering and that headers are
   sortable (`TABLE_CONFIG.sorting` defaults in lib/table-operations.js);

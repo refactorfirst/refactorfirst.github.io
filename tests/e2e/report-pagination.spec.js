@@ -224,15 +224,50 @@ test.describe('search and filter', () => {
   });
 
   test('the "x" button clears the filter and restores the unfiltered table', async ({ page }) => {
+    const search = page.locator('input[data-rf-search="class-relationships"]');
+    await search.fill('target7');
     const clear = page.getByRole('button', { name: /clear.*filter/i }).first();
+    // The clear control appears only once the box holds a term.
+    await expect(clear).toBeVisible();
     await expect(clear).toHaveText('×');
-    await page.locator('input[data-rf-search="class-relationships"]').fill('target7');
     const match = page.locator('[data-rf-match="class-relationships"]');
     await expect(match).toContainText('rows match');
+    // …then measure on the settled, post-re-render DOM. Both boxes are read
+    // in a single evaluate: sequential boundingBox() calls straddle the
+    // scroll the filter-triggered re-render provokes and differ by it.
+    // It must be vertically centred INSIDE the input (regression: mvp.css's
+    // input margin once inflated the slot and parked it at the bottom edge).
+    const geometry = await page.evaluate(() => {
+      const inputEl = document.querySelector('input[data-rf-search="class-relationships"]');
+      const clearEl = inputEl.closest('.rf-table-search').querySelector('.rf-search-clear');
+      const box = inputEl.getBoundingClientRect();
+      const clearBox = clearEl.getBoundingClientRect();
+      return { box, clearBox };
+    });
+    const { box, clearBox } = geometry;
+    expect(Math.abs((clearBox.y + clearBox.height / 2) - (box.y + box.height / 2))).toBeLessThan(2);
+    expect(clearBox.x + clearBox.width).toBeLessThanOrEqual(box.x + box.width);
+    expect(clearBox.y + clearBox.height).toBeLessThanOrEqual(box.y + box.height);
     await clear.click();
     await expect(page.locator('[data-rf-pagination="class-relationships"]'))
       .toContainText('Page 1 of 3');
     await expect(match).toHaveText('');
+    await expect(clear).toBeHidden();
+  });
+
+  test('Escape clears the filter while the search box has focus', async ({ page }) => {
+    const search = page.locator('input[data-rf-search="class-relationships"]');
+    await search.fill('target7');
+    await expect(page.locator('[data-rf-match="class-relationships"]')).toContainText('rows match');
+    await search.press('Escape');
+    await expect(page.locator('[data-rf-match="class-relationships"]')).toHaveText('');
+    await expect(page.locator('[data-rf-pagination="class-relationships"]'))
+      .toContainText('Page 1 of 3');
+  });
+
+  test('the placeholder prompt sits inside the search box', async ({ page }) => {
+    const search = page.locator('input[data-rf-search="class-relationships"]');
+    await expect(search).toHaveAttribute('placeholder', 'Filter table...');
   });
 
   test('search results stay sorted when a sort order is active', async ({ page }) => {
