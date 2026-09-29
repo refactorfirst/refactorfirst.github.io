@@ -197,6 +197,50 @@ describe('theme-change chart redraw', () => {
     expect(updates.length).toBeGreaterThan(0);
   });
 
+  it('prefers addEventListener when the MediaQueryList supports both listener APIs', () => {
+    installThemeRadios('system');
+    const bound = [];
+    window.matchMedia = () => ({
+      matches: false,
+      addEventListener(type, listener) { bound.push(['modern', type, listener]); },
+      addListener(listener) { bound.push(['legacy', listener]); }
+    });
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+
+    expect(bound).toHaveLength(1);
+    expect(bound[0][0]).toBe('modern');
+    expect(bound[0][1]).toBe('change');
+    expect(bound[0][2]).toBeTypeOf('function');
+  });
+
+  it('falls back to addListener when the MediaQueryList lacks addEventListener', () => {
+    installThemeRadios('system');
+    let legacyListener = null;
+    window.matchMedia = () => ({
+      matches: false,
+      addListener(listener) { legacyListener = listener; }
+    });
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    expect(legacyListener).not.toBeNull();
+
+    // The legacy subscription must drive the same redraw callback.
+    const updates = [];
+    window.Chart = function () { return { update: () => updates.push('redraw') }; };
+    initBubbleChart(document.getElementById('chart_GOD'), 'God Classes', { bubbles: [] });
+    expect(updates.length).toBe(0);
+    legacyListener();
+    expect(updates.length).toBeGreaterThan(0);
+  });
+
+  it('keeps working when the MediaQueryList exposes neither listener API', () => {
+    installThemeRadios('system');
+    window.matchMedia = () => ({ matches: false });
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    expect(() => bindThemeChartRedraw()).not.toThrow();
+  });
+
   it('redraws live charts when a theme radio changes', () => {
     installThemeRadios('system');
     bindThemeChartRedraw(); // no-op: already bound above (and possibly earlier files)
