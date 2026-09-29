@@ -18,7 +18,11 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
   of the breadcrumbs' left-edge alignment) — palettes selected in
   `app/globals.css` via `:root:has(#rf-theme-…:checked)` +
   `prefers-color-scheme`; an inline pre-paint script in `app/layout.jsx`
-  only restores/persists the choice (CSP-hashed by the build). Guards:
+   only restores/persists the choice (CSP-hashed by the build). Chart
+  legends are canvas-drawn, so they can't follow the CSS switch:
+  `resolveLegendTextColor`/`bindThemeChartRedraw` in `lib/report-view.js`
+  resolve a per-theme legend color (>= 4.5:1 on each `--bg-color`) and
+  redraw live charts on radio/`prefers-color-scheme` changes. Guards:
   `tests/unit/theme-css.test.js` (the two dark blocks must stay
   byte-identical; all hex colors live in the palette blocks; dark palette
   passes the same WCAG AA math as `tests/unit/css-a11y.test.js`)

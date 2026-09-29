@@ -20,7 +20,8 @@ import {
   enhanceReport,
   bindPopupHandlers,
   stashStatefulDom,
-  graftStatefulDom
+  graftStatefulDom,
+  destroyBubbleCharts
 } from '../lib/report-view';
 import { enhanceTables } from '../lib/table-enhancer';
 import { renderErrorPage, logError } from '../lib/error-handler';
@@ -101,6 +102,12 @@ export default function ReportView({
     const controller = new AbortController();
     const container = containerRef.current;
 
+    // Every fetch cycle replaces the report markup — loading placeholder,
+    // then the fresh render — so release the previous cycle's Chart.js
+    // instances before any of that happens; enhanceReport builds new charts
+    // for the new canvases once the payload arrives.
+    destroyBubbleCharts();
+
     /** Fetches the trusted template and the selected repository report. */
     async function run() {
       setPayload(null);
@@ -141,7 +148,13 @@ export default function ReportView({
     }
 
     run();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      // Unmounting (or a dependency change) throws the report's canvases
+      // away with the markup; release their charts alongside the aborted
+      // request instead of leaking live instances on dead canvases.
+      destroyBubbleCharts();
+    };
   }, [username, repository, branch, environmentProp, platformBaseUrlProp, attempt]);
 
   // Render effect: re-renders the report whenever the payload arrives or the
