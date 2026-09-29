@@ -694,9 +694,10 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
     hideAllPopups();
   });
 
-  test('a payload change destroys the previous charts before the markup swap and re-creates them', async () => {
+  test('a payload change destroys the previous charts before the loading markup and re-creates them', async () => {
     // Every Chart.js construction/teardown, in order, so the test can pin
-    // that the old instances are released before the replacement render
+    // that the old instances are released before the fetch effect clears
+    // the payload (loading placeholder) and before the replacement render
     // builds fresh charts on the new canvases.
     const events = [];
     const instances = [];
@@ -704,7 +705,11 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
       const chart = {
         destroyed: false,
         update() {},
-        destroy() { chart.destroyed = true; events.push('destroy'); }
+        destroy() {
+          chart.destroyed = true;
+          const canvas = document.querySelector('canvas#chart_GOD');
+          events.push(canvas && canvas.isConnected ? 'destroy:attached' : 'destroy:detached');
+        }
       };
       instances.push(chart);
       events.push('create');
@@ -717,9 +722,10 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
     const firstRenderCreates = instances.length;
     expect(firstRenderCreates).toBeGreaterThan(0);
 
-    // Switching branches fetches a new payload: the replacement render must
-    // tear the old Chart.js instances down (they would otherwise outlive
-    // their removed canvases) and then re-create charts for the fresh DOM.
+    // Switching branches re-runs the fetch effect: it must release the old
+    // Chart.js instances (they would otherwise outlive their removed
+    // canvases) before the loading placeholder replaces the report markup,
+    // and the fresh render then builds new charts for the new canvases.
     utils.rerender(_jsx(ReportView, {
       username: 'junit-team',
       repository: 'junit4',
@@ -727,19 +733,82 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
       widgetSettleMs: 25
     }));
     // The rerender passes through loading/graft phases that reuse or drop
-    // the old canvas node, so wait on the destruction itself settling.
+    // the old canvas node; the destroys happen up front at the fetch
+    // cycle's start, so wait on them and then on the fresh render.
     await waitFor(() => {
-      expect(events.filter(e => e === 'destroy').length).toBe(firstRenderCreates);
+      expect(events.filter(e => e !== 'create').length).toBe(firstRenderCreates);
+    });
+    await waitFor(() => {
+      expect(instances.length).toBe(2 * firstRenderCreates);
     });
     expect(utils.container.querySelector('canvas#chart_GOD')).not.toBe(firstCanvas);
 
     expect(instances.slice(0, firstRenderCreates).every(c => c.destroyed)).toBe(true);
-    // All destroys precede every replacement construction.
-    const destroys = events.slice(firstRenderCreates, instances.length);
-    expect(destroys.every(e => e === 'destroy')).toBe(true);
+    // Destroyed while the canvases were still attached: before the loading
+    // markup swap, not after the report markup was thrown away.
+    const destroys = events.filter(e => e !== 'create');
+    expect(destroys.every(e => e === 'destroy:attached')).toBe(true);
+    expect(events).not.toContain('destroy:detached');
+    // ...and all destroys precede every replacement construction.
+    expect(events.findIndex(e => e !== 'create')).toBeLessThan(events.lastIndexOf('create'));
     // enhanceReport still builds charts for the replacement canvases.
     expect(instances.length).toBe(2 * firstRenderCreates);
   }, SLOW_TEST_MS);
+
+  test('unmounting the report destroys its live charts', async () => {
+    const instances = [];
+    window.Chart = function () {
+      const chart = {
+        destroyed: false,
+        update() {},
+        destroy() { chart.destroyed = true; }
+      };
+      instances.push(chart);
+      return chart;
+    };
+    markWidgetReady('chart');
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    expect(instances.length).toBeGreaterThan(0);
+    expect(instances.every(c => c.destroyed)).toBe(false);
+
+    // The fetch effect's cleanup aborts the in-flight request; it must
+    // release the report's Chart.js instances as well, since the canvases
+    // go away with the unmounted container.
+    utils.unmount();
+    expect(instances.every(c => c.destroyed)).toBe(true);
+  });
+
+  test('a refetch destroys the previous charts up front, even if it never delivers a payload', async () => {
+    const instances = [];
+    window.Chart = function () {
+      const chart = {
+        destroyed: false,
+        update() {},
+        destroy() { chart.destroyed = true; }
+      };
+      instances.push(chart);
+      return chart;
+    };
+    markWidgetReady('chart');
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    expect(instances.length).toBeGreaterThan(0);
+    expect(instances.every(c => c.destroyed)).toBe(false);
+
+    // A branch switch whose fetch never resolves: the old Chart.js
+    // instances must be released when the fetch cycle starts — before the
+    // payload is cleared and the loading markup replaces the report — not
+    // wait for a replacement payload that may never arrive.
+    mockFetch.mockImplementation(() => new Promise(() => {}));
+    utils.rerender(_jsx(ReportView, {
+      username: 'junit-team',
+      repository: 'junit4',
+      branch: 'develop',
+      widgetSettleMs: 25
+    }));
+    expect(instances.every(c => c.destroyed)).toBe(true);
+  });
 });
 
 async function hideAllPopups() {
