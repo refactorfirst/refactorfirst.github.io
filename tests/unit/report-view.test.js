@@ -12,6 +12,7 @@ import {
   enhanceReport,
   resolveLegendTextColor,
   bindThemeChartRedraw,
+  destroyBubbleCharts,
   statefulElementIds,
   stashStatefulDom,
   graftStatefulDom
@@ -262,6 +263,77 @@ describe('theme-change chart redraw', () => {
     trigger();
     expect(god.updates.length).toBeGreaterThan(godRedraws); // still live
     expect(brain.updates.length).toBe(brainRedraws); // stale entry pruned, not redrawn
+  });
+
+  it('destroys the chart of a canvas that left the DOM before pruning it', () => {
+    installThemeRadios('system');
+    bindThemeChartRedraw();
+    document.body.innerHTML = `
+      <input type="radio" name="rf-theme" id="rf-theme-light">
+      <input type="radio" name="rf-theme" id="rf-theme-dark" checked>
+      <input type="radio" name="rf-theme" id="rf-theme-system">
+      <canvas id="chart_GOD"></canvas>`;
+    const chart = {
+      destroyed: false,
+      update() {},
+      destroy() { chart.destroyed = true; }
+    };
+    window.Chart = function () { return chart; };
+    initBubbleChart(document.getElementById('chart_GOD'), 'God Classes', { bubbles: [] });
+    expect(chart.destroyed).toBe(false);
+
+    // The re-render threw the canvas away: the next theme change must
+    // release the Chart.js instance, not merely drop the registry entry.
+    document.getElementById('chart_GOD').remove();
+    const radio = document.getElementById('rf-theme-light');
+    radio.checked = true;
+    radio.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    expect(chart.destroyed).toBe(true);
+  });
+});
+
+describe('destroyBubbleCharts', () => {
+  afterEach(() => { delete window.Chart; });
+
+  it('destroys every live chart and clears the registry', () => {
+    installThemeRadios('light');
+    const instances = [];
+    window.Chart = function () {
+      const chart = {
+        destroyed: false,
+        update() {},
+        destroy() { chart.destroyed = true; }
+      };
+      instances.push(chart);
+      return chart;
+    };
+    initBubbleChart(document.getElementById('chart_GOD'), 'God Classes', { bubbles: [] });
+    const second = document.createElement('canvas');
+    second.id = 'chart_BRAIN';
+    document.body.appendChild(second);
+    initBubbleChart(second, 'Brain Methods', { bubbles: [] });
+    expect(instances.length).toBe(2);
+
+    destroyBubbleCharts();
+    expect(instances.map(c => c.destroyed)).toEqual([true, true]);
+
+    // Registry cleared: a theme change must not touch the destroyed charts.
+    const updates = [];
+    instances.forEach(c => (c.update = () => updates.push('redraw')));
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(updates.length).toBe(0);
+  });
+
+  it('tolerates chart stubs without a destroy method', () => {
+    installThemeRadios('light');
+    window.Chart = function () {
+      return { update() {} }; // no destroy: must not throw
+    };
+    initBubbleChart(document.getElementById('chart_GOD'), 'God Classes', { bubbles: [] });
+    expect(() => destroyBubbleCharts()).not.toThrow();
   });
 });
 

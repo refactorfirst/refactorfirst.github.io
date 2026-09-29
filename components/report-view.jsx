@@ -20,7 +20,8 @@ import {
   enhanceReport,
   bindPopupHandlers,
   stashStatefulDom,
-  graftStatefulDom
+  graftStatefulDom,
+  destroyBubbleCharts
 } from '../lib/report-view';
 import { enhanceTables } from '../lib/table-enhancer';
 import { renderErrorPage, logError } from '../lib/error-handler';
@@ -176,6 +177,10 @@ export default function ReportView({
         if (cancelled) return;
 
         const payloadChanged = lastEnhancedPayloadRef.current !== payload;
+        // The replacement render throws the old canvases away with the
+        // markup: destroy their Chart.js instances first so none outlives
+        // its canvas (enhanceReport builds fresh charts for the new DOM).
+        if (payloadChanged) destroyBubbleCharts();
         // Stash live chart canvases and rendered graphs before the innerHTML
         // swap throws the old DOM away (no-op on first render — there is
         // nothing stateful in the loading placeholder).

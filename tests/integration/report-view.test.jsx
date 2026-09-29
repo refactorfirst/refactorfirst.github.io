@@ -693,6 +693,53 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
     expect(document.getElementById('overlay').style.display).toBe('block');
     hideAllPopups();
   });
+
+  test('a payload change destroys the previous charts before the markup swap and re-creates them', async () => {
+    // Every Chart.js construction/teardown, in order, so the test can pin
+    // that the old instances are released before the replacement render
+    // builds fresh charts on the new canvases.
+    const events = [];
+    const instances = [];
+    window.Chart = function () {
+      const chart = {
+        destroyed: false,
+        update() {},
+        destroy() { chart.destroyed = true; events.push('destroy'); }
+      };
+      instances.push(chart);
+      events.push('create');
+      return chart;
+    };
+    markWidgetReady('chart');
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    const firstCanvas = utils.container.querySelector('canvas#chart_GOD');
+    const firstRenderCreates = instances.length;
+    expect(firstRenderCreates).toBeGreaterThan(0);
+
+    // Switching branches fetches a new payload: the replacement render must
+    // tear the old Chart.js instances down (they would otherwise outlive
+    // their removed canvases) and then re-create charts for the fresh DOM.
+    utils.rerender(_jsx(ReportView, {
+      username: 'junit-team',
+      repository: 'junit4',
+      branch: 'develop',
+      widgetSettleMs: 25
+    }));
+    // The rerender passes through loading/graft phases that reuse or drop
+    // the old canvas node, so wait on the destruction itself settling.
+    await waitFor(() => {
+      expect(events.filter(e => e === 'destroy').length).toBe(firstRenderCreates);
+    });
+    expect(utils.container.querySelector('canvas#chart_GOD')).not.toBe(firstCanvas);
+
+    expect(instances.slice(0, firstRenderCreates).every(c => c.destroyed)).toBe(true);
+    // All destroys precede every replacement construction.
+    const destroys = events.slice(firstRenderCreates, instances.length);
+    expect(destroys.every(e => e === 'destroy')).toBe(true);
+    // enhanceReport still builds charts for the replacement canvases.
+    expect(instances.length).toBe(2 * firstRenderCreates);
+  }, SLOW_TEST_MS);
 });
 
 async function hideAllPopups() {
