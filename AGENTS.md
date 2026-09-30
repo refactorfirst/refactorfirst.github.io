@@ -181,7 +181,12 @@ coverage there when introducing new markup patterns.
   after measuring `wrapper.scrollWidth > clientWidth` (re-measured on each
   re-render and on window resize). It MUST stay conditional — any overflow
   ancestor becomes the sticky constraint container and breaks the
-  viewport-sticky `thead th`. Scrolling tables keep their header pinned
+  viewport-sticky `thead th`. The unwrapped problem/solution tables (no
+  `data-rf-table`, no `.rf-table-scroll`, no sticky header) instead get an
+  unconditional `overflow-x: auto` from a `main#app` rule in globals.css so
+  their nowrap rows scroll inside the 5px border on narrow screens
+  (guarded by tests/unit/report-template-wcag.test.js and
+  tests/e2e/report-overflow.spec.js). Scrolling tables keep their header pinned
   anyway: `refreshStickyHeaders` in lib/table-enhancer.js compensates by
   translating every `thead th` down by the viewport scroll offset (clamped to
   the table's bottom edge) on window scroll/resize; narrow tables keep pure

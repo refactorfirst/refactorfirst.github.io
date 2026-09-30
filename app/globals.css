@@ -909,3 +909,15 @@ main#app .rf-table-search .rf-search-clear:focus-visible {
   outline-color: var(--brand-accent);
   outline-offset: -2px;
 }
+
+main#app table.rf-data-table:not([data-rf-table]) {
+  /* Unwrapped problem/solution tables have no .rf-table-scroll wrapper, and
+     mvp.css clamps them to max-width: 100% while rendering td/th with
+     white-space: nowrap; the template's overflow: visible then lets the
+     rows spill past the 5px border on narrow screens. Re-enable horizontal
+     scrolling here so the bordered box hugs the column and the wider rows
+     scroll inside it. The enhanced tables (data-rf-table) are excluded on
+     purpose: any overflow container would capture their viewport-sticky
+     table headers. */
+  overflow-x: auto;
+}

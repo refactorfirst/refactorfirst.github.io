@@ -193,6 +193,34 @@ describe('enhanced tables: sticky headers CSS (plan Phase 2)', () => {
     expect(rule[1]).toMatch(/align-items:\s*center/);
   });
 
+  it('gives unwrapped problem/solution tables their own horizontal scrollbar', () => {
+    // These tables have no .rf-table-scroll wrapper (its 5px frame lives on
+    // the wrapper for the enhanced tables); mvp.css clamps every table to
+    // max-width: 100% and renders td/th with white-space: nowrap, while the
+    // template forces overflow: visible — so on narrow screens the nowrap
+    // rows spill past the bordered table box. globals.css must re-enable
+    // horizontal scrolling on the unwrapped tables themselves (the enhanced
+    // tables must keep overflow: visible for the viewport-sticky header).
+    const globals = readFileSync(path.join(ROOT, 'app/globals.css'), 'utf8');
+    const noComments = globals.replace(/\/\*[\s\S]*?\*\//g, '');
+    // Match the selector up to its opening brace without crossing '}'.
+    const rule = noComments.match(
+      /main#app\s+table\.rf-data-table:not\(\[data-rf-table\]\)[^{]*\{([^}]*)\}/s);
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/overflow-x:\s*auto/);
+  });
+
+  it('keeps the enhanced tables overflow-visible (sticky header constraint)', () => {
+    // Regression guard for the selector negation above: the toolbar tables
+    // must never match the scrolling rule — their headers pin to the
+    // viewport by script, and an overflow container would capture them.
+    const globals = readFileSync(path.join(ROOT, 'app/globals.css'), 'utf8');
+    const match = globals.match(/main#app\s+table\.rf-data-table[^{]*\{/g) ?? [];
+    for (const selector of match) {
+      expect(selector).toContain(':not([data-rf-table])');
+    }
+  });
+
   it('puts the outer table border on the scroll wrapper, not the scrolled table', () => {
     // When a table overflows, .rf-table-scroll clips/scrolls it — a border on
     // the <table> itself would scroll away with the content, so the visible
