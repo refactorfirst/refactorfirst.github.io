@@ -154,7 +154,11 @@ coverage there when introducing new markup patterns.
   identical dark blocks) in `app/globals.css`; mvp.css light overrides must
   stay on `html:root` (mvp loads after the bundle). Report-template
   widgets that hardcode light colors are re-driven from `main#app …`
-  rules there (the mustache stays byte-identical).
+  rules there (the mustache stays byte-identical); the vizdom graph
+  SVGs' embedded black strokes/fills are likewise re-themed to
+  `--graph-line` (`#9fb0c0` dark = `CHART_LEGEND_TEXT.dark`) via
+  `path[stroke]`/`polygon` selectors on `.fullscreen-svg` — red cycle
+  edges stay red.
 
 ## Report Tables (Enhanced)
 

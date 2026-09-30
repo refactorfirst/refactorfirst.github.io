@@ -28,6 +28,9 @@
   --card-bg: #ffffff;
   --border-color: #dde4ea;
   --input-border: #c6d2dc;
+  /* vizdom WASM graph edges bake black stroke/fill attributes into the SVG;
+     palette-driven so the dark theme can swap them to a readable tint. */
+  --graph-line: #000000;
   --error-color: #c0392b;
   --success-color: #1e8449;
   --error-bg: #fdf6f5;
@@ -91,6 +94,7 @@ html:root {
   --card-bg: #1a2330;
   --border-color: #2c3a4d;
   --input-border: #5b7396;
+  --graph-line: #9fb0c0;
   --error-color: #f0928c;
   --success-color: #5bbd8b;
   --error-bg: #2b1d1f;
@@ -132,6 +136,7 @@ html:root {
     --card-bg: #1a2330;
     --border-color: #2c3a4d;
     --input-border: #5b7396;
+    --graph-line: #9fb0c0;
     --error-color: #f0928c;
     --success-color: #5bbd8b;
     --error-bg: #2b1d1f;
@@ -920,4 +925,19 @@ main#app table.rf-data-table:not([data-rf-table]) {
      purpose: any overflow container would capture their viewport-sticky
      table headers. */
   overflow-x: auto;
+}
+
+/* vizdom WASM graphs (Class/Package/cycle maps): the layout bakes black
+   stroke/fill presentation attributes onto the edge curves and arrowhead
+   polygons, which vanish on the dark page. Only non-red elements re-drive
+   from the palette --graph-line — red stays red (cycle edges) and the
+   fill-only paths (text glyphs) are left alone: node labels stay black on
+   their white ellipses. */
+main#app .fullscreen-svg path[stroke]:not([stroke="red"]) {
+  stroke: var(--graph-line);
+}
+
+main#app .fullscreen-svg polygon:not([fill="red"]) {
+  stroke: var(--graph-line);
+  fill: var(--graph-line);
 }
