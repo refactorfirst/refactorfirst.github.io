@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
+import { JSDOM } from 'jsdom';
 import {
   exposeGraphDots,
   withEdgeFontColor,
@@ -479,6 +480,250 @@ describe('withEdgeFontColor (vizdom bakes label color at parse time)', () => {
 
   it('handles compact attribute spacing', () => {
     expect(withEdgeFontColor('A -> B [label = "6"];', '#abc')).toBe('A -> B [label = "6" fontcolor = "#abc"];');
+  });
+});
+
+describe('edge font color boundaries', () => {
+  it.each([undefined, null, ''])('leaves DOT unchanged when color is %p', color => {
+    const dot = 'digraph G { A -> B [label="1"]; }';
+    expect(withEdgeFontColor(dot, color)).toBe(dot);
+  });
+
+  it.each([null, 0, false, {}])('preserves non-string input %p by identity', dot => {
+    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
+  });
+
+  it('does not recolor a node following an edge without attributes', () => {
+    const dot = 'digraph G { A -> B; C [label="Node"]; D -> E [label="2"]; }';
+    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
+      'digraph G { A -> B; C [label="Node"]; D -> E [label="2" fontcolor = "#9fb0c0"]; }');
+  });
+
+  it('preserves explicit colors while theming other edges and is idempotent', () => {
+    const dot = 'A -> B [fontcolor="blue" label="1"]; B -> C [label="2"];';
+    const expected = 'A -> B [fontcolor="blue" label="1"]; B -> C [label="2" fontcolor = "#9fb0c0"];';
+    const themed = withEdgeFontColor(dot, '#9fb0c0');
+    expect(themed).toBe(expected);
+    expect(withEdgeFontColor(themed, '#9fb0c0')).toBe(expected);
+  });
+
+  it('handles quoted node IDs, ports, and multiline edge attributes', () => {
+    const dot = '"org.example.A":out -> "org.example.B":in [\n label="3"\n color="red"\n];';
+    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
+      '"org.example.A":out -> "org.example.B":in [\n label="3"\n color="red" fontcolor = "#9fb0c0"\n];');
+  });
+});
+
+// Each case owns its document so event subscriptions do not accumulate and
+// exact redraw counts can catch accidental duplicate binding.
+describe('theme redraw regressions', () => {
+  let previousWindow;
+  let previousDocument;
+  let dom;
+  let media;
+  let mediaListener;
+  let parsed;
+  let zoomed;
+  let rejectDot;
+  const classDot = 'digraph C { A -> B [label="1"]; }';
+  const packageDot = 'digraph P { P -> Q [label="2"]; }';
+  const cycleDot = 'digraph Z { X -> Y [label="3" color="red"]; }';
+  const data = {
+    classMap: { dot: classDot },
+    packageMap: { dot: packageDot, hasEdges: true },
+    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dot: cycleDot } }
+  };
+
+  beforeEach(() => {
+    previousWindow = globalThis.window;
+    previousDocument = globalThis.document;
+    dom = new JSDOM('<!doctype html><html><body></body></html>');
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    installThemeRadios('system');
+    mediaListener = null;
+    media = {
+      matches: false,
+      addEventListener(type, listener) {
+        expect(type).toBe('change');
+        mediaListener = listener;
+      }
+    };
+    window.matchMedia = () => media;
+    parsed = [];
+    zoomed = [];
+    rejectDot = () => false;
+    window.Vizdom = {
+      DotParser: class {
+        parse(dot) {
+          parsed.push(dot);
+          if (rejectDot(dot)) throw new Error('invalid graph');
+          return {
+            to_directed() { return this; },
+            layout() { return this; },
+            to_svg() { return { to_string: () => '<svg width="1"></svg>' }; }
+          };
+        }
+      }
+    };
+    window.svgPanZoom = (selector, options) => {
+      zoomed.push({ svg: document.querySelector(selector), options });
+    };
+    bindThemeChartRedraw();
+    mediaListener(); // Prune entries from earlier tests before reusing graph IDs.
+    document.body.insertAdjacentHTML('beforeend',
+      '<div id="classGraph"></div><div id="packageGraph"></div><div id="cycle_0"></div>');
+  });
+
+  afterEach(() => {
+    // Prune this case's graph entries before restoring the shared document.
+    document.body.innerHTML = '';
+    rejectDot = () => false;
+    mediaListener();
+    destroyBubbleCharts();
+    dom.window.close();
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+  });
+
+  function selectTheme(mode) {
+    const radio = document.getElementById(`rf-theme-${mode}`);
+    radio.checked = true;
+    radio.dispatchEvent(new window.Event('change', { bubbles: true }));
+  }
+
+  it('recolors every graph on OS changes and reattaches pan/zoom to fresh SVGs', async () => {
+    await initWasmGraphs(data);
+    expect(parsed).toEqual([classDot, packageDot, cycleDot]);
+    const originalSvgs = zoomed.map(entry => entry.svg);
+    parsed.length = 0;
+    zoomed.length = 0;
+    media.matches = true;
+    mediaListener();
+    expect(parsed).toEqual([
+      'digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }',
+      'digraph P { P -> Q [label="2" fontcolor = "#9fb0c0"]; }',
+      'digraph Z { X -> Y [label="3" color="red" fontcolor = "#9fb0c0"]; }'
+    ]);
+    expect(zoomed).toHaveLength(3);
+    zoomed.forEach(({ svg, options }, i) => {
+      expect(svg).not.toBeNull();
+      expect(svg).not.toBe(originalSvgs[i]);
+      expect(svg.classList.contains('fullscreen-svg')).toBe(true);
+      expect(options).toEqual({ zoomEnabled: true, controlIconsEnabled: true });
+    });
+    parsed.length = 0;
+    media.matches = false;
+    mediaListener();
+    expect(parsed).toEqual([classDot, packageDot, cycleDot]);
+  });
+
+  it.each(['light', 'dark'])('honors explicit %s mode when the OS preference changes', async mode => {
+    selectTheme(mode);
+    await initWasmGraphs({ classMap: data.classMap });
+    const expected = mode === 'light' ? classDot
+      : 'digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }';
+    expect(parsed).toEqual([expected]);
+    parsed.length = 0;
+    media.matches = true;
+    mediaListener();
+    media.matches = false;
+    mediaListener();
+    expect(parsed).toEqual([expected, expected]);
+  });
+
+  it('binds graph redraw only once and ignores unrelated form changes', async () => {
+    await initWasmGraphs({ classMap: data.classMap });
+    bindThemeChartRedraw();
+    parsed.length = 0;
+    const unrelated = document.createElement('input');
+    unrelated.name = 'table-filter';
+    document.body.appendChild(unrelated);
+    unrelated.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(parsed).toEqual([]);
+    selectTheme('dark');
+    expect(parsed).toEqual(['digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }']);
+  });
+
+  it('uses the latest report DOT when a container is reused', async () => {
+    await initWasmGraphs({ classMap: data.classMap });
+    const replacement = 'digraph New { C -> D [label="9"]; }';
+    await initWasmGraphs({ classMap: { dot: replacement } });
+    parsed.length = 0;
+    selectTheme('dark');
+    selectTheme('light');
+    expect(parsed).toEqual([
+      'digraph New { C -> D [label="9" fontcolor = "#9fb0c0"]; }', replacement
+    ]);
+  });
+
+  it('continues redrawing healthy graphs when another graph cannot be parsed', async () => {
+    await initWasmGraphs(data);
+    const previousClassSvg = document.querySelector('#classGraph svg');
+    const previousPackageSvg = document.querySelector('#packageGraph svg');
+    parsed.length = 0;
+    rejectDot = dot => dot.startsWith('digraph C');
+    const warning = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      selectTheme('dark');
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(warning.mock.calls[0][0]).toBe('WASM graph re-render failed:');
+      expect(parsed).toHaveLength(3);
+      expect(document.querySelector('#classGraph svg')).toBe(previousClassSvg);
+      expect(document.querySelector('#packageGraph svg')).not.toBe(previousPackageSvg);
+      expect(parsed[2]).toContain('fontcolor = "#9fb0c0"');
+    } finally {
+      warning.mockRestore();
+    }
+  });
+
+  it('permanently prunes removed graphs until they are initialized again', async () => {
+    await initWasmGraphs(data);
+    document.getElementById('classGraph').remove();
+    mediaListener();
+    document.body.insertAdjacentHTML('beforeend', '<div id="classGraph"></div>');
+    parsed.length = 0;
+    mediaListener();
+    expect(parsed).toEqual([packageDot, cycleDot]);
+    expect(document.getElementById('classGraph').innerHTML).toBe('');
+  });
+
+  it('updates both axis colors on the existing chart without changing custom titles', () => {
+    let config;
+    const colors = [];
+    window.Chart = function (_canvas, options) {
+      config = options;
+      return { update() {
+        colors.push(['x', 'y'].map(axis => config.options.scales[axis].title.color()));
+      } };
+    };
+    initBubbleChart(document.getElementById('chart_GOD'), 'Custom report', {
+      xaxisLabel: 'Complexity (Δ)', yaxisLabel: 'Churn (%)', bubbles: []
+    });
+    selectTheme('dark');
+    selectTheme('light');
+    expect(colors).toHaveLength(2);
+    for (const color of colors[0]) {
+      expect(contrastAgainst(color, DARK_BG)).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const color of colors[1]) {
+      expect(contrastAgainst(color, LIGHT_BG)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(colors[0][0]).not.toBe(colors[1][0]);
+    expect(config.options.scales.x.title.text).toBe(`Complexity (Δ) ${LONG_ARROW}`);
+    expect(config.options.scales.y.title.text).toBe(`Churn (%) ${LONG_ARROW}`);
+    expect(config.options.scales.x.title.display).toBe(true);
+    expect(config.options.scales.y.title.display).toBe(true);
+  });
+
+  it('uses default titles for empty and null axis labels', () => {
+    let config;
+    window.Chart = function (_canvas, options) { config = options; };
+    initBubbleChart(document.getElementById('chart_GOD'), 'Empty labels', {
+      xaxisLabel: '', yaxisLabel: null, bubbles: []
+    });
+    expect(config.options.scales.x.title.text).toBe(`Effort to refactor ${LONG_ARROW}`);
+    expect(config.options.scales.y.title.text).toBe(`Relative churn (impact) ${LONG_ARROW}`);
   });
 });
 

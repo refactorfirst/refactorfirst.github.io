@@ -159,6 +159,102 @@ describe('search injection', () => {
   });
 });
 
+describe('filter clear regressions', () => {
+  for (const method of ['click', 'Escape']) {
+    it(`${method} clears immediately, resets the page, and requests focus restoration`, () => {
+      setup({
+        debounceMs: 30,
+        tableStates: { 'class-relationships': {
+          search: 'Class1', page: 3, sortKey: 'priority', sortDir: 'desc'
+        } }
+      });
+      const input = root.querySelector('input[type="search"]');
+      const clear = root.querySelector('.rf-search-clear');
+      expect(clear.hidden).toBe(false);
+      expect(clear.type).toBe('button');
+      expect(clear.getAttribute('aria-label')).toBe('Clear the Class relationships to remove, in priority order table filter');
+      if (method === 'click') {
+        clear.click();
+      } else {
+        const event = new window.KeyboardEvent('keydown', {
+          key: 'Escape', bubbles: true, cancelable: true
+        });
+        input.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+      }
+      expect(input.value).toBe('');
+      expect(clear.hidden).toBe(true);
+      // The patch must preserve the caller's sort state when merged.
+      expect(actions).toEqual([{
+        id: 'class-relationships',
+        patch: { search: '', page: 1 },
+        meta: { restoreFocus: true }
+      }]);
+    });
+
+    it(`${method} prevents a pending debounced search from restoring the cleared term`, async () => {
+      setup({ debounceMs: 20 });
+      const input = root.querySelector('input[type="search"]');
+      const clear = root.querySelector('.rf-search-clear');
+      input.value = 'Class1';
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+      expect(clear.hidden).toBe(false);
+      expect(actions).toEqual([]);
+      if (method === 'click') clear.click();
+      else input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(actions).toHaveLength(1);
+      expect(actions[0].patch).toEqual({ search: '', page: 1 });
+      await new Promise(resolve => setTimeout(resolve, 60));
+      expect(input.value).toBe('');
+      expect(clear.hidden).toBe(true);
+      // A queued callback may run, but it must never replay the old query.
+      for (const action of actions) {
+        expect(action.patch).toEqual({ search: '', page: 1 });
+        expect(action.meta).toEqual({ restoreFocus: true });
+      }
+    });
+  }
+
+  it('updates clear visibility immediately while coalescing actual search actions', async () => {
+    setup({ debounceMs: 20 });
+    const input = root.querySelector('input[type="search"]');
+    const clear = root.querySelector('.rf-search-clear');
+    for (const value of ['C', 'Class', 'Class2']) {
+      input.value = value;
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+      expect(clear.hidden).toBe(false);
+      expect(actions).toEqual([]);
+    }
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(actions).toEqual([{
+      id: 'class-relationships', patch: { search: 'Class2', page: 1 }, meta: { restoreFocus: true }
+    }]);
+  });
+
+  it('offers a clear control for whitespace-only input', () => {
+    setup({ tableStates: { 'class-relationships': { search: '   ' } } });
+    const clear = root.querySelector('.rf-search-clear');
+    expect(clear.hidden).toBe(false);
+    clear.click();
+    expect(root.querySelector('input').value).toBe('');
+    expect(clear.hidden).toBe(true);
+    expect(actions[0].patch).toEqual({ search: '', page: 1 });
+  });
+
+  it('leaves ordinary key events uncanceled and the current filter visible', () => {
+    setup({ tableStates: { 'class-relationships': { search: 'Class1' } } });
+    const input = root.querySelector('input[type="search"]');
+    for (const key of ['Tab', 'Enter', 'ArrowLeft']) {
+      const event = new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      input.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(input.value).toBe('Class1');
+    expect(root.querySelector('.rf-search-clear').hidden).toBe(false);
+    expect(actions).toEqual([]);
+  });
+});
+
 describe('sortable headers', () => {
   it('toggles the default-sorted priority column to descending on first click', () => {
     // The renderer applies the configured default (priority ascending) when no
