@@ -158,7 +158,12 @@ coverage there when introducing new markup patterns.
   SVGs' embedded black strokes/fills are likewise re-themed to
   `--graph-line` (`#9fb0c0` dark = `CHART_LEGEND_TEXT.dark`) via
   `path[stroke]`/`polygon` selectors on `.fullscreen-svg` — red cycle
-  edges stay red.
+  edges stay red. Edge labels are glyph paths baked by vizdom, so CSS
+  can't reach them: `withEdgeFontColor` in `lib/report-view.js` rewrites
+  the DOT with `fontcolor = "#9fb0c0"` per edge when the dark palette
+  is active (vizdom uppercases the hex in the SVG), and theme switches
+  re-parse the graphs via `redrawGraphsForTheme` alongside the chart
+  legend redraw in `bindThemeChartRedraw`.
 
 ## Report Tables (Enhanced)
 

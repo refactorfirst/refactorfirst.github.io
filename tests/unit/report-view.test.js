@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   exposeGraphDots,
+  withEdgeFontColor,
   initBubbleChart,
   initDisharmonyCharts,
   initWasmGraphs,
@@ -441,7 +442,66 @@ describe('initDisharmonyCharts', () => {
   });
 });
 
+describe('withEdgeFontColor (vizdom bakes label color at parse time)', () => {
+  it('appends fontcolor to edge statements with an attribute list', () => {
+    const dot = 'strict digraph G {\nActiveTestSuite -> TestSuite [ label = "6" weight = "6" ];\n}';
+    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
+      'strict digraph G {\nActiveTestSuite -> TestSuite [ label = "6" weight = "6" fontcolor = "#9fb0c0" ];\n}');
+  });
+
+  it('appends fontcolor to every edge in the graph', () => {
+    const dot = 'strict digraph G {\nA -> B [ label = "1" ];\nB -> C [ label = "2" ];\n}';
+    const themed = withEdgeFontColor(dot, '#9fb0c0');
+    expect(themed).toContain('B [ label = "1" fontcolor = "#9fb0c0" ];');
+    expect(themed).toContain('C [ label = "2" fontcolor = "#9fb0c0" ];');
+  });
+
+  it('keeps red cycle edges red while recoloring their labels', () => {
+    const dot = 'A -> B [ label = "2" weight = "2" color = "red" ];';
+    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
+      'A -> B [ label = "2" weight = "2" color = "red" fontcolor = "#9fb0c0" ];');
+  });
+
+  it('respects an edge-level fontcolor already set in the dot', () => {
+    const dot = 'A -> B [ label = "1" fontcolor = "blue" ];';
+    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
+  });
+
+  it('does not touch node statements or graph headers', () => {
+    const dot = 'strict digraph G {\nTestSuite [ label = "TestSuite" ];\n}';
+    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
+  });
+
+  it('returns non-string input unchanged', () => {
+    expect(withEdgeFontColor(undefined, '#9fb0c0')).toBeUndefined();
+    expect(withEdgeFontColor('', '#9fb0c0')).toBe('');
+  });
+
+  it('handles compact attribute spacing', () => {
+    expect(withEdgeFontColor('A -> B [label = "6"];', '#abc')).toBe('A -> B [label = "6" fontcolor = "#abc"];');
+  });
+});
+
 describe('initWasmGraphs', () => {
+  // Minimal DotParser stub: records the parsed dot and yields a fixed SVG.
+  function stubVizdom() {
+    const captured = [];
+    window.Vizdom = {
+      DotParser: class {
+        parse(dot) {
+          captured.push(dot);
+          return {
+            to_directed() { return this; },
+            layout() { return this; },
+            to_svg() { return { to_string: () => '<svg width="1"></svg>' }; }
+          };
+        }
+      }
+    };
+    return captured;
+  }
+  afterEach(() => { delete window.Vizdom; delete window.matchMedia; });
+
   it('resolves gracefully when the WASM loader is unavailable', async () => {
     document.body.innerHTML = '<div id="classGraph"></div>';
     // No network/WASM in tests: must resolve, not reject
@@ -453,7 +513,83 @@ describe('initWasmGraphs', () => {
     await initWasmGraphs({ classMap: { dot: 'x', dotThresholdExceeded: true } });
     expect(document.getElementById('classGraph').innerHTML).toBe('');
   });
+
+  it('parses the dot unchanged while the light palette is active', async () => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
+    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
+    expect(captured).toEqual([dot]);
+  });
+
+  it('appends fontcolor = #9fb0c0 to edge labels while the dark palette is active', async () => {
+    installThemeRadios('dark', false);
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    const dot = 'strict digraph G {\nA -> B [ label = "6" weight = "6" ];\n}';
+    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
+    expect(captured).toEqual([
+      'strict digraph G {\nA -> B [ label = "6" weight = "6" fontcolor = "#9fb0c0" ];\n}'
+    ]);
+    expect(graph.innerHTML).toBe('<svg class="fullscreen-svg" width="1"></svg>');
+  });
+
+  it('re-parses graphs with fresh label colors when a theme radio changes', async () => {
+    installThemeRadios('light', false);
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
+    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
+    const lightParses = captured.length;
+    expect(captured.every(d => !d.includes('fontcolor'))).toBe(true);
+
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured.length).toBeGreaterThan(lightParses);
+    expect(captured[captured.length - 1]).toContain('fontcolor = "#9fb0c0"');
+
+    // Switching back re-renders with the plain dot again.
+    const lightBack = document.getElementById('rf-theme-light');
+    lightBack.checked = true;
+    lightBack.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured[captured.length - 1]).toBe(dot);
+  });
+
+  it('prunes graphs whose container left the DOM on theme change', async () => {
+    installThemeRadios('light', false);
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
+    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
+    const initial = captured.length;
+
+    // The re-render threw the graph container away: next theme change must
+    // not re-parse this graph at all.
+    graph.remove();
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured.length).toBe(initial);
+  });
 });
+
 
 describe('popup helpers', () => {
   beforeEach(() => {

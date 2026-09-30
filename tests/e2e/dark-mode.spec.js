@@ -171,6 +171,43 @@ test('non-red graph edges re-tint to the dark palette, cycle edges stay red', as
   expect(await strokeOf(REGULAR_EDGE)).toBe('rgb(0, 0, 0)');
 });
 
+test('graph edge labels re-tint to the dark palette, restore in light', async ({ page }) => {
+  test.skip(test.info().project.name !== 'chromium', 'wasm-heavy check runs once');
+  // Mock GitHub raw content so the report page never hits the network.
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    if (route.request().url().endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: SAMPLE_REPORT });
+    } else {
+      route.continue();
+    }
+  });
+  await page.goto('/refactorfirst/refactorfirst/master/');
+  // vizdom parses/lays out the graph asynchronously via WASM. Edge labels
+  // render as glyph paths whose fill carries the DOT fontcolor.
+  await page.waitForSelector('#classGraph svg path[stroke="black"]', { timeout: 120000 });
+
+  // vizdom uppercases the DOT color when it writes the SVG fill attribute.
+  const labelFills = () => page.evaluate(() =>
+    Array.from(document.querySelectorAll('#classGraph svg path'))
+      .filter(p => !p.getAttribute('stroke'))
+      .map(p => (p.getAttribute('fill') || '').toLowerCase()));
+
+  // Light theme: labels keep the baked-in default (no fontcolor applied).
+  expect((await labelFills()).some(f => f === '#9fb0c0')).toBe(false);
+
+  await page.locator('#rf-theme-dark').check();
+  // Dark theme: the graph re-parses with fontcolor = "#9fb0c0" on edges.
+  await page.waitForSelector('#classGraph svg path[fill="#9FB0C0"]');
+  const darkFills = await labelFills();
+  expect(darkFills.filter(f => f === '#9fb0c0').length).toBeGreaterThan(0);
+
+  // Switching back to light re-renders with the plain dot again.
+  await page.locator('#rf-theme-light').check();
+  await page.waitForFunction(() =>
+    !document.querySelector('#classGraph svg path[fill="#9FB0C0"]'));
+  expect((await labelFills()).some(f => f === '#9fb0c0')).toBe(false);
+});
+
 test('breadcrumbs and the toggle share one vertically centered row on report pages', async ({ page }) => {
   test.skip(test.info().project.name !== 'chromium', 'geometry check runs once');
   // Mock GitHub raw content so the report page never hits the network.
