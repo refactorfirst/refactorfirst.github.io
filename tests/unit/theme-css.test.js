@@ -362,3 +362,86 @@ describe('theme persistence bootstrap', () => {
     expect(layoutSource).toMatch(/<meta\s+name="color-scheme"\s+content="light dark"\s*\/>/);
   });
 });
+
+// Keep the new filter controls perceivable in both palettes and retain the
+// browser's hidden behavior when an empty filter has no clear action.
+describe('table filter accessibility', () => {
+  it('does not override hidden on the clear button with an unconditional display', () => {
+    const base = rules.get('main#app .rf-table-search .rf-search-clear');
+    expect(base).toBeTruthy();
+    expect(base).not.toMatch(/(?:^|;)\s*display\s*:/);
+    expect(rules.get('main#app .rf-table-search .rf-search-clear:not([hidden])'))
+      .toMatch(/display:\s*inline-flex/);
+  });
+
+  it('visually hides the label without removing it from the accessibility tree', () => {
+    const label = rules.get('main#app .rf-table-search .rf-search-label');
+    expect(label).toBeTruthy();
+    expect(label).toMatch(/clip-path:\s*inset\(50%\)/);
+    expect(label).not.toMatch(/display:\s*none|visibility:\s*hidden/);
+  });
+
+  it('provides a clear button target at least 24px wide and high', () => {
+    const clear = rules.get('main#app .rf-table-search .rf-search-clear');
+    for (const dimension of ['width', 'height']) {
+      const value = clear.match(new RegExp(`${dimension}:\\s*([\\d.]+)rem`));
+      expect(value).not.toBeNull();
+      expect(Number(value[1]) * 16).toBeGreaterThanOrEqual(24);
+    }
+  });
+
+  for (const [name, palette] of [['light', lightPalette], ['dark', darkPalette]]) {
+    it(`keeps the filter boundary, clear icon and focus ring perceivable in ${name} mode`, () => {
+      const input = rules.get('main#app .rf-table-search input[type="search"]');
+      const clear = rules.get('main#app .rf-table-search .rf-search-clear');
+      const focus = rules.get('main#app .rf-table-search .rf-search-clear:focus-visible');
+      const borderColor = input.match(/border:\s*1px solid (var\([^)]+\))/)[1];
+      const iconColor = clear.match(/(?:^|;)\s*color:\s*([^;]+)/)[1];
+      const focusColor = focus.match(/outline-color:\s*([^;]+)/)[1];
+      for (const surface of ['--bg-color', '--surface-color', '--card-bg']) {
+        const background = resolveIn(palette.get(surface), palette);
+        expect(contrastRatio(resolveIn(borderColor, palette), background)).toBeGreaterThanOrEqual(3);
+        expect(contrastRatio(resolveIn(iconColor, palette), background)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(resolveIn(focusColor, palette), background)).toBeGreaterThanOrEqual(3);
+      }
+    });
+  }
+});
+
+describe('report CSS selector boundaries', () => {
+  it('themes only graph edges and arrowheads, preserving red cycles and node glyphs', () => {
+    const fixture = document.createElement('div');
+    fixture.innerHTML = `
+      <main id="app"><svg class="fullscreen-svg">
+        <path id="edge" stroke="black"/>
+        <path id="cycle-edge" stroke="red"/>
+        <path id="node-label" fill="black"/>
+        <polygon id="arrow" fill="black"/>
+        <polygon id="cycle-arrow" fill="red"/>
+        <ellipse id="node" fill="white"/>
+      </svg><svg><path id="other-icon" stroke="black"/></svg></main>
+      <svg class="fullscreen-svg"><path id="outside-report" stroke="black"/></svg>`;
+    const selectors = [...rules].filter(([, body]) => /var\(--graph-line\)/.test(body))
+      .map(([selector]) => selector);
+    expect(selectors.length).toBeGreaterThan(0);
+    expect([...fixture.querySelectorAll(selectors.join(','))].map(el => el.id))
+      .toEqual(['edge', 'arrow']);
+  });
+
+  it('applies the unwrapped-table scrolling rule only to report data tables without enhancement', () => {
+    const fixture = document.createElement('div');
+    fixture.innerHTML = `
+      <main id="app">
+        <table id="problem" class="rf-data-table"></table>
+        <table id="solution" class="rf-data-table"></table>
+        <table id="enhanced" class="rf-data-table" data-rf-table="class-relationships"></table>
+        <table id="ordinary"></table>
+      </main><table id="outside-report" class="rf-data-table"></table>`;
+    const selectors = [...rules].filter(([selector, body]) =>
+      selector.includes('table.rf-data-table') && /overflow-x:\s*auto/.test(body))
+      .map(([selector]) => selector);
+    expect(selectors.length).toBeGreaterThan(0);
+    expect([...fixture.querySelectorAll(selectors.join(','))].map(el => el.id))
+      .toEqual(['problem', 'solution']);
+  });
+});
