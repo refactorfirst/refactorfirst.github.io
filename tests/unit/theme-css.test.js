@@ -205,6 +205,34 @@ describe('dark mode cascade structure', () => {
   });
 });
 
+// vizdom WASM graphs (classGraph/packageGraph/cycle SVGs): the layout bakes
+// black stroke/fill presentation attributes onto the edge curves and
+// arrowhead polygons, which disappear on the dark page background. Only
+// non-red elements re-drive from the palette — red marks cycle edges.
+describe('vizdom graph edges in dark mode', () => {
+  it('declares a per-palette graph line color (dark mirrors the chart legend text)', () => {
+    // The dark value must mirror CHART_LEGEND_TEXT.dark in
+    // lib/report-view.js (#9fb0c0 == --muted-color).
+    expect(lightPalette.get('--graph-line')).toBeTruthy();
+    expect(darkPalette.get('--graph-line')).toBe('#9fb0c0');
+    // Perceivable against the dark page (SC 1.4.11, non-text >= 3:1).
+    expect(contrastOf(darkPalette, '--graph-line', '--bg-color')).toBeGreaterThanOrEqual(3);
+  });
+
+  it('re-drives non-red edge curves and arrowheads from the palette', () => {
+    // Edge curves are the stroke-bearing paths (fill-only paths are text
+    // glyphs, which must not match: node labels stay black on their white
+    // ellipses); red cycle edges stay red.
+    const edges = rules.get('main#app .fullscreen-svg path[stroke]:not([stroke="red"])');
+    expect(edges).toBeTruthy();
+    expect(edges).toMatch(/stroke:\s*var\(--graph-line\)/);
+    const arrows = rules.get('main#app .fullscreen-svg polygon:not([fill="red"])');
+    expect(arrows).toBeTruthy();
+    expect(arrows).toMatch(/stroke:\s*var\(--graph-line\)/);
+    expect(arrows).toMatch(/fill:\s*var\(--graph-line\)/);
+  });
+});
+
 describe('popup close button', () => {
   it('is a red square re-driven from palette variables', () => {
     // The template ships a bare × button; the red-square chrome must come

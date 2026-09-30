@@ -78,13 +78,18 @@ afterEach(() => {
 });
 
 describe('search injection', () => {
-  it('injects a labelled search input wired to the live match region', () => {
+  it('injects a search input with the prompt as placeholder and a hidden label', () => {
     setup();
     const input = root.querySelector('input[type="search"]');
     expect(input).not.toBeNull();
     expect(input.id).toBe('rf-search-class-relationships');
+    // The visible prompt lives in the placeholder (like the site's
+    // "Search repositories..." box); the label stays for screen readers.
+    expect(input.placeholder).toBe('Filter table...');
     const label = root.querySelector(`label[for="rf-search-class-relationships"]`);
     expect(label).not.toBeNull();
+    expect(label.textContent).toBe('Filter table');
+    expect(label.className).toBe('rf-search-label');
     const match = root.querySelector('[data-rf-match="class-relationships"]');
     expect(match.id).toBe('rf-match-class-relationships');
     expect(input.getAttribute('aria-describedby')).toBe('rf-match-class-relationships');
@@ -102,16 +107,55 @@ describe('search injection', () => {
     expect(actions[0].meta).toEqual({ restoreFocus: true });
   });
 
-  it('provides an "x" clear button that resets the current search term', () => {
-    setup({ tableStates: { 'class-relationships': { search: 'assert' } } });
+  it('keeps the inline "x" hidden while the box is empty and shows it with a term', () => {
+    setup();
     const clear = root.querySelector('.rf-search-clear');
     expect(clear).not.toBeNull();
     expect(clear.textContent).toBe('×');
     expect(clear.getAttribute('aria-label')).toContain('Clear');
+    // No current term: the clear control is not offered yet.
+    expect(clear.hidden).toBe(true);
+    const input = root.querySelector('input[type="search"]');
+    expect(input.value).toBe('');
+  });
+
+  it('reveals the inline "x" as soon as the user types and hides it again', () => {
+    setup();
+    const input = root.querySelector('input[type="search"]');
+    const clear = root.querySelector('.rf-search-clear');
+    input.value = 'assert';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(clear.hidden).toBe(false);
+    input.value = '';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(clear.hidden).toBe(true);
+  });
+
+  it('shows the inline "x" for a persisted term and clicking it clears the search', () => {
+    setup({ tableStates: { 'class-relationships': { search: 'assert' } } });
+    const clear = root.querySelector('.rf-search-clear');
+    expect(clear.hidden).toBe(false);
     const input = root.querySelector('input[type="search"]');
     expect(input.value).toBe('assert');
     clear.click();
+    expect(input.value).toBe('');
+    expect(clear.hidden).toBe(true);
     expect(actions.some(a => a.patch.search === '' && a.patch.page === 1)).toBe(true);
+  });
+
+  it('clears the search when Escape is pressed while the box has focus', () => {
+    setup({ tableStates: { 'class-relationships': { search: 'assert' } } });
+    const input = root.querySelector('input[type="search"]');
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(input.value).toBe('');
+    expect(actions.some(a => a.patch.search === '' && a.patch.page === 1)).toBe(true);
+  });
+
+  it('ignores keys other than Escape', () => {
+    setup({ tableStates: { 'class-relationships': { search: 'assert' } } });
+    const input = root.querySelector('input[type="search"]');
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(actions).toEqual([]);
   });
 });
 

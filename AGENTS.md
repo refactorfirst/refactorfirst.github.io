@@ -154,7 +154,16 @@ coverage there when introducing new markup patterns.
   identical dark blocks) in `app/globals.css`; mvp.css light overrides must
   stay on `html:root` (mvp loads after the bundle). Report-template
   widgets that hardcode light colors are re-driven from `main#app …`
-  rules there (the mustache stays byte-identical).
+  rules there (the mustache stays byte-identical); the vizdom graph
+  SVGs' embedded black strokes/fills are likewise re-themed to
+  `--graph-line` (`#9fb0c0` dark = `CHART_LEGEND_TEXT.dark`) via
+  `path[stroke]`/`polygon` selectors on `.fullscreen-svg` — red cycle
+  edges stay red. Edge labels are glyph paths baked by vizdom, so CSS
+  can't reach them: `withEdgeFontColor` in `lib/report-view.js` rewrites
+  the DOT with `fontcolor = "#9fb0c0"` per edge when the dark palette
+  is active (vizdom uppercases the hex in the SVG), and theme switches
+  re-parse the graphs via `redrawGraphsForTheme` alongside the chart
+  legend redraw in `bindThemeChartRedraw`.
 
 ## Report Tables (Enhanced)
 
@@ -164,8 +173,11 @@ coverage there when introducing new markup patterns.
   the `.rf-table-block` wrapper shrink-wraps the table and the toolbar uses
   `contain: inline-size` so controls align with the table's right edge),
   sortable th buttons with `aria-sort`, pagination below 20+ row tables, and
-  click/Enter/Space cell copy with toast feedback. The filter's clear control
-  is an × button (accessible name "Clear the … table filter").
+  click/Enter/Space cell copy with toast feedback. The filter prompt lives in
+  the input's placeholder ("Filter table...", with a screen-reader-only
+  label); the clear control is an × button overlaid on the input's right
+  edge (accessible name "Clear the … table filter"), revealed only while the
+  box holds a term and invoked by click or Escape while the box has focus.
 - Tables open sorted by their Priority column ascending (▲, priority 1
   first), signalling both the report's priority ordering and that headers are
   sortable (`TABLE_CONFIG.sorting` defaults in lib/table-operations.js);
@@ -178,7 +190,12 @@ coverage there when introducing new markup patterns.
   after measuring `wrapper.scrollWidth > clientWidth` (re-measured on each
   re-render and on window resize). It MUST stay conditional — any overflow
   ancestor becomes the sticky constraint container and breaks the
-  viewport-sticky `thead th`. Scrolling tables keep their header pinned
+  viewport-sticky `thead th`. The unwrapped problem/solution tables (no
+  `data-rf-table`, no `.rf-table-scroll`, no sticky header) instead get an
+  unconditional `overflow-x: auto` from a `main#app` rule in globals.css so
+  their nowrap rows scroll inside the 5px border on narrow screens
+  (guarded by tests/unit/report-template-wcag.test.js and
+  tests/e2e/report-overflow.spec.js). Scrolling tables keep their header pinned
   anyway: `refreshStickyHeaders` in lib/table-enhancer.js compensates by
   translating every `thead th` down by the viewport scroll offset (clamped to
   the table's bottom edge) on window scroll/resize; narrow tables keep pure

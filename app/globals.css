@@ -28,6 +28,9 @@
   --card-bg: #ffffff;
   --border-color: #dde4ea;
   --input-border: #c6d2dc;
+  /* vizdom WASM graph edges bake black stroke/fill attributes into the SVG;
+     palette-driven so the dark theme can swap them to a readable tint. */
+  --graph-line: #000000;
   --error-color: #c0392b;
   --success-color: #1e8449;
   --error-bg: #fdf6f5;
@@ -91,6 +94,7 @@ html:root {
   --card-bg: #1a2330;
   --border-color: #2c3a4d;
   --input-border: #5b7396;
+  --graph-line: #9fb0c0;
   --error-color: #f0928c;
   --success-color: #5bbd8b;
   --error-bg: #2b1d1f;
@@ -132,6 +136,7 @@ html:root {
     --card-bg: #1a2330;
     --border-color: #2c3a4d;
     --input-border: #5b7396;
+    --graph-line: #9fb0c0;
     --error-color: #f0928c;
     --success-color: #5bbd8b;
     --error-bg: #2b1d1f;
@@ -835,4 +840,104 @@ main#app .rf-data-table td[data-rf-copy]:focus-visible {
      accent-background role): #2a6f97 is only 2.9:1 against the dark
      --surface-color, below the 3:1 of SC 2.4.11. */
   outline-color: var(--brand-accent);
+}
+
+main#app .rf-table-search {
+  /* Anchors the overlaid clear control inside the input's right edge. */
+  position: relative;
+}
+
+main#app .rf-table-search .rf-search-label {
+  /* Screen-reader-only: the visible prompt is the input's placeholder. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+main#app .rf-table-search input[type="search"] {
+  /* mvp.css gives inputs a pale border that reads near-invisible on the
+     white page (under 3:1, SC 1.4.11). --muted-color is a full palette
+     role, so the border stays dark in light mode and bright on the dark
+     background. Room for the overlaid ×. */
+  border: 1px solid var(--muted-color);
+  padding-right: 1.9rem;
+  /* mvp.css also endows inputs with margin-bottom: 1rem; the flex slot
+     would grow by that margin, so the overlaid ×'s "50%" anchor point
+     would drop below the input and strand the button at its bottom edge.
+     The slot must hug the input exactly. */
+  margin: 0;
+}
+
+/* We inject our own themed × (palette colours, reveal/clear logic);
+   WebKit's native search-cancel button would otherwise sit beside it. */
+main#app .rf-table-search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+main#app .rf-table-search .rf-search-clear {
+  /* Overlaid on the input's right edge (the enhancer reveals it via the
+     `hidden` attribute only while the box holds a term). 1.6rem clears the
+     24px pointer-target minimum (SC 2.5.8) and fits the input's height. */
+  position: absolute;
+  top: 50%;
+  right: 0.1rem;
+  transform: translateY(-50%);
+  /* mvp.css gives buttons a ~0.5rem top margin, which for an absolutely
+     positioned element shifts the box down off the input's centre line. */
+  margin: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-color);
+}
+
+/* The flex centering must ride on :not([hidden]) — a plain `display` here
+   would override the UA's [hidden] { display: none } and keep the empty
+   state's × on screen. */
+main#app .rf-table-search .rf-search-clear:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+main#app .rf-table-search .rf-search-clear:focus-visible {
+  outline-color: var(--brand-accent);
+  outline-offset: -2px;
+}
+
+main#app table.rf-data-table:not([data-rf-table]) {
+  /* Unwrapped problem/solution tables have no .rf-table-scroll wrapper, and
+     mvp.css clamps them to max-width: 100% while rendering td/th with
+     white-space: nowrap; the template's overflow: visible then lets the
+     rows spill past the 5px border on narrow screens. Re-enable horizontal
+     scrolling here so the bordered box hugs the column and the wider rows
+     scroll inside it. The enhanced tables (data-rf-table) are excluded on
+     purpose: any overflow container would capture their viewport-sticky
+     table headers. */
+  overflow-x: auto;
+}
+
+/* vizdom WASM graphs (Class/Package/cycle maps): the layout bakes black
+   stroke/fill presentation attributes onto the edge curves and arrowhead
+   polygons, which vanish on the dark page. Only non-red elements re-drive
+   from the palette --graph-line — red stays red (cycle edges) and the
+   fill-only paths (text glyphs) are left alone: node labels stay black on
+   their white ellipses. */
+main#app .fullscreen-svg path[stroke]:not([stroke="red"]) {
+  stroke: var(--graph-line);
+}
+
+main#app .fullscreen-svg polygon:not([fill="red"]) {
+  stroke: var(--graph-line);
+  fill: var(--graph-line);
 }

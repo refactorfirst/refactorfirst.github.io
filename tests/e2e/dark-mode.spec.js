@@ -128,6 +128,86 @@ test('dark mode keeps rendering dark on report pages after navigation', async ({
   expect(await page.evaluate(() => localStorage.getItem('rf-theme'))).toBe('dark');
 });
 
+test('non-red graph edges re-tint to the dark palette, cycle edges stay red', async ({ page }) => {
+  test.skip(test.info().project.name !== 'chromium', 'wasm-heavy check runs once');
+  // Mock GitHub raw content so the report page never hits the network.
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    if (route.request().url().endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: SAMPLE_REPORT });
+    } else {
+      route.continue();
+    }
+  });
+  await page.goto('/refactorfirst/refactorfirst/master/');
+  // vizdom parses/lays out the graph asynchronously via WASM.
+  await page.waitForSelector('#classGraph svg path[stroke="black"]', { timeout: 120000 });
+  await page.waitForSelector('#classGraph svg polygon[fill="black"]');
+  await page.waitForSelector('#classGraph svg path[stroke="red"]');
+
+  const strokeOf = selector => page.evaluate(
+    sel => getComputedStyle(document.querySelector(sel)).stroke, selector);
+  const fillOf = selector => page.evaluate(
+    sel => getComputedStyle(document.querySelector(sel)).fill, selector);
+  const REGULAR_EDGE = '#classGraph svg path[stroke="black"]';
+  const REGULAR_ARROW = '#classGraph svg polygon[fill="black"]';
+  const CYCLE_EDGE = '#classGraph svg path[stroke="red"]';
+  const CYCLE_ARROW = '#classGraph svg polygon[fill="red"]';
+
+  // Light theme: edges keep the baked-in black.
+  expect(await strokeOf(REGULAR_EDGE)).toBe('rgb(0, 0, 0)');
+
+  await page.locator('#rf-theme-dark').check();
+  // Dark theme: non-red edges/arrowheads use #9fb0c0 (dark --muted-color,
+  // the Chart.js legend text color)…
+  expect(await strokeOf(REGULAR_EDGE)).toBe('rgb(159, 176, 192)');
+  expect(await strokeOf(REGULAR_ARROW)).toBe('rgb(159, 176, 192)');
+  expect(await fillOf(REGULAR_ARROW)).toBe('rgb(159, 176, 192)');
+  // …while red (cycle) edges and arrowheads stay red.
+  expect(await strokeOf(CYCLE_EDGE)).toBe('rgb(255, 0, 0)');
+  expect(await fillOf(CYCLE_ARROW)).toBe('rgb(255, 0, 0)');
+
+  // Switching back to light restores black without a reload (pure CSS).
+  await page.locator('#rf-theme-light').check();
+  expect(await strokeOf(REGULAR_EDGE)).toBe('rgb(0, 0, 0)');
+});
+
+test('graph edge labels re-tint to the dark palette, restore in light', async ({ page }) => {
+  test.skip(test.info().project.name !== 'chromium', 'wasm-heavy check runs once');
+  // Mock GitHub raw content so the report page never hits the network.
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    if (route.request().url().endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: SAMPLE_REPORT });
+    } else {
+      route.continue();
+    }
+  });
+  await page.goto('/refactorfirst/refactorfirst/master/');
+  // vizdom parses/lays out the graph asynchronously via WASM. Edge labels
+  // render as glyph paths whose fill carries the DOT fontcolor.
+  await page.waitForSelector('#classGraph svg path[stroke="black"]', { timeout: 120000 });
+
+  // vizdom uppercases the DOT color when it writes the SVG fill attribute.
+  const labelFills = () => page.evaluate(() =>
+    Array.from(document.querySelectorAll('#classGraph svg path'))
+      .filter(p => !p.getAttribute('stroke'))
+      .map(p => (p.getAttribute('fill') || '').toLowerCase()));
+
+  // Light theme: labels keep the baked-in default (no fontcolor applied).
+  expect((await labelFills()).some(f => f === '#9fb0c0')).toBe(false);
+
+  await page.locator('#rf-theme-dark').check();
+  // Dark theme: the graph re-parses with fontcolor = "#9fb0c0" on edges.
+  await page.waitForSelector('#classGraph svg path[fill="#9FB0C0"]');
+  const darkFills = await labelFills();
+  expect(darkFills.filter(f => f === '#9fb0c0').length).toBeGreaterThan(0);
+
+  // Switching back to light re-renders with the plain dot again.
+  await page.locator('#rf-theme-light').check();
+  await page.waitForFunction(() =>
+    !document.querySelector('#classGraph svg path[fill="#9FB0C0"]'));
+  expect((await labelFills()).some(f => f === '#9fb0c0')).toBe(false);
+});
+
 test('breadcrumbs and the toggle share one vertically centered row on report pages', async ({ page }) => {
   test.skip(test.info().project.name !== 'chromium', 'geometry check runs once');
   // Mock GitHub raw content so the report page never hits the network.
