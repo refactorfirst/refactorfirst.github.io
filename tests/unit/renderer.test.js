@@ -185,6 +185,58 @@ describe('templating safety (repository-provided templates are untrusted)', () =
 });
 
 // ---------------------------------------------------------------------------
+// Source-link cell partial: the class-relationships cell markup lives in
+// lib/renderer.js (outside both report template copies) and is expanded via
+// a Mustache partial, preserving the rendered report output byte-for-byte.
+// ---------------------------------------------------------------------------
+
+describe('source-link cell partial (kept outside the report templates)', () => {
+  const junitFixture = JSON.parse(
+    readFileSync(path.join(import.meta.dir, '../fixtures/junit4-report.json'), 'utf8')
+  );
+
+  it('renders the class-relationships source-link cell through {{> source-link-cell}}', () => {
+    const template = readFileSync(
+      path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+    );
+    const html = renderTemplate(template, prepareReportData(junitFixture));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector(
+      'table[data-rf-table="class-relationships"] tbody td.rf-text-left'
+    );
+    expect(cell).not.toBeNull();
+    const link = cell.querySelector('a[target="_blank"]');
+    expect(link).not.toBeNull();
+    expect(link.getAttribute('href')).toContain('https://github.com/junit-team/junit4/blob/');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('expands the partial to the same bytes the templates embedded inline', () => {
+    const inline = [
+      '<table><tbody>',
+      '                    <tr>',
+      '                        <td class="rf-text-left">{{{renderedLabel}}}</td>',
+      '                        <td class="rf-text-right">{{priority}}</td>',
+      '                    </tr>',
+      '                </tbody></table>'
+    ].join('\n') + '\n';
+    const viaPartial = [
+      '<table><tbody>',
+      '                    <tr>',
+      '                        {{> source-link-cell}}',
+      '                        <td class="rf-text-right">{{priority}}</td>',
+      '                    </tr>',
+      '                </tbody></table>'
+    ].join('\n') + '\n';
+    const row = junitFixture.classRelationshipsToRemove.relationships[0];
+    const rendered = renderTemplate(viaPartial, row);
+    expect(rendered).toBe(renderTemplate(inline, row));
+    expect(rendered).toContain('<td class="rf-text-left">');
+    expect(rendered).toContain('<a ');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // prepareReportData: filter -> sort -> paginate pipeline feeding the report
 // template with paginated rows and tableUi metadata (plan Phase 3).
 // ---------------------------------------------------------------------------

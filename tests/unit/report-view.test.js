@@ -185,6 +185,36 @@ describe('initBubbleChart', () => {
     window.open = originalOpen;
   });
 
+  it('never calls window.open for javascript: or other non-http(s) urls', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    const originalOpen = window.open;
+    const opens = [];
+    window.open = (...args) => { opens.push(args); };
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
+    });
+    const onClick = created[0].options.onClick;
+    const clickEvent = new window.MouseEvent('click');
+    for (const url of [
+      'javascript:alert(1)',
+      'JAVASCRIPT:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'file:///etc/passwd',
+      'ftp://example.com/Foo.java',
+      '/relative/path',
+      'not a url',
+      { toString: () => 'javascript:alert(1)' }
+    ]) {
+      onClick(clickEvent, [{ datasetIndex: 0, index: 0 }], {
+        data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: { url } }] }] }
+      });
+    }
+    expect(opens).toEqual([]);
+    window.open = originalOpen;
+  });
+
   it('shows a pointer cursor while hovering a bubble with a url', () => {
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };
