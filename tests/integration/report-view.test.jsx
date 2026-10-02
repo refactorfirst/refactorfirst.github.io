@@ -160,10 +160,16 @@ describe('ReportView', () => {
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
   });
 
-  test('escapes renderedLabel in class relationships', async () => {
+  test('hyperlinks the Class Relationship column like the Package Relationships table', async () => {
     respondJsonFor(sampleJson);
     const { container } = await renderReport();
-    expect(container.innerHTML).toContain('&lt;a href=https://github.com/junit-team/junit4');
+    const table = container.querySelector('table[data-rf-table="class-relationships"]');
+    expect(table).not.toBeNull();
+    const link = table.querySelector('tbody a[href^="https://github.com/junit-team/junit4"]');
+    expect(link).not.toBeNull();
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+    expect(container.innerHTML).not.toContain('<a href=https://github.com/junit-team/junit4');
     expect(container.querySelector('.rf-report')).not.toBeNull();
   });
 

@@ -144,6 +144,62 @@ describe('initBubbleChart', () => {
     delete window.Chart;
   });
 
+  it('opens the clicked bubble source url in a new tab', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    const originalOpen = window.open;
+    const opens = [];
+    window.open = (...args) => { opens.push(args); };
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
+    });
+    const stubChart = {
+      data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: { url: 'https://example.com/Foo.java' } }] }] }
+    };
+    created[0].options.onClick(new window.MouseEvent('click'), [{ datasetIndex: 0, index: 0 }], stubChart);
+    expect(opens).toEqual([['https://example.com/Foo.java', '_blank', 'noopener']]);
+    window.open = originalOpen;
+  });
+
+  it('ignores bubble clicks away from every bubble and on bubbles without a url', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    const originalOpen = window.open;
+    const opens = [];
+    window.open = (...args) => { opens.push(args); };
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
+    });
+    const stubChart = {
+      data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: { url: 'https://example.com/Foo.java' } }] }] }
+    };
+    created[0].options.onClick(new window.MouseEvent('click'), [], stubChart);
+    created[0].options.onClick(
+      new window.MouseEvent('click'),
+      [{ datasetIndex: 0, index: 0 }],
+      { data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: {} }] }] } }
+    );
+    expect(opens).toEqual([]);
+    window.open = originalOpen;
+  });
+
+  it('shows a pointer cursor while hovering a bubble with a url', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
+    });
+    const onHover = created[0].options.onHover;
+    const hoverEvent = { native: { target: canvas } };
+    onHover(hoverEvent, [{ datasetIndex: 0, index: 0 }], created[0]);
+    expect(canvas.style.cursor).toBe('pointer');
+    onHover(hoverEvent, [], created[0]);
+    expect(canvas.style.cursor).toBe('default');
+  });
+
   it('renders legend labels in a theme-resolved color with >= 4.5:1 contrast', () => {
     for (const [mode, background] of [['light', LIGHT_BG], ['dark', DARK_BG]]) {
       installThemeRadios(mode);
