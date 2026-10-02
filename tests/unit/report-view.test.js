@@ -215,6 +215,23 @@ describe('initBubbleChart', () => {
     window.open = originalOpen;
   });
 
+  it('shows the click-to-open tooltip prompt only for openable http(s) urls', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', { bubbles: [] });
+    const label = created[0].options.plugins.tooltip.callbacks.label;
+    const promptFor = url => label({
+      raw: { raw: { label: 'Foo.java', priority: 1, x: 1, y: 2, url } }
+    }).filter(line => line === 'Click to open source file');
+    expect(promptFor('https://example.com/Foo.java')).toEqual(['Click to open source file']);
+    expect(promptFor('http://example.com/Foo.java')).toEqual(['Click to open source file']);
+    expect(promptFor('javascript:alert(1)')).toEqual([]);
+    expect(promptFor('/relative/path')).toEqual([]);
+    expect(promptFor('')).toEqual([]);
+    expect(promptFor(undefined)).toEqual([]);
+  });
+
   it('shows a pointer cursor while hovering a bubble with a url', () => {
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };
