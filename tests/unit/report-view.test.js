@@ -144,6 +144,121 @@ describe('initBubbleChart', () => {
     delete window.Chart;
   });
 
+  it('opens the clicked bubble source url in a new tab', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    const originalOpen = window.open;
+    const opens = [];
+    window.open = (...args) => { opens.push(args); };
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
+    });
+    const stubChart = {
+      data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: { url: 'https://example.com/Foo.java' } }] }] }
+    };
+    created[0].options.onClick(new window.MouseEvent('click'), [{ datasetIndex: 0, index: 0 }], stubChart);
+    expect(opens).toEqual([['https://example.com/Foo.java', '_blank', 'noopener']]);
+    window.open = originalOpen;
+  });
+
+  it('ignores bubble clicks away from every bubble and on bubbles without a url', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    const originalOpen = window.open;
+    const opens = [];
+    window.open = (...args) => { opens.push(args); };
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
+    });
+    const stubChart = {
+      data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: { url: 'https://example.com/Foo.java' } }] }] }
+    };
+    created[0].options.onClick(new window.MouseEvent('click'), [], stubChart);
+    created[0].options.onClick(
+      new window.MouseEvent('click'),
+      [{ datasetIndex: 0, index: 0 }],
+      { data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: {} }] }] } }
+    );
+    expect(opens).toEqual([]);
+    window.open = originalOpen;
+  });
+
+  it('never calls window.open for javascript: or other non-http(s) urls', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    const originalOpen = window.open;
+    const opens = [];
+    window.open = (...args) => { opens.push(args); };
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
+    });
+    const onClick = created[0].options.onClick;
+    const clickEvent = new window.MouseEvent('click');
+    for (const url of [
+      'javascript:alert(1)',
+      'JAVASCRIPT:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'file:///etc/passwd',
+      'ftp://example.com/Foo.java',
+      '/relative/path',
+      'not a url',
+      { toString: () => 'javascript:alert(1)' }
+    ]) {
+      onClick(clickEvent, [{ datasetIndex: 0, index: 0 }], {
+        data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: { url } }] }] }
+      });
+    }
+    expect(opens).toEqual([]);
+    window.open = originalOpen;
+  });
+
+  it('shows the click-to-open tooltip prompt only for openable http(s) urls', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', { bubbles: [] });
+    const label = created[0].options.plugins.tooltip.callbacks.label;
+    const promptFor = url => label({
+      raw: { raw: { label: 'Foo.java', priority: 1, x: 1, y: 2, url } }
+    }).filter(line => line === 'Click to open source file');
+    expect(promptFor('https://example.com/Foo.java')).toEqual(['Click to open source file']);
+    expect(promptFor('http://example.com/Foo.java')).toEqual(['Click to open source file']);
+    expect(promptFor('javascript:alert(1)')).toEqual([]);
+    expect(promptFor('/relative/path')).toEqual([]);
+    expect(promptFor('')).toEqual([]);
+    expect(promptFor(undefined)).toEqual([]);
+  });
+
+  it('shows a pointer cursor only while hovering a bubble with an openable http(s) url', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [
+        { x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' },
+        { x: 2, y: 2, r: 24, label: 'Bar.java', url: 'javascript:alert(1)' },
+        { x: 3, y: 3, r: 24, label: 'Baz.java' }
+      ]
+    });
+    const onHover = created[0].options.onHover;
+    const hoverEvent = { native: { target: canvas } };
+    onHover(hoverEvent, [{ datasetIndex: 0, index: 0 }], created[0]);
+    expect(canvas.style.cursor).toBe('pointer');
+    onHover(hoverEvent, [{ datasetIndex: 0, index: 1 }], created[0]);
+    expect(canvas.style.cursor).toBe('default');
+    onHover(hoverEvent, [{ datasetIndex: 0, index: 2 }], created[0]);
+    expect(canvas.style.cursor).toBe('default');
+    onHover(hoverEvent, [], created[0]);
+    expect(canvas.style.cursor).toBe('default');
+    // event-target guard preserved: missing native target neither throws
+    // nor touches the cursor.
+    expect(() => onHover({ native: {} }, [{ datasetIndex: 0, index: 0 }], created[0])).not.toThrow();
+    expect(canvas.style.cursor).toBe('default');
+  });
+
   it('renders legend labels in a theme-resolved color with >= 4.5:1 contrast', () => {
     for (const [mode, background] of [['light', LIGHT_BG], ['dark', DARK_BG]]) {
       installThemeRadios(mode);

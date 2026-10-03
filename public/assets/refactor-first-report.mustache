@@ -469,7 +469,7 @@
                 <tbody>
                 {{#classRelationshipsToRemove.relationships}}
                     <tr>
-                        <td class="rf-text-left">{{renderedLabel}}</td>
+                        <td class="rf-text-left">{{{safeRenderedLabel}}}</td>
                         <td class="rf-text-right">{{priority}}</td>
                         <td class="rf-text-right">{{cycleCount}}</td>
                         <td class="rf-text-right">{{effortRank}}</td>
@@ -579,7 +579,7 @@
                 <tbody>
                 {{#packageRelationshipsToRemove.relationships}}
                     <tr>
-                        <td class="rf-text-left">{{{renderedLabel}}}</td>
+                        <td class="rf-text-left">{{{safeRenderedLabel}}}</td>
                         <td class="rf-text-right">{{priority}}</td>
                         <td class="rf-text-right">{{cycleCount}}</td>
                         <td class="rf-text-right">{{effortRank}}</td>
