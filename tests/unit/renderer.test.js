@@ -186,7 +186,7 @@ describe('templating safety (repository-provided templates are untrusted)', () =
 
 // ---------------------------------------------------------------------------
 // Source-link cell output: both report templates render the class-
-// relationships cell inline ({{{renderedLabel}}}); the rendering layer owns
+// relationships cell inline; the rendering layer owns
 // the link-safety behavior around it. These guards pin the rendered output
 // so template or renderer changes cannot silently drop or weaken the
 // source links.
@@ -196,6 +196,52 @@ describe('source-link cell rendering (owned by the report rendering layer)', () 
   const junitFixture = JSON.parse(
     readFileSync(path.join(import.meta.dir, '../fixtures/junit4-report.json'), 'utf8')
   );
+
+  for (const templatePath of ['assets', 'public/assets']) {
+    it(`restricts relationship labels to links and markers in ${templatePath}`, () => {
+      const template = readFileSync(
+        path.join(import.meta.dir, `../../${templatePath}/refactor-first-report.mustache`), 'utf8'
+      );
+      const renderedLabel =
+        '<style>body { display: none }</style>' +
+        '<a href="https://example.com/source" target="_blank" rel="opener" ' +
+        'style="display:none" class="close-btn" id="app" onclick="alert(1)" ' +
+        'data-rf-sort="class-relationships" aria-hidden="true">Source</a>' +
+        '<strong style="display:none">*</strong> &#8594; Target : 1' +
+        '<img src="https://example.com/tracker"><button>Injected</button>' +
+        '<a href="javascript:alert(1)">Unsafe</a>';
+      const data = structuredClone(junitFixture);
+      for (const key of ['classRelationshipsToRemove', 'packageRelationshipsToRemove']) {
+        data[key].relationships = [
+          { ...data[key].relationships[0], renderedLabel,
+            safeRenderedLabel: '<style>body { color: red }</style>' },
+          { priority: 2, renderedLabel: null, safeRenderedLabel: '<strong>Forged</strong>' }
+        ];
+      }
+      const original = structuredClone(data);
+      const html = renderTemplate(template, prepareReportData(data));
+      const doc = new JSDOM(html).window.document;
+      expect(data).toEqual(original);
+      expect(html).not.toContain('body {');
+      for (const table of ['class-relationships', 'package-relationships']) {
+        const cells = doc.querySelectorAll(`table[data-rf-table="${table}"] tbody tr td:first-child`);
+        const cell = cells[0];
+        expect(cell.textContent).toContain('Source* → Target : 1');
+        expect(cell.querySelector('strong')?.textContent).toBe('*');
+        expect(cell.querySelector('a')?.getAttribute('href')).toBe('https://example.com/source');
+        expect(cell.querySelector('a')?.getAttribute('target')).toBe('_blank');
+        expect(cell.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+        expect(cell.querySelector('a:last-child')?.hasAttribute('href')).toBe(false);
+        for (const element of cell.querySelectorAll('*')) {
+          expect(['A', 'STRONG']).toContain(element.tagName);
+          for (const attribute of element.attributes) {
+            expect(['href', 'target', 'rel']).toContain(attribute.name);
+          }
+        }
+        expect(cells[1].textContent).toBe('');
+      }
+    });
+  }
 
   it('renders the class-relationships source-link cell with a hardened anchor', () => {
     const template = readFileSync(
