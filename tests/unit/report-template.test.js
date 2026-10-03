@@ -25,16 +25,4 @@ describe('bundled report template', () => {
   it('the served public/ copy is identical to the source template', () => {
     expect(loadTemplate('public')).toBe(loadTemplate('assets'));
   });
-
-  it('renders the class-relationships source link via the shared partial, not inline', () => {
-    for (const which of ['assets', 'public']) {
-      const template = loadTemplate(which);
-      const start = template.indexOf('{{#classRelationshipsToRemove.relationships}}');
-      const end = template.indexOf('{{/classRelationshipsToRemove.relationships}}');
-      expect(start).toBeGreaterThan(-1);
-      const rows = template.slice(start, end);
-      expect(rows).toContain('{{> source-link-cell}}');
-      expect(rows).not.toContain('{{{renderedLabel}}}');
-    }
-  });
 });

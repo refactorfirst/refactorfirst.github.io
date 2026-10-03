@@ -232,18 +232,30 @@ describe('initBubbleChart', () => {
     expect(promptFor(undefined)).toEqual([]);
   });
 
-  it('shows a pointer cursor while hovering a bubble with a url', () => {
+  it('shows a pointer cursor only while hovering a bubble with an openable http(s) url', () => {
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };
     const canvas = document.getElementById('chart_GOD');
     initBubbleChart(canvas, 'God Classes', {
-      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
+      bubbles: [
+        { x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' },
+        { x: 2, y: 2, r: 24, label: 'Bar.java', url: 'javascript:alert(1)' },
+        { x: 3, y: 3, r: 24, label: 'Baz.java' }
+      ]
     });
     const onHover = created[0].options.onHover;
     const hoverEvent = { native: { target: canvas } };
     onHover(hoverEvent, [{ datasetIndex: 0, index: 0 }], created[0]);
     expect(canvas.style.cursor).toBe('pointer');
+    onHover(hoverEvent, [{ datasetIndex: 0, index: 1 }], created[0]);
+    expect(canvas.style.cursor).toBe('default');
+    onHover(hoverEvent, [{ datasetIndex: 0, index: 2 }], created[0]);
+    expect(canvas.style.cursor).toBe('default');
     onHover(hoverEvent, [], created[0]);
+    expect(canvas.style.cursor).toBe('default');
+    // event-target guard preserved: missing native target neither throws
+    // nor touches the cursor.
+    expect(() => onHover({ native: {} }, [{ datasetIndex: 0, index: 0 }], created[0])).not.toThrow();
     expect(canvas.style.cursor).toBe('default');
   });
 
