@@ -4,6 +4,8 @@
 import { describe, it, expect, mock, afterEach } from 'bun:test';
 import {
   TABLE_CONFIG,
+  REPORT_TABLES,
+  columnValue,
   paginateTableData,
   pageCount,
   sortTableData,
@@ -411,5 +413,62 @@ describe('TABLE_CONFIG defaults', () => {
     expect(TABLE_CONFIG.copy.enabled).toBe(true);
     expect(TABLE_CONFIG.copy.toastDuration).toBe(3000);
     expect(TABLE_CONFIG.stickyHeaders).toBe(true);
+  });
+});
+
+describe('REPORT_TABLES package-relationships class-break column', () => {
+  const column = REPORT_TABLES['package-relationships'].columns.find(
+    col => col.key === 'classRelationshipsToBreakPackage'
+  );
+
+  it('exposes the class-break column', () => {
+    expect(column).toBeDefined();
+    expect(column.label).toBe('Class Relationships to Remove To Break Package Relationship');
+  });
+
+  it('reads the rendered label of structured ClassRelationshipDTO entries', () => {
+    const row = {
+      classRelationshipsToBreakPackage: [
+        {
+          sourceClass: 'org.junit.runner.Request',
+          targetClass: 'org.junit.internal.requests.SortingRequest',
+          sourceMarked: true,
+          targetMarked: false,
+          weight: 2,
+          renderedLabel:
+            '<a href="https://example.com/Request.java" target="_blank">Request</a>* &#8594; ' +
+            '<a href="https://example.com/SortingRequest.java" target="_blank">SortingRequest</a> : 2'
+        },
+        {
+          sourceClass: 'org.junit.runner.Request',
+          targetClass: 'org.junit.internal.requests.ClassRequest',
+          renderedLabel:
+            '<a href="https://example.com/Request.java" target="_blank">Request</a> &#8594; ' +
+            '<a href="https://example.com/ClassRequest.java" target="_blank">ClassRequest</a> : 2'
+        }
+      ]
+    };
+    expect(columnValue(column, row)).toBe('Request * → SortingRequest : 2; Request → ClassRequest : 2');
+  });
+
+  it('ignores pre-DTO string entries from older reports', () => {
+    const row = {
+      classRelationshipsToBreakPackage: [
+        '<a href="https://example.com/MethodSorter.java" target="_blank">MethodSorter</a> &#8594; ' +
+          '<a href="https://example.com/MethodSorters.java" target="_blank">MethodSorters</a> : 1'
+      ]
+    };
+    expect(columnValue(column, row)).toBe('');
+  });
+
+  it('tolerates missing or malformed entries', () => {
+    expect(columnValue(column, {})).toBe('');
+    expect(columnValue(column, { classRelationshipsToBreakPackage: null })).toBe('');
+    expect(columnValue(column, { classRelationshipsToBreakPackage: [] })).toBe('');
+    expect(
+      columnValue(column, {
+        classRelationshipsToBreakPackage: [{ sourceClass: 'a.B' }, null, { renderedLabel: 'Plain label' }]
+      })
+    ).toBe('; ; Plain label');
   });
 });
