@@ -602,3 +602,129 @@ describe('prepareReportData', () => {
     expect(disharmonyThs[1].querySelector('.rf-sort-indicator').textContent).toBe('▲');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Class relationships to break a package cycle: RefactorFirst serializes
+// structured ClassRelationshipDTO objects, which must render through the
+// package relationships table cell, sanitized to links and markers only.
+// Pre-DTO string entries are no longer part of the schema and are dropped.
+// ---------------------------------------------------------------------------
+
+describe('class relationships to break a package cycle cell rendering', () => {
+  const template = readFileSync(
+    path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+  );
+
+  const structuredEntry = {
+    sourceClass: 'org.junit.runner.Request',
+    targetClass: 'org.junit.internal.requests.SortingRequest',
+    sourceMarked: true,
+    targetMarked: false,
+    weight: 2,
+    renderedLabel:
+      '<a href="https://example.com/Request.java" target="_blank">Request</a>* &#8594; ' +
+      '<a href="https://example.com/SortingRequest.java" target="_blank">SortingRequest</a> : 2',
+    cycleCount: 1
+  };
+  const secondEntry = {
+    sourceClass: 'org.junit.internal.MethodSorter',
+    targetClass: 'org.junit.runners.MethodSorters',
+    sourceMarked: false,
+    targetMarked: false,
+    weight: 1,
+    renderedLabel:
+      '<a href="https://example.com/MethodSorter.java" target="_blank">MethodSorter</a> &#8594; ' +
+      '<a href="https://example.com/MethodSorters.java" target="_blank">MethodSorters</a> : 1',
+    cycleCount: 1
+  };
+
+  function reportWithBreakEntries(entries) {
+    return {
+      project: { name: 'Demo', version: '1.0' },
+      packageRelationshipsToRemove: {
+        hasRelationships: true,
+        relationships: [
+          {
+            renderedLabel: 'org.junit.runner &#8594; org.junit.internal : 2',
+            priority: 1,
+            cycleCount: 1,
+            effortRank: 1,
+            classRelationshipsToBreakPackage: entries
+          }
+        ]
+      }
+    };
+  }
+
+  function breakCellOf(html) {
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector(
+      'table[data-rf-table="package-relationships"] tbody td:nth-of-type(5)'
+    );
+    expect(cell).not.toBeNull();
+    return cell;
+  }
+
+  it('renders structured ClassRelationshipDTO entries from current reports', () => {
+    const html = renderTemplate(template, prepareReportData(reportWithBreakEntries([structuredEntry])));
+    const cell = breakCellOf(html);
+    expect(cell.textContent).toContain('Request* → SortingRequest : 2');
+    expect(cell.querySelector('a')?.getAttribute('href')).toBe('https://example.com/Request.java');
+    expect(cell.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('drops pre-DTO string entries from older reports', () => {
+    const html = renderTemplate(
+      template,
+      prepareReportData(reportWithBreakEntries([
+        structuredEntry,
+        '<a href="https://example.com/MethodSorter.java" target="_blank">MethodSorter</a> &#8594; ' +
+          '<a href="https://example.com/MethodSorters.java" target="_blank">MethodSorters</a> : 1'
+      ]))
+    );
+    const cell = breakCellOf(html);
+    expect(cell.textContent).toContain('Request* → SortingRequest : 2');
+    expect(cell.textContent).not.toContain('MethodSorter');
+    expect(cell.querySelectorAll('br').length).toBe(1);
+  });
+
+  it('renders multiple entries on separate lines', () => {
+    const html = renderTemplate(
+      template,
+      prepareReportData(reportWithBreakEntries([structuredEntry, secondEntry]))
+    );
+    const cell = breakCellOf(html);
+    expect(cell.querySelectorAll('br').length).toBe(2);
+    expect(cell.textContent).toContain('Request* → SortingRequest : 2');
+    expect(cell.textContent).toContain('MethodSorter → MethodSorters : 1');
+  });
+
+  it('sanitizes class-break labels to links and markers only', () => {
+    const hostile = {
+      ...structuredEntry,
+      renderedLabel:
+        '<style>body { display: none }</style>' +
+        '<a href="https://example.com/x" target="_blank" onclick="alert(1)" style="display:none">X</a>' +
+        '<img src=x onerror="alert(1)">' +
+        '<a href="javascript:alert(1)">Unsafe</a>'
+    };
+    const html = renderTemplate(template, prepareReportData(reportWithBreakEntries([hostile])));
+    const cell = breakCellOf(html);
+    expect(cell.textContent).toContain('X');
+    expect(cell.innerHTML).not.toContain('body {');
+    expect(cell.innerHTML).not.toContain('onclick');
+    expect(cell.innerHTML).not.toContain('onerror');
+    expect(cell.innerHTML).not.toContain('javascript:');
+    expect(cell.querySelector('img')).toBeNull();
+    for (const element of cell.querySelectorAll('*')) {
+      expect(['A', 'BR']).toContain(element.tagName);
+    }
+  });
+
+  it('does not mutate the report data while normalizing entries', () => {
+    const data = reportWithBreakEntries([structuredEntry, secondEntry]);
+    const original = structuredClone(data);
+    prepareReportData(data);
+    expect(data).toEqual(original);
+  });
+});
