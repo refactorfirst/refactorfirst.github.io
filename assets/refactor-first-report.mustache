@@ -584,7 +584,7 @@
                         <td class="rf-text-right">{{cycleCount}}</td>
                         <td class="rf-text-right">{{effortRank}}</td>
                         <td class="rf-text-left">{{#classRelationshipsToBreakPackage}}
-                            {{{.}}}<br>{{/classRelationshipsToBreakPackage}}</td>
+                            {{{safeRenderedLabel}}}<br>{{/classRelationshipsToBreakPackage}}</td>
                     </tr>
                 {{/packageRelationshipsToRemove.relationships}}
                 </tbody>
