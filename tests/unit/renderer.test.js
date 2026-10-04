@@ -638,6 +638,11 @@ describe('class relationships to break a package cycle cell rendering', () => {
     cycleCount: 1
   };
 
+  /**
+   * Builds a minimal report with the supplied class-break entries in one package relationship.
+   * @param {Array<object|string>} entries - Structured DTOs or legacy labels to render.
+   * @returns {object} Report fixture for the package relationship table.
+   */
   function reportWithBreakEntries(entries) {
     return {
       project: { name: 'Demo', version: '1.0' },
@@ -656,6 +661,11 @@ describe('class relationships to break a package cycle cell rendering', () => {
     };
   }
 
+  /**
+   * Parses a rendered report and asserts that its package class-break cell exists.
+   * @param {string} html - Rendered report markup.
+   * @returns {HTMLTableCellElement} The first package relationship's class-break cell.
+   */
   function breakCellOf(html) {
     const doc = new JSDOM(html).window.document;
     const cell = doc.querySelector(
