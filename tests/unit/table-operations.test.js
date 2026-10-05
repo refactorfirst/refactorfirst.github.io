@@ -441,6 +441,31 @@ describe('REPORT_TABLES class-relationships relationship column', () => {
   });
 });
 
+describe('REPORT_TABLES package-relationships relationship column', () => {
+  const column = REPORT_TABLES['package-relationships'].columns[0];
+
+  it('derives the plain text from the package names and removal markers', () => {
+    expect(column.key).toBe('packageRelationship');
+    expect(column.label).toBe('Package Relationship');
+    expect(columnValue(column, {
+      sourcePackage: 'org.junit.runner',
+      targetPackage: 'org.junit.internal',
+      sourceMarked: false,
+      targetMarked: true
+    })).toBe('org.junit.runner → org.junit.internal*');
+    expect(columnValue(column, {
+      sourcePackage: 'org.a',
+      targetPackage: 'org.b'
+    })).toBe('org.a → org.b');
+  });
+
+  it('falls back to an empty value when the structured fields are absent', () => {
+    expect(columnValue(column, {})).toBe('');
+    expect(columnValue(column, { sourceMarked: true })).toBe('');
+    expect(columnValue(column, { renderedLabel: 'org.a &#8594; org.b : 1' })).toBe('');
+  });
+});
+
 describe('REPORT_TABLES package-relationships class-break column', () => {
   const column = REPORT_TABLES['package-relationships'].columns.find(
     col => col.key === 'classRelationshipsToBreakPackage'

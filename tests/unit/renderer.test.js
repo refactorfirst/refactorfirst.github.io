@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { renderTemplate, initializeMustache, prepareReportData, classRelationshipMarkup } from '../../lib/renderer.js';
+import { renderTemplate, initializeMustache, prepareReportData, classRelationshipMarkup, packageRelationshipMarkup } from '../../lib/renderer.js';
 import { TABLE_CONFIG } from '../../lib/table-operations.js';
 
 describe('Mustache Rendering', () => {
@@ -247,6 +247,33 @@ describe('source-link cell rendering (owned by the report rendering layer)', () 
     expect(classRelationshipMarkup({ renderedLabel: '<a href="https://x">A</a>' }, REPO_URL)).toBeNull();
   });
 
+  it('builds the package-relationship markup from repoUrl, package paths and package names', () => {
+    // The package names double as the anchor text; the hyperlink targets are
+    // project.repoUrl plus the package directory paths relative to the project root
+    expect(packageRelationshipMarkup(
+      {
+        sourcePackage: 'org.hjug.graphbuilder.metrics',
+        targetPackage: 'org.hjug.graphbuilder',
+        sourcePackagePath: 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/metrics/',
+        targetPackagePath: 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/',
+        sourceMarked: false,
+        targetMarked: true
+      },
+      REPO_URL
+    )).toBe(
+      '<a href="' + REPO_URL + 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/metrics/" target="_blank">org.hjug.graphbuilder.metrics</a> ' +
+        '&#8594; ' +
+        '<a href="' + REPO_URL + 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/" target="_blank">org.hjug.graphbuilder</a>*'
+    );
+  });
+
+  it('returns null for entries without the structured package-relationship fields', () => {
+    expect(packageRelationshipMarkup(null, REPO_URL)).toBeNull();
+    expect(packageRelationshipMarkup('legacy label', REPO_URL)).toBeNull();
+    expect(packageRelationshipMarkup({ sourceMarked: true }, REPO_URL)).toBeNull();
+    expect(packageRelationshipMarkup({ renderedLabel: 'org.a &#8594; org.b : 1' }, REPO_URL)).toBeNull();
+  });
+
   for (const templatePath of ['assets', 'public/assets']) {
     it(`renders hardened source links in the class-relationships cell (${templatePath})`, () => {
       const template = readFileSync(
@@ -379,38 +406,91 @@ describe('source-link cell rendering (owned by the report rendering layer)', () 
     expect(cell.textContent).toContain('A → B');
   });
 
-  it('still restricts package relationship labels to links and markers', () => {
+  it('renders the package-relationships cell from repoUrl + package paths with hardened anchors', () => {
     const template = readFileSync(
       path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
     );
-    const data = structuredClone(junitFixture);
-    const hostilePackageLabel =
-      '<style>body { display: none }</style>' +
-      '<a href="https://example.com/source" target="_blank" rel="opener" ' +
-      'style="display:none" class="close-btn" id="app" onclick="alert(1)" ' +
-      'data-rf-sort="package-relationships" aria-hidden="true">Source</a>' +
-      '<strong style="display:none">*</strong> &#8594; Target : 1' +
-      '<img src="https://example.com/tracker"><button>Injected</button>' +
-      '<a href="javascript:alert(1)">Unsafe</a>';
-    data.packageRelationshipsToRemove.relationships = [
-      { ...data.packageRelationshipsToRemove.relationships[0], renderedLabel: hostilePackageLabel }
-    ];
+    const data = {
+      project: { name: 'Demo', version: '1.0', repoUrl: REPO_URL },
+      classRelationshipsToRemove: { hasRelationships: false, relationships: [] },
+      packageRelationshipsToRemove: {
+        hasRelationships: true,
+        relationships: [
+          {
+            sourcePackage: 'org.hjug.graphbuilder.metrics',
+            targetPackage: 'org.hjug.graphbuilder',
+            sourcePackagePath: 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/metrics/',
+            targetPackagePath: 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/',
+            sourceMarked: false,
+            targetMarked: true,
+            priority: 1,
+            cycleCount: 1,
+            effortRank: 1,
+            classRelationshipsToBreakPackage: []
+          }
+        ]
+      }
+    };
     const original = structuredClone(data);
     const html = renderTemplate(template, prepareReportData(data));
     const doc = new JSDOM(html).window.document;
     expect(data).toEqual(original);
-    expect(html).not.toContain('body {');
-    const cell = doc.querySelector(
-      'table[data-rf-table="package-relationships"] tbody tr td:first-child'
-    );
-    expect(cell.textContent).toContain('Source* → Target : 1');
-    expect(cell.querySelector('strong')?.textContent).toBe('*');
-    expect(cell.querySelector('a')?.getAttribute('href')).toBe('https://example.com/source');
-    expect(cell.querySelector('a')?.getAttribute('target')).toBe('_blank');
-    expect(cell.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
-    expect(cell.querySelector('a:last-child')?.hasAttribute('href')).toBe(false);
+    const cell = doc.querySelector('table[data-rf-table="package-relationships"] tbody tr td:first-child');
+    expect(cell).not.toBeNull();
+    const anchors = cell.querySelectorAll('a');
+    expect(anchors.length).toBe(2);
+    expect(anchors[0].getAttribute('href'))
+      .toBe(REPO_URL + 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/metrics/');
+    expect(anchors[0].getAttribute('target')).toBe('_blank');
+    expect(anchors[0].getAttribute('rel')).toBe('noopener noreferrer');
+    expect(anchors[0].textContent).toBe('org.hjug.graphbuilder.metrics');
+    expect(anchors[1].textContent).toBe('org.hjug.graphbuilder');
+    expect(cell.textContent).toBe('org.hjug.graphbuilder.metrics → org.hjug.graphbuilder*');
     for (const element of cell.querySelectorAll('*')) {
-      expect(['A', 'STRONG']).toContain(element.tagName);
+      expect(element.tagName).toBe('A');
+      for (const attribute of element.attributes) {
+        expect(['href', 'target', 'rel']).toContain(attribute.name);
+      }
+    }
+  });
+
+  it('neutralizes hostile package-relationship fields down to links and markers', () => {
+    const template = readFileSync(
+      path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+    );
+    const data = {
+      project: { name: 'Demo', version: '1.0', repoUrl: 'https://github.com/demo/repo/blob/main/' },
+      classRelationshipsToRemove: { hasRelationships: false, relationships: [] },
+      packageRelationshipsToRemove: {
+        hasRelationships: true,
+        relationships: [
+          {
+            sourcePackage: 'org.demo.pkg<img src=x onerror=alert(1)>',
+            targetPackage: 'org.demo.other',
+            sourcePackagePath: 'src/main/java/org/demo/pkg" onclick="alert(1)',
+            targetPackagePath: 'src/main/java/org/demo/other/',
+            sourceMarked: true,
+            targetMarked: false,
+            priority: 1,
+            cycleCount: 1,
+            effortRank: 1,
+            classRelationshipsToBreakPackage: []
+          }
+        ]
+      }
+    };
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector('table[data-rf-table="package-relationships"] tbody tr td:first-child');
+    expect(cell).not.toBeNull();
+    // The hostile name is escaped into inert text and the quote in the path cannot
+    // break out of the href attribute: no img element, no event handler attributes
+    expect(cell.querySelector('img')).toBeNull();
+    expect(cell.querySelector('[onclick]')).toBeNull();
+    expect(cell.textContent).toContain('org.demo.pkg');
+    expect(cell.textContent).toContain('→ org.demo.other');
+    for (const element of cell.querySelectorAll('*')) {
+      expect(element.tagName).toBe('A');
       for (const attribute of element.attributes) {
         expect(['href', 'target', 'rel']).toContain(attribute.name);
       }
@@ -460,6 +540,27 @@ function synthRelationships(count) {
 }
 
 /**
+ * Builds package relationship fixtures with out-of-order priorities to exercise sorting.
+ * @param {number} count - Number of package relationship rows to generate.
+ * @returns {Array<object>} Synthetic package relationship rows.
+ */
+function synthPackageRelationships(count) {
+  return Array.from({ length: count }, (_, i) => ({
+    sourcePackage: `com.example.pkg${(i + 1) % count}`,
+    targetPackage: `com.example.pkg${i}`,
+    sourcePackagePath: `src/main/java/com/example/pkg${(i + 1) % count}/`,
+    targetPackagePath: `src/main/java/com/example/pkg${i}/`,
+    sourceMarked: i % 2 === 0,
+    targetMarked: false,
+    // start out of order (4, 5, 1, 2, 3, ...) so sorted assertions are meaningful
+    priority: ((i + 3) % 5) + 1,
+    cycleCount: i,
+    effortRank: i,
+    classRelationshipsToBreakPackage: []
+  }));
+}
+
+/**
  * Builds a report fixture with configurable table sizes and unsorted priorities.
  * @param {object} [options] - Row counts for each report table.
  * @param {number} [options.classRows=25] - Class relationship count.
@@ -478,7 +579,7 @@ function synthReport({ classRows = 25, pkgRows = 5, disharmonyRows = 30, cycleRo
     },
     packageRelationshipsToRemove: {
       hasRelationships: pkgRows > 0,
-      relationships: synthRelationships(pkgRows)
+      relationships: synthPackageRelationships(pkgRows)
     },
     hasDisharmonies: true,
     disharmonies: [{
@@ -834,7 +935,12 @@ describe('class relationships to break a package cycle cell rendering', () => {
         hasRelationships: true,
         relationships: [
           {
-            renderedLabel: 'org.junit.runner &#8594; org.junit.internal : 2',
+            sourcePackage: 'org.junit.runner',
+            targetPackage: 'org.junit.internal',
+            sourcePackagePath: 'src/main/java/org/junit/runner/',
+            targetPackagePath: 'src/main/java/org/junit/internal/',
+            sourceMarked: false,
+            targetMarked: false,
             priority: 1,
             cycleCount: 1,
             effortRank: 1,
@@ -867,6 +973,12 @@ describe('class relationships to break a package cycle cell rendering', () => {
     expect(link.getAttribute('href')).toBe(REPO_URL + 'src/main/java/org/junit/runner/Request.java');
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    // The package-relationship cell renders from the package fields too
+    const doc = new JSDOM(html).window.document;
+    const packageCell = doc.querySelector('table[data-rf-table="package-relationships"] tbody td:first-child');
+    expect(packageCell.textContent).toBe('org.junit.runner → org.junit.internal');
+    expect(packageCell.querySelector('a').getAttribute('href'))
+      .toBe(REPO_URL + 'src/main/java/org/junit/runner/');
   });
 
   it('drops pre-DTO string entries from older reports', () => {

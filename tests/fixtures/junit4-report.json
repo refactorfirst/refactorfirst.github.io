@@ -889,7 +889,8 @@
         "sourceMarked": true,
         "targetMarked": true,
         "weight": 1,
-        "renderedLabel": "org.junit.internal<strong>*</strong> &#8594; org.junit.runners<strong>*</strong> : 1",
+        "sourcePackagePath": "src/main/java/org/junit/internal/",
+        "targetPackagePath": "src/main/java/org/junit/runners/",
         "priority": 1,
         "cycleCount": 4,
         "effortRank": 1,
@@ -918,7 +919,8 @@
         "sourceMarked": true,
         "targetMarked": false,
         "weight": 1,
-        "renderedLabel": "org.junit.runners<strong>*</strong> &#8594; org.junit.internal.builders : 1",
+        "sourcePackagePath": "src/main/java/org/junit/runners/",
+        "targetPackagePath": "src/main/java/org/junit/internal/builders/",
         "priority": 2,
         "cycleCount": 4,
         "effortRank": 1,
@@ -947,7 +949,8 @@
         "sourceMarked": false,
         "targetMarked": false,
         "weight": 2,
-        "renderedLabel": "org.junit.runner &#8594; org.junit.internal.builders : 2",
+        "sourcePackagePath": "src/main/java/org/junit/runner/",
+        "targetPackagePath": "src/main/java/org/junit/internal/builders/",
         "priority": 3,
         "cycleCount": 4,
         "effortRank": 2,
@@ -976,7 +979,8 @@
         "sourceMarked": false,
         "targetMarked": false,
         "weight": 5,
-        "renderedLabel": "org.junit.runner &#8594; org.junit.internal.requests : 5",
+        "sourcePackagePath": "src/main/java/org/junit/runner/",
+        "targetPackagePath": "src/main/java/org/junit/internal/requests/",
         "priority": 4,
         "cycleCount": 4,
         "effortRank": 5,
@@ -1053,7 +1057,8 @@
         "sourceMarked": true,
         "targetMarked": false,
         "weight": 12,
-        "renderedLabel": "org.junit.internal<strong>*</strong> &#8594; org.junit.runner : 12",
+        "sourcePackagePath": "src/main/java/org/junit/internal/",
+        "targetPackagePath": "src/main/java/org/junit/runner/",
         "priority": 5,
         "cycleCount": 4,
         "effortRank": 12,
@@ -1098,7 +1103,8 @@
         "sourceMarked": false,
         "targetMarked": true,
         "weight": 1,
-        "renderedLabel": "org.junit &#8594; org.junit.runners<strong>*</strong> : 1",
+        "sourcePackagePath": "src/main/java/org/junit/",
+        "targetPackagePath": "src/main/java/org/junit/runners/",
         "priority": 6,
         "cycleCount": 3,
         "effortRank": 1,
@@ -1127,7 +1133,8 @@
         "sourceMarked": true,
         "targetMarked": true,
         "weight": 2,
-        "renderedLabel": "org.junit.runner.notification<strong>*</strong> &#8594; org.junit.internal<strong>*</strong> : 2",
+        "sourcePackagePath": "src/main/java/org/junit/runner/notification/",
+        "targetPackagePath": "src/main/java/org/junit/internal/",
         "priority": 7,
         "cycleCount": 3,
         "effortRank": 2,
@@ -1156,7 +1163,8 @@
         "sourceMarked": false,
         "targetMarked": false,
         "weight": 2,
-        "renderedLabel": "org.junit.runners.model &#8594; org.junit.internal.runners.model : 2",
+        "sourcePackagePath": "src/main/java/org/junit/runners/model/",
+        "targetPackagePath": "src/main/java/org/junit/internal/runners/model/",
         "priority": 8,
         "cycleCount": 3,
         "effortRank": 2,
@@ -1201,7 +1209,8 @@
         "sourceMarked": true,
         "targetMarked": false,
         "weight": 5,
-        "renderedLabel": "org.junit.internal.runners<strong>*</strong> &#8594; org.junit.runners.model : 5",
+        "sourcePackagePath": "src/main/java/org/junit/internal/runners/",
+        "targetPackagePath": "src/main/java/org/junit/runners/model/",
         "priority": 9,
         "cycleCount": 3,
         "effortRank": 5,
@@ -1262,7 +1271,8 @@
         "sourceMarked": true,
         "targetMarked": false,
         "weight": 8,
-        "renderedLabel": "org.junit.internal<strong>*</strong> &#8594; org.junit : 8",
+        "sourcePackagePath": "src/main/java/org/junit/internal/",
+        "targetPackagePath": "src/main/java/org/junit/",
         "priority": 10,
         "cycleCount": 3,
         "effortRank": 8,
@@ -1339,7 +1349,8 @@
         "sourceMarked": false,
         "targetMarked": false,
         "weight": 15,
-        "renderedLabel": "org.junit.runners.model &#8594; org.junit.runner : 15",
+        "sourcePackagePath": "src/main/java/org/junit/runners/model/",
+        "targetPackagePath": "src/main/java/org/junit/runner/",
         "priority": 11,
         "cycleCount": 3,
         "effortRank": 15,
@@ -1400,7 +1411,8 @@
         "sourceMarked": false,
         "targetMarked": true,
         "weight": 16,
-        "renderedLabel": "org.junit.runners.parameterized &#8594; org.junit.runners<strong>*</strong> : 16",
+        "sourcePackagePath": "src/main/java/org/junit/runners/parameterized/",
+        "targetPackagePath": "src/main/java/org/junit/runners/",
         "priority": 12,
         "cycleCount": 3,
         "effortRank": 16,
@@ -1461,7 +1473,8 @@
         "sourceMarked": true,
         "targetMarked": false,
         "weight": 25,
-        "renderedLabel": "org.junit.runner.notification<strong>*</strong> &#8594; org.junit.runner : 25",
+        "sourcePackagePath": "src/main/java/org/junit/runner/notification/",
+        "targetPackagePath": "src/main/java/org/junit/runner/",
         "priority": 13,
         "cycleCount": 3,
         "effortRank": 25,
@@ -1586,7 +1599,8 @@
         "sourceMarked": false,
         "targetMarked": false,
         "weight": 39,
-        "renderedLabel": "junit.framework &#8594; org.junit.runner : 39",
+        "sourcePackagePath": "src/main/java/junit/framework/",
+        "targetPackagePath": "src/main/java/org/junit/runner/",
         "priority": 14,
         "cycleCount": 3,
         "effortRank": 39,
@@ -1711,7 +1725,8 @@
         "sourceMarked": true,
         "targetMarked": false,
         "weight": 41,
-        "renderedLabel": "org.junit.internal.runners<strong>*</strong> &#8594; org.junit.runner : 41",
+        "sourcePackagePath": "src/main/java/org/junit/internal/runners/",
+        "targetPackagePath": "src/main/java/org/junit/runner/",
         "priority": 15,
         "cycleCount": 3,
         "effortRank": 41,
@@ -1900,7 +1915,8 @@
         "sourceMarked": false,
         "targetMarked": false,
         "weight": 31,
-        "renderedLabel": "org.junit.validator &#8594; org.junit.runners.model : 31",
+        "sourcePackagePath": "src/main/java/org/junit/validator/",
+        "targetPackagePath": "src/main/java/org/junit/runners/model/",
         "priority": 16,
         "cycleCount": 2,
         "effortRank": 31,
@@ -2121,7 +2137,8 @@
         "sourceMarked": true,
         "targetMarked": false,
         "weight": 13,
-        "renderedLabel": "org.junit.experimental.theories<strong>*</strong> &#8594; org.junit.experimental.theories.internal : 13",
+        "sourcePackagePath": "src/main/java/org/junit/experimental/theories/",
+        "targetPackagePath": "src/main/java/org/junit/experimental/theories/internal/",
         "priority": 17,
         "cycleCount": 1,
         "effortRank": 13,
@@ -2182,7 +2199,8 @@
         "sourceMarked": false,
         "targetMarked": false,
         "weight": 44,
-        "renderedLabel": "org.junit.runner.manipulation &#8594; org.junit.runner : 44",
+        "sourcePackagePath": "src/main/java/org/junit/runner/manipulation/",
+        "targetPackagePath": "src/main/java/org/junit/runner/",
         "priority": 18,
         "cycleCount": 1,
         "effortRank": 44,
@@ -2326,7 +2344,8 @@
             "effortRank": 1,
             "changePronenessRank": 2,
             "color": "rgba(235, 64, 52, 0.75)",
-            "borderColor": "rgb(235, 64, 52)"
+            "borderColor": "rgb(235, 64, 52)",
+            "path": "src/main/java/org/junit/runners/BlockJUnit4ClassRunner.java"
           },
           {
             "id": "ParentRunner.java",
@@ -2338,7 +2357,8 @@
             "effortRank": 2,
             "changePronenessRank": 1,
             "color": "rgba(39, 174, 96, 0.75)",
-            "borderColor": "rgb(39, 174, 96)"
+            "borderColor": "rgb(39, 174, 96)",
+            "path": "src/main/java/org/junit/runners/ParentRunner.java"
           }
         ],
         "xaxisLabel": "Effort to refactor",
@@ -2434,7 +2454,8 @@
             "effortRank": 1,
             "changePronenessRank": 1,
             "color": "rgba(235, 64, 52, 0.75)",
-            "borderColor": "rgb(235, 64, 52)"
+            "borderColor": "rgb(235, 64, 52)",
+            "path": "src/main/java/org/junit/runner/notification/Failure.java"
           },
           {
             "id": "FrameworkField.java",
@@ -2446,7 +2467,8 @@
             "effortRank": 2,
             "changePronenessRank": 2,
             "color": "rgba(39, 174, 96, 0.75)",
-            "borderColor": "rgb(39, 174, 96)"
+            "borderColor": "rgb(39, 174, 96)",
+            "path": "src/main/java/org/junit/runners/model/FrameworkField.java"
           }
         ],
         "xaxisLabel": "Effort to refactor",
@@ -2542,7 +2564,8 @@
             "effortRank": 5,
             "changePronenessRank": 12,
             "color": "rgba(235, 64, 52, 0.75)",
-            "borderColor": "rgb(235, 64, 52)"
+            "borderColor": "rgb(235, 64, 52)",
+            "path": "src/main/java/org/junit/experimental/theories/Theories.java"
           },
           {
             "id": "BlockJUnit4ClassRunner.java",
@@ -2554,7 +2577,8 @@
             "effortRank": 8,
             "changePronenessRank": 14,
             "color": "rgba(220, 72, 55, 0.75)",
-            "borderColor": "rgb(220, 72, 55)"
+            "borderColor": "rgb(220, 72, 55)",
+            "path": "src/main/java/org/junit/runners/BlockJUnit4ClassRunner.java"
           },
           {
             "id": "ErrorReportingRunner.java",
@@ -2566,7 +2590,8 @@
             "effortRank": 1,
             "changePronenessRank": 6,
             "color": "rgba(205, 81, 59, 0.75)",
-            "borderColor": "rgb(205, 81, 59)"
+            "borderColor": "rgb(205, 81, 59)",
+            "path": "src/main/java/org/junit/internal/runners/ErrorReportingRunner.java"
           },
           {
             "id": "Categories.java",
@@ -2578,7 +2603,8 @@
             "effortRank": 6,
             "changePronenessRank": 11,
             "color": "rgba(190, 89, 62, 0.75)",
-            "borderColor": "rgb(190, 89, 62)"
+            "borderColor": "rgb(190, 89, 62)",
+            "path": "src/main/java/org/junit/experimental/categories/Categories.java"
           },
           {
             "id": "Categories.java",
@@ -2590,7 +2616,8 @@
             "effortRank": 9,
             "changePronenessRank": 11,
             "color": "rgba(175, 98, 66, 0.75)",
-            "borderColor": "rgb(175, 98, 66)"
+            "borderColor": "rgb(175, 98, 66)",
+            "path": "src/main/java/org/junit/experimental/categories/Categories.java"
           },
           {
             "id": "TestRunner.java",
@@ -2602,7 +2629,8 @@
             "effortRank": 2,
             "changePronenessRank": 2,
             "color": "rgba(160, 106, 69, 0.75)",
-            "borderColor": "rgb(160, 106, 69)"
+            "borderColor": "rgb(160, 106, 69)",
+            "path": "src/main/java/junit/textui/TestRunner.java"
           },
           {
             "id": "JUnit4ClassRunner.java",
@@ -2614,7 +2642,8 @@
             "effortRank": 3,
             "changePronenessRank": 3,
             "color": "rgba(145, 115, 72, 0.75)",
-            "borderColor": "rgb(145, 115, 72)"
+            "borderColor": "rgb(145, 115, 72)",
+            "path": "src/main/java/org/junit/internal/runners/JUnit4ClassRunner.java"
           },
           {
             "id": "JUnit38ClassRunner.java",
@@ -2626,7 +2655,8 @@
             "effortRank": 4,
             "changePronenessRank": 4,
             "color": "rgba(129, 123, 76, 0.75)",
-            "borderColor": "rgb(129, 123, 76)"
+            "borderColor": "rgb(129, 123, 76)",
+            "path": "src/main/java/org/junit/internal/runners/JUnit38ClassRunner.java"
           },
           {
             "id": "ParentRunner.java",
@@ -2638,7 +2668,8 @@
             "effortRank": 13,
             "changePronenessRank": 13,
             "color": "rgba(114, 132, 79, 0.75)",
-            "borderColor": "rgb(114, 132, 79)"
+            "borderColor": "rgb(114, 132, 79)",
+            "path": "src/main/java/org/junit/runners/ParentRunner.java"
           },
           {
             "id": "FailOnTimeout.java",
@@ -2650,7 +2681,8 @@
             "effortRank": 10,
             "changePronenessRank": 9,
             "color": "rgba(99, 140, 82, 0.75)",
-            "borderColor": "rgb(99, 140, 82)"
+            "borderColor": "rgb(99, 140, 82)",
+            "path": "src/main/java/org/junit/internal/runners/statements/FailOnTimeout.java"
           },
           {
             "id": "BlockJUnit4ClassRunnerWithParameters.java",
@@ -2662,7 +2694,8 @@
             "effortRank": 7,
             "changePronenessRank": 5,
             "color": "rgba(84, 149, 86, 0.75)",
-            "borderColor": "rgb(84, 149, 86)"
+            "borderColor": "rgb(84, 149, 86)",
+            "path": "src/main/java/org/junit/runners/parameterized/BlockJUnit4ClassRunnerWithParameters.java"
           },
           {
             "id": "TemporaryFolder.java",
@@ -2674,7 +2707,8 @@
             "effortRank": 11,
             "changePronenessRank": 8,
             "color": "rgba(69, 157, 89, 0.75)",
-            "borderColor": "rgb(69, 157, 89)"
+            "borderColor": "rgb(69, 157, 89)",
+            "path": "src/main/java/org/junit/rules/TemporaryFolder.java"
           },
           {
             "id": "AllMembersSupplier.java",
@@ -2686,7 +2720,8 @@
             "effortRank": 12,
             "changePronenessRank": 7,
             "color": "rgba(54, 166, 93, 0.75)",
-            "borderColor": "rgb(54, 166, 93)"
+            "borderColor": "rgb(54, 166, 93)",
+            "path": "src/main/java/org/junit/experimental/theories/internal/AllMembersSupplier.java"
           },
           {
             "id": "TestCase.java",
@@ -2698,7 +2733,8 @@
             "effortRank": 10,
             "changePronenessRank": 1,
             "color": "rgba(39, 174, 96, 0.75)",
-            "borderColor": "rgb(39, 174, 96)"
+            "borderColor": "rgb(39, 174, 96)",
+            "path": "src/main/java/junit/framework/TestCase.java"
           }
         ],
         "xaxisLabel": "Effort to refactor",
@@ -3130,7 +3166,8 @@
             "effortRank": 1,
             "changePronenessRank": 4,
             "color": "rgba(235, 64, 52, 0.75)",
-            "borderColor": "rgb(235, 64, 52)"
+            "borderColor": "rgb(235, 64, 52)",
+            "path": "src/main/java/org/junit/runners/ParentRunner.java"
           },
           {
             "id": "Theories.java",
@@ -3142,7 +3179,8 @@
             "effortRank": 2,
             "changePronenessRank": 3,
             "color": "rgba(170, 101, 67, 0.75)",
-            "borderColor": "rgb(170, 101, 67)"
+            "borderColor": "rgb(170, 101, 67)",
+            "path": "src/main/java/org/junit/experimental/theories/Theories.java"
           },
           {
             "id": "MethodValidator.java",
@@ -3154,7 +3192,8 @@
             "effortRank": 1,
             "changePronenessRank": 1,
             "color": "rgba(104, 137, 81, 0.75)",
-            "borderColor": "rgb(104, 137, 81)"
+            "borderColor": "rgb(104, 137, 81)",
+            "path": "src/main/java/org/junit/internal/runners/MethodValidator.java"
           },
           {
             "id": "AllMembersSupplier.java",
@@ -3166,7 +3205,8 @@
             "effortRank": 3,
             "changePronenessRank": 2,
             "color": "rgba(39, 174, 96, 0.75)",
-            "borderColor": "rgb(39, 174, 96)"
+            "borderColor": "rgb(39, 174, 96)",
+            "path": "src/main/java/org/junit/experimental/theories/internal/AllMembersSupplier.java"
           }
         ],
         "xaxisLabel": "Effort to refactor",
@@ -3335,7 +3375,8 @@
             "effortRank": 1,
             "changePronenessRank": 14,
             "color": "rgba(235, 64, 52, 0.75)",
-            "borderColor": "rgb(235, 64, 52)"
+            "borderColor": "rgb(235, 64, 52)",
+            "path": "src/main/java/org/junit/runners/ParentRunner.java"
           },
           {
             "id": "Theories.java",
@@ -3347,7 +3388,8 @@
             "effortRank": 3,
             "changePronenessRank": 12,
             "color": "rgba(220, 72, 55, 0.75)",
-            "borderColor": "rgb(220, 72, 55)"
+            "borderColor": "rgb(220, 72, 55)",
+            "path": "src/main/java/org/junit/experimental/theories/Theories.java"
           },
           {
             "id": "Theories.java",
@@ -3359,7 +3401,8 @@
             "effortRank": 3,
             "changePronenessRank": 12,
             "color": "rgba(205, 81, 59, 0.75)",
-            "borderColor": "rgb(205, 81, 59)"
+            "borderColor": "rgb(205, 81, 59)",
+            "path": "src/main/java/org/junit/experimental/theories/Theories.java"
           },
           {
             "id": "Throwables.java",
@@ -3371,7 +3414,8 @@
             "effortRank": 2,
             "changePronenessRank": 9,
             "color": "rgba(190, 89, 62, 0.75)",
-            "borderColor": "rgb(190, 89, 62)"
+            "borderColor": "rgb(190, 89, 62)",
+            "path": "src/main/java/org/junit/internal/Throwables.java"
           },
           {
             "id": "Assert.java",
@@ -3383,7 +3427,8 @@
             "effortRank": 6,
             "changePronenessRank": 13,
             "color": "rgba(175, 98, 66, 0.75)",
-            "borderColor": "rgb(175, 98, 66)"
+            "borderColor": "rgb(175, 98, 66)",
+            "path": "src/main/java/org/junit/Assert.java"
           },
           {
             "id": "Throwables.java",
@@ -3395,7 +3440,8 @@
             "effortRank": 3,
             "changePronenessRank": 9,
             "color": "rgba(160, 106, 69, 0.75)",
-            "borderColor": "rgb(160, 106, 69)"
+            "borderColor": "rgb(160, 106, 69)",
+            "path": "src/main/java/org/junit/internal/Throwables.java"
           },
           {
             "id": "TestRunner.java",
@@ -3407,7 +3453,8 @@
             "effortRank": 1,
             "changePronenessRank": 5,
             "color": "rgba(145, 115, 72, 0.75)",
-            "borderColor": "rgb(145, 115, 72)"
+            "borderColor": "rgb(145, 115, 72)",
+            "path": "src/main/java/junit/textui/TestRunner.java"
           },
           {
             "id": "BlockJUnit4ClassRunnerWithParameters.java",
@@ -3419,7 +3466,8 @@
             "effortRank": 7,
             "changePronenessRank": 10,
             "color": "rgba(129, 123, 76, 0.75)",
-            "borderColor": "rgb(129, 123, 76)"
+            "borderColor": "rgb(129, 123, 76)",
+            "path": "src/main/java/org/junit/runners/parameterized/BlockJUnit4ClassRunnerWithParameters.java"
           },
           {
             "id": "BaseTestRunner.java",
@@ -3431,7 +3479,8 @@
             "effortRank": 4,
             "changePronenessRank": 6,
             "color": "rgba(114, 132, 79, 0.75)",
-            "borderColor": "rgb(114, 132, 79)"
+            "borderColor": "rgb(114, 132, 79)",
+            "path": "src/main/java/junit/runner/BaseTestRunner.java"
           },
           {
             "id": "JUnit38ClassRunner.java",
@@ -3443,7 +3492,8 @@
             "effortRank": 5,
             "changePronenessRank": 7,
             "color": "rgba(99, 140, 82, 0.75)",
-            "borderColor": "rgb(99, 140, 82)"
+            "borderColor": "rgb(99, 140, 82)",
+            "path": "src/main/java/org/junit/internal/runners/JUnit38ClassRunner.java"
           },
           {
             "id": "SpecificDataPointsSupplier.java",
@@ -3455,7 +3505,8 @@
             "effortRank": 5,
             "changePronenessRank": 4,
             "color": "rgba(84, 149, 86, 0.75)",
-            "borderColor": "rgb(84, 149, 86)"
+            "borderColor": "rgb(84, 149, 86)",
+            "path": "src/main/java/org/junit/experimental/theories/internal/SpecificDataPointsSupplier.java"
           },
           {
             "id": "SpecificDataPointsSupplier.java",
@@ -3467,7 +3518,8 @@
             "effortRank": 5,
             "changePronenessRank": 4,
             "color": "rgba(69, 157, 89, 0.75)",
-            "borderColor": "rgb(69, 157, 89)"
+            "borderColor": "rgb(69, 157, 89)",
+            "path": "src/main/java/org/junit/experimental/theories/internal/SpecificDataPointsSupplier.java"
           },
           {
             "id": "SpecificDataPointsSupplier.java",
@@ -3479,7 +3531,8 @@
             "effortRank": 5,
             "changePronenessRank": 4,
             "color": "rgba(54, 166, 93, 0.75)",
-            "borderColor": "rgb(54, 166, 93)"
+            "borderColor": "rgb(54, 166, 93)",
+            "path": "src/main/java/org/junit/experimental/theories/internal/SpecificDataPointsSupplier.java"
           },
           {
             "id": "SpecificDataPointsSupplier.java",
@@ -3491,7 +3544,8 @@
             "effortRank": 5,
             "changePronenessRank": 4,
             "color": "rgba(39, 174, 96, 0.75)",
-            "borderColor": "rgb(39, 174, 96)"
+            "borderColor": "rgb(39, 174, 96)",
+            "path": "src/main/java/org/junit/experimental/theories/internal/SpecificDataPointsSupplier.java"
           }
         ],
         "xaxisLabel": "Effort to refactor",
@@ -3980,7 +4034,8 @@
             "effortRank": 1,
             "changePronenessRank": 2,
             "color": "rgba(235, 64, 52, 0.75)",
-            "borderColor": "rgb(235, 64, 52)"
+            "borderColor": "rgb(235, 64, 52)",
+            "path": "src/main/java/org/junit/runners/model/FrameworkMethod.java"
           },
           {
             "id": "TestClass.java",
@@ -3992,7 +4047,8 @@
             "effortRank": 2,
             "changePronenessRank": 3,
             "color": "rgba(137, 119, 74, 0.75)",
-            "borderColor": "rgb(137, 119, 74)"
+            "borderColor": "rgb(137, 119, 74)",
+            "path": "src/main/java/org/junit/runners/model/TestClass.java"
           },
           {
             "id": "Statement.java",
@@ -4004,7 +4060,8 @@
             "effortRank": 3,
             "changePronenessRank": 1,
             "color": "rgba(39, 174, 96, 0.75)",
-            "borderColor": "rgb(39, 174, 96)"
+            "borderColor": "rgb(39, 174, 96)",
+            "path": "src/main/java/org/junit/runners/model/Statement.java"
           }
         ],
         "xaxisLabel": "Effort to refactor",
