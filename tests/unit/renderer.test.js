@@ -515,6 +515,98 @@ describe('source-link cell rendering (owned by the report rendering layer)', () 
 });
 
 // ---------------------------------------------------------------------------
+// Disharmony table source-link cells: the report JSON carries the plain file
+// name in the Class cell plus the source path relative to the project root;
+// the rendering layer combines the path with project.repoUrl and sanitizes
+// the anchor before it reaches the template.
+// ---------------------------------------------------------------------------
+
+describe('disharmony table source-link cell rendering', () => {
+  const template = readFileSync(
+    path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+  );
+
+  /**
+   * Builds a one-row God Class findings report with the supplied Class cell.
+   * @param {object} classCell - Raw Class cell from the report JSON.
+   * @returns {object} Report fixture for the disharmony table.
+   */
+  function reportWithClassCell(classCell) {
+    return {
+      project: { name: 'Demo', version: '1.0', repoUrl: 'https://github.com/demo/repo/blob/main/' },
+      hasDisharmonies: true,
+      disharmonies: [{
+        anchorId: 'GOD',
+        title: 'God Classes',
+        problem: 'problem',
+        solution: 'solution',
+        table: {
+          headers: ['Class', 'Priority'],
+          rows: [{
+            cells: [classCell, { content: '1', align: 'right' }]
+          }]
+        }
+      }]
+    };
+  }
+
+  it('builds the Class cell link from repoUrl and the cell path', () => {
+    const data = reportWithClassCell({
+      content: 'TestClass.java',
+      path: 'src/main/java/com/example/TestClass.java',
+      align: 'left'
+    });
+    const original = structuredClone(data);
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    expect(data).toEqual(original);
+    const cell = doc.querySelector('table[data-rf-table="disharmony-GOD"] tbody td.rf-text-left');
+    expect(cell).not.toBeNull();
+    const link = cell.querySelector('a');
+    expect(link.getAttribute('href'))
+      .toBe('https://github.com/demo/repo/blob/main/src/main/java/com/example/TestClass.java');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.textContent).toBe('TestClass.java');
+    for (const element of cell.querySelectorAll('*')) {
+      expect(element.tagName).toBe('A');
+      for (const attribute of element.attributes) {
+        expect(['href', 'target', 'rel']).toContain(attribute.name);
+      }
+    }
+  });
+
+  it('neutralizes hostile disharmony cell fields down to a hardened link', () => {
+    const data = reportWithClassCell({
+      content: 'Test<img src=x onerror=alert(1)>Class.java',
+      path: 'src/main/java/com/example/TestClass" onclick="alert(1)',
+      align: 'left'
+    });
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector('table[data-rf-table="disharmony-GOD"] tbody td.rf-text-left');
+    expect(cell.querySelector('img')).toBeNull();
+    expect(cell.querySelector('[onclick]')).toBeNull();
+    expect(cell.textContent).toContain('TestClass.java');
+    for (const element of cell.querySelectorAll('*')) {
+      expect(element.tagName).toBe('A');
+      for (const attribute of element.attributes) {
+        expect(['href', 'target', 'rel']).toContain(attribute.name);
+      }
+    }
+  });
+
+  it('renders cells without a path as before', () => {
+    const data = reportWithClassCell({ content: 'TestClass.java', align: 'left' });
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector('table[data-rf-table="disharmony-GOD"] tbody td.rf-text-left');
+    expect(cell.querySelector('a')).toBeNull();
+    expect(cell.textContent).toBe('TestClass.java');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // prepareReportData: filter -> sort -> paginate pipeline feeding the report
 // template with paginated rows and tableUi metadata (plan Phase 3).
 // ---------------------------------------------------------------------------
