@@ -40,12 +40,13 @@ function buildReport() {
       relationships: Array.from({ length: CLASS_ROW_COUNT }, (_, i) => ({
         sourceClass: `com.example.Source${i}`,
         targetClass: `com.example.Target${i}`,
-        sourceUrl: null,
-        targetUrl: null,
+        sourceClassPath: `src/main/java/com/example/Source${i}.java`,
+        targetClassPath: `src/main/java/com/example/Target${i}.java`,
+        simpleSourceClassName: `Source${i}`,
+        simpleTargetClassName: `Target${i}`,
         sourceMarked: false,
         targetMarked: false,
         weight: 1,
-        renderedLabel: `Source${i} to Target${i}`,
         priority: (i % 5) + 1,
         cycleCount: i % 4,
         effortRank: CLASS_ROW_COUNT - i,
@@ -298,8 +299,8 @@ test.describe('csv export', () => {
     expect(lines.length).toBe(CLASS_ROW_COUNT + 1);
     // The export honours the default sort (priority ascending): the first
     // priority-1 row is Source0, the last priority-5 row is Source44.
-    expect(lines[1]).toContain('Source0 to Target0');
-    expect(lines[CLASS_ROW_COUNT]).toContain(`Source${CLASS_ROW_COUNT - 1} to Target${CLASS_ROW_COUNT - 1}`);
+    expect(lines[1]).toContain('Source0 → Target0');
+    expect(lines[CLASS_ROW_COUNT]).toContain(`Source${CLASS_ROW_COUNT - 1} → Target${CLASS_ROW_COUNT - 1}`);
   });
 
   test('export buttons are labelled and keyboard operable', async ({ page }) => {
@@ -320,7 +321,7 @@ test.describe('wide tables', () => {
   async function loadWideReport(page) {
     const report = buildReport();
     for (const rel of report.classRelationshipsToRemove.relationships) {
-      rel.renderedLabel = `${WIDE_LABEL} ${rel.priority}`;
+      rel.simpleSourceClassName = `${WIDE_LABEL} ${rel.priority}`;
     }
     await page.route('**/raw.githubusercontent.com/**', route => {
       const url = route.request().url();

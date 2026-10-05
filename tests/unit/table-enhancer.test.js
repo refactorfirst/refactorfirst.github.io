@@ -20,13 +20,13 @@ function buildRoot({ rows = 3 } = {}) {
       <caption>Class relationships to remove, in priority order</caption>
       <thead>
         <tr>
-          <th scope="col" aria-sort="none"><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="renderedLabel">Class Relationship</button></th>
+          <th scope="col" aria-sort="none"><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="classRelationship">Class Relationship</button></th>
           <th scope="col" aria-sort="none"><button type="button" class="rf-sort-btn" data-rf-sort="class-relationships" data-sort-key="priority">Priority</button></th>
         </tr>
       </thead>
       <tbody>
         ${Array.from({ length: rows }, (_, i) => `
-          <tr><td class="rf-text-left">Class${i} -&gt; Target${i}</td><td class="rf-text-right">${i + 1}</td></tr>`).join('')}
+          <tr><td class="rf-text-left">Class${i} → Target${i}</td><td class="rf-text-right">${i + 1}</td></tr>`).join('')}
       </tbody>
     </table>
     </div>
@@ -43,8 +43,10 @@ function demoData() {
   return {
     classRelationshipsToRemove: {
       relationships: Array.from({ length: 3 }, (_, i) => ({
-        renderedLabel: `Class${i} -&gt; Target${i}`,
-        priority: i + 1,
+        simpleSourceClassName: `Class${i}`,
+        simpleTargetClassName: `Target${i}`,
+        sourceClassPath: `src/main/java/demo/Class${i}.java`,
+        targetClassPath: `src/main/java/demo/Target${i}.java`,        priority: i + 1,
         cycleCount: i,
         effortRank: i * 2,
         alsoRemovesPackageRelationship: false,
@@ -268,8 +270,8 @@ describe('sortable headers', () => {
 
   it('sorts ascending when a different column is clicked under the default sort', () => {
     setup();
-    root.querySelector('[data-sort-key="renderedLabel"]').click();
-    expect(actions[0].patch).toEqual({ sortKey: 'renderedLabel', sortDir: 'asc', page: 1 });
+    root.querySelector('[data-sort-key="classRelationship"]').click();
+    expect(actions[0].patch).toEqual({ sortKey: 'classRelationship', sortDir: 'asc', page: 1 });
   });
 
   it('toggles to descending when the sorted column is clicked again', () => {
@@ -280,8 +282,8 @@ describe('sortable headers', () => {
 
   it('switches to ascending when another column is clicked', () => {
     setup({ tableStates: { 'class-relationships': { sortKey: 'priority', sortDir: 'desc' } } });
-    root.querySelector('[data-sort-key="renderedLabel"]').click();
-    expect(actions[0].patch).toEqual({ sortKey: 'renderedLabel', sortDir: 'asc', page: 1 });
+    root.querySelector('[data-sort-key="classRelationship"]').click();
+    expect(actions[0].patch).toEqual({ sortKey: 'classRelationship', sortDir: 'asc', page: 1 });
   });
 });
 
@@ -324,7 +326,7 @@ describe('CSV export', () => {
     expect(lines[0]).toBe('Class Relationship,Priority,In Class Cycles,Relationship Strength,Also Removes Pkg Cycle Relationship,In Package Cycles');
     // all three rows match nothing about 'class1' except row index 1 -> 1 row
     expect(lines.length).toBe(2);
-    expect(lines[1]).toBe('Class1 -> Target1,2,1,2,false,0');
+    expect(lines[1]).toBe('Class1 → Target1,2,1,2,false,0');
     delete global.URL.createObjectURL;
     delete global.URL.revokeObjectURL;
   });
@@ -344,9 +346,9 @@ describe('CSV export', () => {
     expect(blobs.length).toBe(1);
     const lines = (await blobs[0].text()).split('\n');
     expect(lines.length).toBe(4);
-    expect(lines[1]).toBe('Class1 -> Target1,1,1,2,false,0');
-    expect(lines[2]).toBe('Class2 -> Target2,2,2,4,false,0');
-    expect(lines[3]).toBe('Class0 -> Target0,3,0,0,false,0');
+    expect(lines[1]).toBe('Class1 → Target1,1,1,2,false,0');
+    expect(lines[2]).toBe('Class2 → Target2,2,2,4,false,0');
+    expect(lines[3]).toBe('Class0 → Target0,3,0,0,false,0');
     delete global.URL.createObjectURL;
     delete global.URL.revokeObjectURL;
   });
@@ -366,8 +368,8 @@ describe('CSV export', () => {
     root.querySelector('[data-rf-export="class-relationships"]').click();
     expect(blobs.length).toBe(1);
     const lines = (await blobs[0].text()).split('\n');
-    expect(lines[1]).toBe('Class0 -> Target0,2,0,0,false,0');
-    expect(lines[2]).toBe('Class1 -> Target1,1,1,2,false,0');
+    expect(lines[1]).toBe('Class0 → Target0,2,0,0,false,0');
+    expect(lines[2]).toBe('Class1 → Target1,1,1,2,false,0');
     delete global.URL.createObjectURL;
     delete global.URL.revokeObjectURL;
   });
@@ -501,8 +503,8 @@ describe('copy cell content', () => {
     const cell = root.querySelector('tbody td');
     cell.click();
     await new Promise(resolve => setTimeout(resolve, 10));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Class0 -> Target0');
-    expect(copied).toEqual([{ ok: true, text: 'Class0 -> Target0' }]);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Class0 → Target0');
+    expect(copied).toEqual([{ ok: true, text: 'Class0 → Target0' }]);
   });
 
   it('copies on Enter and Space keydown', async () => {
@@ -528,6 +530,6 @@ describe('copy cell content', () => {
     setup({ onCopy: (ok, text) => copied.push({ ok, text }) });
     root.querySelector('tbody td').click();
     await new Promise(resolve => setTimeout(resolve, 10));
-    expect(copied).toEqual([{ ok: false, text: 'Class0 -> Target0' }]);
+    expect(copied).toEqual([{ ok: false, text: 'Class0 → Target0' }]);
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { renderTemplate, initializeMustache, prepareReportData } from '../../lib/renderer.js';
+import { renderTemplate, initializeMustache, prepareReportData, classRelationshipMarkup } from '../../lib/renderer.js';
 import { TABLE_CONFIG } from '../../lib/table-operations.js';
 
 describe('Mustache Rendering', () => {
@@ -185,11 +185,12 @@ describe('templating safety (repository-provided templates are untrusted)', () =
 });
 
 // ---------------------------------------------------------------------------
-// Source-link cell output: both report templates render the class-
-// relationships cell inline; the rendering layer owns
-// the link-safety behavior around it. These guards pin the rendered output
-// so template or renderer changes cannot silently drop or weaken the
-// source links.
+// Source-link cell output: the report JSON carries the structured
+// ClassRelationshipDTO fields (sourceClassPath/targetClassPath relative to
+// the project root plus the simple class names), and the rendering layer
+// combines them with project.repoUrl, owns the link-safety behavior and
+// sanitizes the result. These guards pin the rendered output so template or
+// renderer changes cannot silently drop or weaken the source links.
 // ---------------------------------------------------------------------------
 
 describe('source-link cell rendering (owned by the report rendering layer)', () => {
@@ -197,51 +198,224 @@ describe('source-link cell rendering (owned by the report rendering layer)', () 
     readFileSync(path.join(import.meta.dir, '../fixtures/junit4-report.json'), 'utf8')
   );
 
+  const REPO_URL =
+    'https://github.com/refactorfirst/RefactorFirst/blob/5258928239a496b74a704c7653240b82a325ccab/';
+  const REPORT_WRITER_PATH =
+    'report/src/main/java/org/hjug/refactorfirst/report/ReportWriter.java';
+
+  it('builds the class-relationship markup from repoUrl, class paths and simple class names', () => {
+    // The exact example: repoUrl + sourceClassPath/targetClassPath form the
+    // hyperlink targets, the simple class names the anchor text, separated
+    // by the &#8594; arrow.
+    expect(classRelationshipMarkup(
+      {
+        sourceClassPath: REPORT_WRITER_PATH,
+        targetClassPath: REPORT_WRITER_PATH,
+        simpleSourceClassName: 'ReportWriter$SecureDirectoryOps',
+        simpleTargetClassName: 'ReportWriter$FallbackDirectoryOps'
+      },
+      REPO_URL
+    )).toBe(
+      '<a href="' + REPO_URL + REPORT_WRITER_PATH + '" target="_blank">ReportWriter$SecureDirectoryOps</a> ' +
+        '&#8594; ' +
+        '<a href="' + REPO_URL + REPORT_WRITER_PATH + '" target="_blank">ReportWriter$FallbackDirectoryOps</a>'
+    );
+  });
+
+  it('appends the removal marker to marked classes', () => {
+    expect(classRelationshipMarkup(
+      {
+        sourceClassPath: 'src/main/java/demo/A.java',
+        targetClassPath: 'src/main/java/demo/B.java',
+        simpleSourceClassName: 'A',
+        simpleTargetClassName: 'B',
+        sourceMarked: true,
+        targetMarked: true
+      },
+      'https://github.com/demo/repo/blob/main/'
+    )).toBe(
+      '<a href="https://github.com/demo/repo/blob/main/src/main/java/demo/A.java" target="_blank">A</a>* ' +
+        '&#8594; ' +
+        '<a href="https://github.com/demo/repo/blob/main/src/main/java/demo/B.java" target="_blank">B</a>*'
+    );
+  });
+
+  it('returns null for entries without the structured class-relationship fields', () => {
+    expect(classRelationshipMarkup(null, REPO_URL)).toBeNull();
+    expect(classRelationshipMarkup('legacy label', REPO_URL)).toBeNull();
+    expect(classRelationshipMarkup({ sourceClass: 'org.example.A' }, REPO_URL)).toBeNull();
+    expect(classRelationshipMarkup({ renderedLabel: '<a href="https://x">A</a>' }, REPO_URL)).toBeNull();
+  });
+
   for (const templatePath of ['assets', 'public/assets']) {
-    it(`restricts relationship labels to links and markers in ${templatePath}`, () => {
+    it(`renders hardened source links in the class-relationships cell (${templatePath})`, () => {
       const template = readFileSync(
         path.join(import.meta.dir, `../../${templatePath}/refactor-first-report.mustache`), 'utf8'
       );
-      const renderedLabel =
-        '<style>body { display: none }</style>' +
-        '<a href="https://example.com/source" target="_blank" rel="opener" ' +
-        'style="display:none" class="close-btn" id="app" onclick="alert(1)" ' +
-        'data-rf-sort="class-relationships" aria-hidden="true">Source</a>' +
-        '<strong style="display:none">*</strong> &#8594; Target : 1' +
-        '<img src="https://example.com/tracker"><button>Injected</button>' +
-        '<a href="javascript:alert(1)">Unsafe</a>';
-      const data = structuredClone(junitFixture);
-      for (const key of ['classRelationshipsToRemove', 'packageRelationshipsToRemove']) {
-        data[key].relationships = [
-          { ...data[key].relationships[0], renderedLabel,
-            safeRenderedLabel: '<style>body { color: red }</style>' },
-          { priority: 2, renderedLabel: null, safeRenderedLabel: '<strong>Forged</strong>' }
-        ];
-      }
+      const data = {
+        project: { name: 'Demo', version: '1.0', repoUrl: REPO_URL },
+        classRelationshipsToRemove: {
+          hasRelationships: true,
+          relationships: [
+            {
+              sourceClassPath: REPORT_WRITER_PATH,
+              targetClassPath: REPORT_WRITER_PATH,
+              simpleSourceClassName: 'ReportWriter$SecureDirectoryOps',
+              simpleTargetClassName: 'ReportWriter$FallbackDirectoryOps',
+              sourceMarked: false,
+              targetMarked: false,
+              priority: 1,
+              cycleCount: 1,
+              effortRank: 1,
+              alsoRemovesPackageRelationship: false,
+              packageCycleCount: 0
+            },
+            // An entry without the structured fields renders an empty cell
+            { priority: 2 }
+          ]
+        },
+        packageRelationshipsToRemove: { hasRelationships: false, relationships: [] }
+      };
       const original = structuredClone(data);
       const html = renderTemplate(template, prepareReportData(data));
       const doc = new JSDOM(html).window.document;
       expect(data).toEqual(original);
-      expect(html).not.toContain('body {');
-      for (const table of ['class-relationships', 'package-relationships']) {
-        const cells = doc.querySelectorAll(`table[data-rf-table="${table}"] tbody tr td:first-child`);
-        const cell = cells[0];
-        expect(cell.textContent).toContain('Source* → Target : 1');
-        expect(cell.querySelector('strong')?.textContent).toBe('*');
-        expect(cell.querySelector('a')?.getAttribute('href')).toBe('https://example.com/source');
-        expect(cell.querySelector('a')?.getAttribute('target')).toBe('_blank');
-        expect(cell.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
-        expect(cell.querySelector('a:last-child')?.hasAttribute('href')).toBe(false);
-        for (const element of cell.querySelectorAll('*')) {
-          expect(['A', 'STRONG']).toContain(element.tagName);
-          for (const attribute of element.attributes) {
-            expect(['href', 'target', 'rel']).toContain(attribute.name);
-          }
+      const cells = doc.querySelectorAll('table[data-rf-table="class-relationships"] tbody tr td:first-child');
+      const cell = cells[0];
+      const anchors = cell.querySelectorAll('a');
+      expect(anchors.length).toBe(2);
+      expect(anchors[0].getAttribute('href')).toBe(REPO_URL + REPORT_WRITER_PATH);
+      expect(anchors[0].getAttribute('target')).toBe('_blank');
+      expect(anchors[0].getAttribute('rel')).toBe('noopener noreferrer');
+      expect(anchors[0].textContent).toBe('ReportWriter$SecureDirectoryOps');
+      expect(anchors[1].getAttribute('href')).toBe(REPO_URL + REPORT_WRITER_PATH);
+      expect(anchors[1].textContent).toBe('ReportWriter$FallbackDirectoryOps');
+      expect(cell.textContent).toBe('ReportWriter$SecureDirectoryOps → ReportWriter$FallbackDirectoryOps');
+      for (const element of cell.querySelectorAll('*')) {
+        expect(element.tagName).toBe('A');
+        for (const attribute of element.attributes) {
+          expect(['href', 'target', 'rel']).toContain(attribute.name);
         }
-        expect(cells[1].textContent).toBe('');
       }
+      expect(cells[1].textContent).toBe('');
     });
   }
+
+  it('neutralizes hostile class-relationship fields down to links and markers', () => {
+    const template = readFileSync(
+      path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+    );
+    const data = {
+      project: {
+        name: 'Demo',
+        version: '1.0',
+        repoUrl: 'https://github.com/demo/repo/blob/main/'
+      },
+      classRelationshipsToRemove: {
+        hasRelationships: true,
+        relationships: [
+          {
+            sourceClassPath: 'src/main/java/demo/A.java',
+            targetClassPath: 'src/main/java/demo/B.java',
+            simpleSourceClassName: 'Source<img src=x onerror=alert(1)>',
+            simpleTargetClassName: 'Target',
+            sourceMarked: true,
+            targetMarked: false,
+            priority: 1,
+            cycleCount: 1,
+            effortRank: 1,
+            alsoRemovesPackageRelationship: false,
+            packageCycleCount: 0
+          }
+        ]
+      },
+      packageRelationshipsToRemove: { hasRelationships: false, relationships: [] }
+    };
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector('table[data-rf-table="class-relationships"] tbody td.rf-text-left');
+    expect(cell).not.toBeNull();
+    // The hostile name is escaped into inert text; no img element is created
+    expect(cell.querySelector('img')).toBeNull();
+    expect(cell.querySelectorAll('a').length).toBe(2);
+    expect(cell.textContent).toContain('Source');
+    expect(cell.textContent).toContain('→ Target');
+    for (const element of cell.querySelectorAll('*')) {
+      expect(element.tagName).toBe('A');
+      for (const attribute of element.attributes) {
+        expect(['href', 'target', 'rel']).toContain(attribute.name);
+      }
+    }
+  });
+
+  it('strips javascript: URLs from class-relationship links', () => {
+    const template = readFileSync(
+      path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+    );
+    const data = {
+      project: { name: 'Demo', version: '1.0', repoUrl: 'javascript:alert(1)//' },
+      classRelationshipsToRemove: {
+        hasRelationships: true,
+        relationships: [
+          {
+            sourceClassPath: 'src/main/java/demo/A.java',
+            targetClassPath: 'src/main/java/demo/B.java',
+            simpleSourceClassName: 'A',
+            simpleTargetClassName: 'B',
+            priority: 1,
+            cycleCount: 1,
+            effortRank: 1,
+            alsoRemovesPackageRelationship: false,
+            packageCycleCount: 0
+          }
+        ]
+      },
+      packageRelationshipsToRemove: { hasRelationships: false, relationships: [] }
+    };
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector('table[data-rf-table="class-relationships"] tbody td.rf-text-left');
+    expect(cell.querySelector('a[href]')).toBeNull();
+    expect(cell.textContent).toContain('A → B');
+  });
+
+  it('still restricts package relationship labels to links and markers', () => {
+    const template = readFileSync(
+      path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+    );
+    const data = structuredClone(junitFixture);
+    const hostilePackageLabel =
+      '<style>body { display: none }</style>' +
+      '<a href="https://example.com/source" target="_blank" rel="opener" ' +
+      'style="display:none" class="close-btn" id="app" onclick="alert(1)" ' +
+      'data-rf-sort="package-relationships" aria-hidden="true">Source</a>' +
+      '<strong style="display:none">*</strong> &#8594; Target : 1' +
+      '<img src="https://example.com/tracker"><button>Injected</button>' +
+      '<a href="javascript:alert(1)">Unsafe</a>';
+    data.packageRelationshipsToRemove.relationships = [
+      { ...data.packageRelationshipsToRemove.relationships[0], renderedLabel: hostilePackageLabel }
+    ];
+    const original = structuredClone(data);
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    expect(data).toEqual(original);
+    expect(html).not.toContain('body {');
+    const cell = doc.querySelector(
+      'table[data-rf-table="package-relationships"] tbody tr td:first-child'
+    );
+    expect(cell.textContent).toContain('Source* → Target : 1');
+    expect(cell.querySelector('strong')?.textContent).toBe('*');
+    expect(cell.querySelector('a')?.getAttribute('href')).toBe('https://example.com/source');
+    expect(cell.querySelector('a')?.getAttribute('target')).toBe('_blank');
+    expect(cell.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(cell.querySelector('a:last-child')?.hasAttribute('href')).toBe(false);
+    for (const element of cell.querySelectorAll('*')) {
+      expect(['A', 'STRONG']).toContain(element.tagName);
+      for (const attribute of element.attributes) {
+        expect(['href', 'target', 'rel']).toContain(attribute.name);
+      }
+    }
+  });
 
   it('renders the class-relationships source-link cell with a hardened anchor', () => {
     const template = readFileSync(
@@ -272,7 +446,10 @@ describe('source-link cell rendering (owned by the report rendering layer)', () 
  */
 function synthRelationships(count) {
   return Array.from({ length: count }, (_, i) => ({
-    renderedLabel: `Class${String(count - i)} > Class${i}`,
+    simpleSourceClassName: `Class${String(count - i)}`,
+    simpleTargetClassName: `Class${i}`,
+    sourceClassPath: `src/main/java/demo/Class${String(count - i)}.java`,
+    targetClassPath: `src/main/java/demo/Class${i}.java`,
     // start out of order (4, 5, 1, 2, 3, ...) so sorted assertions are meaningful
     priority: ((i + 3) % 5) + 1,
     cycleCount: i,
@@ -294,7 +471,7 @@ function synthRelationships(count) {
  */
 function synthReport({ classRows = 25, pkgRows = 5, disharmonyRows = 30, cycleRows = 21, breakdownRows = 3 } = {}) {
   return {
-    project: { name: 'Demo', version: '1.0' },
+    project: { name: 'Demo', version: '1.0', repoUrl: 'https://github.com/demo/repo/blob/main/' },
     classRelationshipsToRemove: {
       hasRelationships: classRows > 0,
       relationships: synthRelationships(classRows)
@@ -406,7 +583,7 @@ describe('prepareReportData', () => {
     const ui = prepared.classRelationshipsToRemove.tableUi;
     expect(ui.sortKey).toBe('cycleCount');
     expect(ui.sortDir).toBe('desc');
-    // column order: renderedLabel, priority, cycleCount, effortRank, alsoRemoves, packageCycleCount
+    // column order: classRelationship, priority, cycleCount, effortRank, alsoRemoves, packageCycleCount
     expect(ui.colSort).toEqual(['none', 'none', 'descending', 'none', 'none', 'none']);
     expect(ui.colIndicator[2]).toBe('▼');
     expect(ui.colIndicator[0]).toBe('');
@@ -425,7 +602,7 @@ describe('prepareReportData', () => {
     const ui = prepared.classRelationshipsToRemove.tableUi;
     expect(ui.sortKey).toBe('priority');
     expect(ui.sortDir).toBe('asc');
-    // column order: renderedLabel, priority, cycleCount, effortRank, alsoRemoves, packageCycleCount
+    // column order: classRelationship, priority, cycleCount, effortRank, alsoRemoves, packageCycleCount
     expect(ui.colSort).toEqual(['none', 'ascending', 'none', 'none', 'none', 'none']);
     expect(ui.colIndicator[1]).toBe('▲');
     expect(ui.colIndicator[0]).toBe('');
@@ -476,8 +653,8 @@ describe('prepareReportData', () => {
     config.sorting.enabled = false;
     const prepared = prepareReportData(synthReport({ classRows: 5 }), {}, config);
     expect(prepared.classRelationshipsToRemove.tableUi.sortKey).toBe('');
-    expect(prepared.classRelationshipsToRemove.relationships[0].renderedLabel)
-      .toContain('Class0');
+    expect(prepared.classRelationshipsToRemove.relationships[0].simpleTargetClassName)
+      .toBe('Class0');
   });
 
   it('filters before sorting and paginating, carrying match metadata', () => {
@@ -485,7 +662,7 @@ describe('prepareReportData', () => {
       'class-relationships': { search: 'class5', sortKey: 'cycleCount', sortDir: 'desc' }
     });
     const ui = prepared.classRelationshipsToRemove.tableUi;
-    // "class5" matches renderedLabel Class5 of exactly one row (and Class25/15
+    // "class5" matches the Class5 simple class name of exactly one row (and Class25/15
     // contain "class1"/"Class2..." -> assert against the real filter result).
     expect(ui.searchActive).toBe(true);
     expect(ui.matchCount).toBeLessThan(25);
@@ -605,9 +782,12 @@ describe('prepareReportData', () => {
 
 // ---------------------------------------------------------------------------
 // Class relationships to break a package cycle: RefactorFirst serializes
-// structured ClassRelationshipDTO objects, which must render through the
-// package relationships table cell, sanitized to links and markers only.
-// Pre-DTO string entries are no longer part of the schema and are dropped.
+// structured ClassRelationshipDTO objects whose sourceClassPath/
+// targetClassPath and simple class names must be combined with
+// project.repoUrl and rendered through the package relationships table cell,
+// sanitized to links and markers only. Pre-DTO string entries and entries
+// without the structured fields are no longer part of the schema and are
+// dropped.
 // ---------------------------------------------------------------------------
 
 describe('class relationships to break a package cycle cell rendering', () => {
@@ -615,26 +795,30 @@ describe('class relationships to break a package cycle cell rendering', () => {
     path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
   );
 
+  const REPO_URL = 'https://github.com/demo/repo/blob/main/';
+
   const structuredEntry = {
     sourceClass: 'org.junit.runner.Request',
     targetClass: 'org.junit.internal.requests.SortingRequest',
+    sourceClassPath: 'src/main/java/org/junit/runner/Request.java',
+    targetClassPath: 'src/main/java/org/junit/internal/requests/SortingRequest.java',
+    simpleSourceClassName: 'Request',
+    simpleTargetClassName: 'SortingRequest',
     sourceMarked: true,
     targetMarked: false,
     weight: 2,
-    renderedLabel:
-      '<a href="https://example.com/Request.java" target="_blank">Request</a>* &#8594; ' +
-      '<a href="https://example.com/SortingRequest.java" target="_blank">SortingRequest</a> : 2',
     cycleCount: 1
   };
   const secondEntry = {
     sourceClass: 'org.junit.internal.MethodSorter',
     targetClass: 'org.junit.runners.MethodSorters',
+    sourceClassPath: 'src/main/java/org/junit/internal/MethodSorter.java',
+    targetClassPath: 'src/main/java/org/junit/runners/MethodSorters.java',
+    simpleSourceClassName: 'MethodSorter',
+    simpleTargetClassName: 'MethodSorters',
     sourceMarked: false,
     targetMarked: false,
     weight: 1,
-    renderedLabel:
-      '<a href="https://example.com/MethodSorter.java" target="_blank">MethodSorter</a> &#8594; ' +
-      '<a href="https://example.com/MethodSorters.java" target="_blank">MethodSorters</a> : 1',
     cycleCount: 1
   };
 
@@ -645,7 +829,7 @@ describe('class relationships to break a package cycle cell rendering', () => {
    */
   function reportWithBreakEntries(entries) {
     return {
-      project: { name: 'Demo', version: '1.0' },
+      project: { name: 'Demo', version: '1.0', repoUrl: REPO_URL },
       packageRelationshipsToRemove: {
         hasRelationships: true,
         relationships: [
@@ -678,9 +862,11 @@ describe('class relationships to break a package cycle cell rendering', () => {
   it('renders structured ClassRelationshipDTO entries from current reports', () => {
     const html = renderTemplate(template, prepareReportData(reportWithBreakEntries([structuredEntry])));
     const cell = breakCellOf(html);
-    expect(cell.textContent).toContain('Request* → SortingRequest : 2');
-    expect(cell.querySelector('a')?.getAttribute('href')).toBe('https://example.com/Request.java');
-    expect(cell.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(cell.textContent).toContain('Request* → SortingRequest');
+    const link = cell.querySelector('a');
+    expect(link.getAttribute('href')).toBe(REPO_URL + 'src/main/java/org/junit/runner/Request.java');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
   it('drops pre-DTO string entries from older reports', () => {
@@ -693,7 +879,21 @@ describe('class relationships to break a package cycle cell rendering', () => {
       ]))
     );
     const cell = breakCellOf(html);
-    expect(cell.textContent).toContain('Request* → SortingRequest : 2');
+    expect(cell.textContent).toContain('Request* → SortingRequest');
+    expect(cell.textContent).not.toContain('MethodSorter');
+    expect(cell.querySelectorAll('br').length).toBe(1);
+  });
+
+  it('drops entries without the structured class-relationship fields', () => {
+    const html = renderTemplate(
+      template,
+      prepareReportData(reportWithBreakEntries([
+        structuredEntry,
+        { sourceClass: 'org.junit.internal.MethodSorter', renderedLabel: 'MethodSorter &#8594; MethodSorters : 1' }
+      ]))
+    );
+    const cell = breakCellOf(html);
+    expect(cell.textContent).toContain('Request* → SortingRequest');
     expect(cell.textContent).not.toContain('MethodSorter');
     expect(cell.querySelectorAll('br').length).toBe(1);
   });
@@ -705,29 +905,32 @@ describe('class relationships to break a package cycle cell rendering', () => {
     );
     const cell = breakCellOf(html);
     expect(cell.querySelectorAll('br').length).toBe(2);
-    expect(cell.textContent).toContain('Request* → SortingRequest : 2');
-    expect(cell.textContent).toContain('MethodSorter → MethodSorters : 1');
+    expect(cell.textContent).toContain('Request* → SortingRequest');
+    expect(cell.textContent).toContain('MethodSorter → MethodSorters');
   });
 
-  it('sanitizes class-break labels to links and markers only', () => {
+  it('sanitizes hostile class-break fields to links and markers only', () => {
     const hostile = {
       ...structuredEntry,
-      renderedLabel:
-        '<style>body { display: none }</style>' +
-        '<a href="https://example.com/x" target="_blank" onclick="alert(1)" style="display:none">X</a>' +
-        '<img src=x onerror="alert(1)">' +
-        '<a href="javascript:alert(1)">Unsafe</a>'
+      sourceClassPath: 'src/main/java/org/junit/runner/Request" onclick="alert(1)',
+      simpleSourceClassName: 'X<img src=x onerror="alert(1)">'
     };
     const html = renderTemplate(template, prepareReportData(reportWithBreakEntries([hostile])));
     const cell = breakCellOf(html);
     expect(cell.textContent).toContain('X');
-    expect(cell.innerHTML).not.toContain('body {');
-    expect(cell.innerHTML).not.toContain('onclick');
-    expect(cell.innerHTML).not.toContain('onerror');
-    expect(cell.innerHTML).not.toContain('javascript:');
+    // The quote in the hostile path is escaped inside the href value, so it
+    // cannot break out of the attribute: no img element and no event handler
+    // attributes are created.
     expect(cell.querySelector('img')).toBeNull();
+    expect(cell.querySelector('[onclick]')).toBeNull();
+    expect(cell.querySelectorAll('a').length).toBe(2);
     for (const element of cell.querySelectorAll('*')) {
       expect(['A', 'BR']).toContain(element.tagName);
+    }
+    for (const anchor of cell.querySelectorAll('a')) {
+      for (const attribute of anchor.attributes) {
+        expect(['href', 'target', 'rel']).toContain(attribute.name);
+      }
     }
   });
 
