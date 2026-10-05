@@ -151,14 +151,24 @@ describe('initBubbleChart', () => {
     initBubbleChart(canvas, 'God Classes', {
       bubbles: [
         { x: 1, y: 1, r: 24, label: 'Foo.java', path: 'src/main/java/Foo.java' },
-        { x: 2, y: 2, r: 12, label: 'Bar.java' }
+        {
+          x: 2, y: 2, r: 20, label: 'Both.java', path: 'src/main/java/Both.java',
+          url: 'https://legacy.example/Both.java'
+        },
+        { x: 3, y: 3, r: 16, label: 'Legacy.java', url: 'https://legacy.example/Legacy.java' },
+        { x: 4, y: 4, r: 12, label: 'Bar.java' }
       ]
     }, 'https://github.com/demo/repo/blob/main/');
     const data = created[0].data.datasets[0].data;
     expect(data[0].raw.path).toBe('src/main/java/Foo.java');
     expect(data[0].raw.url).toBe('https://github.com/demo/repo/blob/main/src/main/java/Foo.java');
-    // A bubble without a path gets no url and stays non-clickable
-    expect(data[1].raw.url).toBeNull();
+    // The constructed repoUrl + path wins over a legacy embedded url
+    expect(data[1].raw.url).toBe('https://github.com/demo/repo/blob/main/src/main/java/Both.java');
+    // A bubble without a path keeps the payload's legacy url (still gated by
+    // isHttpUrl in the click/hover handlers)
+    expect(data[2].raw.url).toBe('https://legacy.example/Legacy.java');
+    // A bubble with neither a path nor a legacy url stays non-clickable
+    expect(data[3].raw.url).toBeNull();
     delete window.Chart;
   });
 

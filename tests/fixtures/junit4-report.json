@@ -4381,40 +4381,58 @@
       "dotThresholdExceeded": false,
       "breakdown": [
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/runner/JUnitCore.java target=\"_blank\">JUnitCore</a>",
-          "edgesHtml": "JUnitCore &#8594; JUnitCommandLineParseResult : 3<br/>\nJUnitCore &#8594; Request : 3<br/>\n"
+          "className": "JUnitCore",
+          "edgesHtml": "JUnitCore &#8594; JUnitCommandLineParseResult : 3<br/>\nJUnitCore &#8594; Request : 3<br/>\n",
+          "classPath": "src/main/java/org/junit/runner/JUnitCore.java",
+          "marked": false
         },
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/runner/Request.java target=\"_blank\">Request</a><strong>*</strong>",
-          "edgesHtml": "<strong>Request &#8594; JUnitCore : 1<strong>*</strong></strong><br/>\nRequest &#8594; ClassRequest : 2<br/>\n<strong>Request &#8594; FilterRequest : 1<strong>*</strong></strong><br/>\n<strong>Request &#8594; SortingRequest : 1<strong>*</strong></strong><br/>\nRequest &#8594; OrderingRequest : 1<br/>\n"
+          "className": "Request",
+          "edgesHtml": "<strong>Request &#8594; JUnitCore : 1<strong>*</strong></strong><br/>\nRequest &#8594; ClassRequest : 2<br/>\n<strong>Request &#8594; FilterRequest : 1<strong>*</strong></strong><br/>\n<strong>Request &#8594; SortingRequest : 1<strong>*</strong></strong><br/>\nRequest &#8594; OrderingRequest : 1<br/>\n",
+          "classPath": "src/main/java/org/junit/runner/Request.java",
+          "marked": true
         },
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/internal/requests/OrderingRequest.java target=\"_blank\">OrderingRequest</a>",
-          "edgesHtml": "<strong>OrderingRequest &#8594; Request : 3<strong>*</strong></strong><br/>\nOrderingRequest &#8594; MemoizingRequest : 1<br/>\n"
+          "className": "OrderingRequest",
+          "edgesHtml": "<strong>OrderingRequest &#8594; Request : 3<strong>*</strong></strong><br/>\nOrderingRequest &#8594; MemoizingRequest : 1<br/>\n",
+          "classPath": "src/main/java/org/junit/internal/requests/OrderingRequest.java",
+          "marked": false
         },
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/internal/requests/MemoizingRequest.java target=\"_blank\">MemoizingRequest</a>",
-          "edgesHtml": "<strong>MemoizingRequest &#8594; Request : 1<strong>*</strong></strong><br/>\n"
+          "className": "MemoizingRequest",
+          "edgesHtml": "<strong>MemoizingRequest &#8594; Request : 1<strong>*</strong></strong><br/>\n",
+          "classPath": "src/main/java/org/junit/internal/requests/MemoizingRequest.java",
+          "marked": false
         },
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/internal/requests/SortingRequest.java target=\"_blank\">SortingRequest</a>",
-          "edgesHtml": "SortingRequest &#8594; Request : 4<br/>\n"
+          "className": "SortingRequest",
+          "edgesHtml": "SortingRequest &#8594; Request : 4<br/>\n",
+          "classPath": "src/main/java/org/junit/internal/requests/SortingRequest.java",
+          "marked": false
         },
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/internal/requests/FilterRequest.java target=\"_blank\">FilterRequest</a>",
-          "edgesHtml": "FilterRequest &#8594; Request : 4<br/>\n"
+          "className": "FilterRequest",
+          "edgesHtml": "FilterRequest &#8594; Request : 4<br/>\n",
+          "classPath": "src/main/java/org/junit/internal/requests/FilterRequest.java",
+          "marked": false
         },
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/internal/requests/ClassRequest.java target=\"_blank\">ClassRequest</a>",
-          "edgesHtml": "ClassRequest &#8594; MemoizingRequest : 1<br/>\n"
+          "className": "ClassRequest",
+          "edgesHtml": "ClassRequest &#8594; MemoizingRequest : 1<br/>\n",
+          "classPath": "src/main/java/org/junit/internal/requests/ClassRequest.java",
+          "marked": false
         },
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/runner/JUnitCommandLineParseResult.java target=\"_blank\">JUnitCommandLineParseResult</a>",
-          "edgesHtml": "JUnitCommandLineParseResult &#8594; Request : 8<br/>\nJUnitCommandLineParseResult &#8594; FilterFactories : 1<br/>\n"
+          "className": "JUnitCommandLineParseResult",
+          "edgesHtml": "JUnitCommandLineParseResult &#8594; Request : 8<br/>\nJUnitCommandLineParseResult &#8594; FilterFactories : 1<br/>\n",
+          "classPath": "src/main/java/org/junit/runner/JUnitCommandLineParseResult.java",
+          "marked": false
         },
         {
-          "className": "<a href=https://github.com/junit-team/junit4/blob/300468b1efd48d76fac2f7bd6d576846dcbbf5ed/src/main/java/org/junit/runner/FilterFactories.java target=\"_blank\">FilterFactories</a>",
-          "edgesHtml": "FilterFactories &#8594; Request : 2<br/>\n"
+          "className": "FilterFactories",
+          "edgesHtml": "FilterFactories &#8594; Request : 2<br/>\n",
+          "classPath": "src/main/java/org/junit/runner/FilterFactories.java",
+          "marked": false
         }
       ]
     }

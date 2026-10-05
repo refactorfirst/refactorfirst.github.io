@@ -607,6 +607,105 @@ describe('disharmony table source-link cell rendering', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Largest cycle breakdown source-link cells: the report JSON carries the
+// simple class name, the source path relative to the project root and the
+// removal marker; the rendering layer combines the path with project.repoUrl
+// and sanitizes the anchor before it reaches the template.
+// ---------------------------------------------------------------------------
+
+describe('largest cycle breakdown source-link cell rendering', () => {
+  const template = readFileSync(
+    path.join(import.meta.dir, '../../assets/refactor-first-report.mustache'), 'utf8'
+  );
+
+  /**
+   * Builds a report whose largest cycle breakdown holds the supplied rows.
+   * @param {Array<object>} rows - Raw breakdown rows.
+   * @returns {object} Report fixture for the largest cycle table.
+   */
+  function reportWithBreakdownRows(rows) {
+    return {
+      project: { name: 'Demo', version: '1.0', repoUrl: 'https://github.com/demo/repo/blob/main/' },
+      classCycles: {
+        hasCycles: true,
+        summary: [],
+        largestCycle: {
+          hasCycleMap: true,
+          cycleName: 'A \u2192 B \u2192 A',
+          breakdown: rows
+        }
+      }
+    };
+  }
+
+  it('builds the class cell link from repoUrl and the row classPath', () => {
+    const data = reportWithBreakdownRows([
+      {
+        className: 'ReportWriter$SecureDirectoryOps',
+        classPath: 'report/src/main/java/org/hjug/refactorfirst/report/ReportWriter.java',
+        marked: true,
+        edgesHtml: 'edge 1'
+      }
+    ]);
+    const original = structuredClone(data);
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    expect(data).toEqual(original);
+    const cell = doc.querySelector('table[data-rf-table="largest-cycle-breakdown"] tbody td.rf-text-left');
+    expect(cell).not.toBeNull();
+    const link = cell.querySelector('a');
+    expect(link.getAttribute('href'))
+      .toBe('https://github.com/demo/repo/blob/main/report/src/main/java/org/hjug/refactorfirst/report/ReportWriter.java');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.textContent).toBe('ReportWriter$SecureDirectoryOps');
+    expect(cell.textContent).toBe('ReportWriter$SecureDirectoryOps*');
+    for (const element of cell.querySelectorAll('*')) {
+      expect(element.tagName).toBe('A');
+      for (const attribute of element.attributes) {
+        expect(['href', 'target', 'rel']).toContain(attribute.name);
+      }
+    }
+  });
+
+  it('neutralizes hostile breakdown fields down to a hardened link', () => {
+    const data = reportWithBreakdownRows([
+      {
+        className: 'Foo<img src=x onerror=alert(1)>',
+        classPath: 'src/main/java/Foo" onclick="alert(1)',
+        marked: false,
+        edgesHtml: 'edge 1'
+      }
+    ]);
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector('table[data-rf-table="largest-cycle-breakdown"] tbody td.rf-text-left');
+    expect(cell.querySelector('img')).toBeNull();
+    expect(cell.querySelector('[onclick]')).toBeNull();
+    expect(cell.textContent).toContain('Foo');
+    for (const element of cell.querySelectorAll('*')) {
+      expect(element.tagName).toBe('A');
+      for (const attribute of element.attributes) {
+        expect(['href', 'target', 'rel']).toContain(attribute.name);
+      }
+    }
+  });
+
+  it('renders rows without a class path as plain names with markers', () => {
+    const data = reportWithBreakdownRows([
+      { className: 'Foo', marked: true, edgesHtml: 'edge 1' },
+      { className: 'Bar', edgesHtml: 'edge 2' }
+    ]);
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cells = doc.querySelectorAll('table[data-rf-table="largest-cycle-breakdown"] tbody tr td:first-child');
+    expect(cells[0].querySelector('a')).toBeNull();
+    expect(cells[0].textContent).toBe('Foo*');
+    expect(cells[1].textContent).toBe('Bar');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // prepareReportData: filter -> sort -> paginate pipeline feeding the report
 // template with paginated rows and tableUi metadata (plan Phase 3).
 // ---------------------------------------------------------------------------
@@ -700,7 +799,10 @@ function synthReport({ classRows = 25, pkgRows = 5, disharmonyRows = 30, cycleRo
         hasCycleMap: true,
         cycleName: 'cycle-0',
         breakdown: Array.from({ length: breakdownRows }, (_, i) => ({
-          className: `<b>CycleClass${i}</b>`, edgesHtml: `edge ${i}`
+          className: `CycleClass${i}`,
+          classPath: `src/main/java/demo/CycleClass${i}.java`,
+          marked: i % 2 === 0,
+          edgesHtml: `edge ${i}`
         }))
       }
     }
@@ -838,7 +940,7 @@ describe('prepareReportData', () => {
     expect(ui.colSort).toEqual(['none', 'none']);
     expect(ui.colIndicator).toEqual(['', '']);
     expect(prepared.classCycles.largestCycle.breakdown.map(row => row.className))
-      .toEqual(['<b>CycleClass0</b>', '<b>CycleClass1</b>', '<b>CycleClass2</b>']);
+      .toEqual(['CycleClass0', 'CycleClass1', 'CycleClass2']);
   });
 
   it('still forgoes any default sort when sorting is disabled', () => {
