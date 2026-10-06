@@ -172,6 +172,32 @@ describe('initBubbleChart', () => {
     delete window.Chart;
   });
 
+  it('encodes each path segment while preserving the / separators', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'C#Foo.java', path: 'src/main/java/C#Foo.java? v=1.java' }]
+    }, 'https://github.com/demo/repo/blob/main/');
+    // File-name characters such as # and ? stay part of the path instead of
+    // becoming URL fragment or query delimiters
+    expect(created[0].data.datasets[0].data[0].raw.url)
+      .toBe('https://github.com/demo/repo/blob/main/src/main/java/C%23Foo.java%3F%20v%3D1.java');
+    delete window.Chart;
+  });
+
+  it('inserts the separator when the repository url lacks a trailing slash', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', path: 'src/Foo.java' }]
+    }, 'https://github.com/demo/repo');
+    expect(created[0].data.datasets[0].data[0].raw.url)
+      .toBe('https://github.com/demo/repo/src/Foo.java');
+    delete window.Chart;
+  });
+
   it('opens the clicked bubble source url in a new tab', () => {
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };

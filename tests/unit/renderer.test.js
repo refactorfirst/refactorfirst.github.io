@@ -240,6 +240,22 @@ describe('source-link cell rendering (owned by the report rendering layer)', () 
     );
   });
 
+  it('encodes class-relationship path segments and tolerates a missing repoUrl trailing slash', () => {
+    expect(classRelationshipMarkup(
+      {
+        sourceClassPath: 'src/main/java/C#Foo.java',
+        targetClassPath: 'src/main/java/B?ar.java',
+        simpleSourceClassName: 'Foo',
+        simpleTargetClassName: 'Bar'
+      },
+      'https://github.com/demo/repo'
+    )).toBe(
+      '<a href="https://github.com/demo/repo/src/main/java/C%23Foo.java" target="_blank">Foo</a> ' +
+        '&#8594; ' +
+        '<a href="https://github.com/demo/repo/src/main/java/B%3Far.java" target="_blank">Bar</a>'
+    );
+  });
+
   it('returns null for entries without the structured class-relationship fields', () => {
     expect(classRelationshipMarkup(null, REPO_URL)).toBeNull();
     expect(classRelationshipMarkup('legacy label', REPO_URL)).toBeNull();
@@ -264,6 +280,22 @@ describe('source-link cell rendering (owned by the report rendering layer)', () 
       '<a href="' + REPO_URL + 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/metrics/" target="_blank">org.hjug.graphbuilder.metrics</a> ' +
         '&#8594; ' +
         '<a href="' + REPO_URL + 'codebase-graph-builder/src/main/java/org/hjug/graphbuilder/" target="_blank">org.hjug.graphbuilder</a>*'
+    );
+  });
+
+  it('encodes package-relationship path segments and tolerates a missing repoUrl trailing slash', () => {
+    expect(packageRelationshipMarkup(
+      {
+        sourcePackage: 'org.demo.pkg',
+        targetPackage: 'org.demo.other',
+        sourcePackagePath: 'src/main/java/org/demo/pkg#dir/',
+        targetPackagePath: 'src/main/java/org/demo/other?dir/'
+      },
+      'https://github.com/demo/repo'
+    )).toBe(
+      '<a href="https://github.com/demo/repo/src/main/java/org/demo/pkg%23dir/" target="_blank">org.demo.pkg</a> ' +
+        '&#8594; ' +
+        '<a href="https://github.com/demo/repo/src/main/java/org/demo/other%3Fdir/" target="_blank">org.demo.other</a>'
     );
   });
 
@@ -587,13 +619,28 @@ describe('disharmony table source-link cell rendering', () => {
     const cell = doc.querySelector('table[data-rf-table="disharmony-GOD"] tbody td.rf-text-left');
     expect(cell.querySelector('img')).toBeNull();
     expect(cell.querySelector('[onclick]')).toBeNull();
-    expect(cell.textContent).toContain('TestClass.java');
+    // The hostile content is escaped as inert anchor text, not nested HTML
+    expect(cell.textContent).toContain('Test<img src=x onerror=alert(1)>Class.java');
     for (const element of cell.querySelectorAll('*')) {
       expect(element.tagName).toBe('A');
       for (const attribute of element.attributes) {
         expect(['href', 'target', 'rel']).toContain(attribute.name);
       }
     }
+  });
+
+  it('encodes disharmony cell path segments and tolerates a missing repoUrl trailing slash', () => {
+    const data = reportWithClassCell({
+      content: 'C#Foo.java',
+      path: 'src/main/java/C#Foo.java',
+      align: 'left'
+    });
+    data.project.repoUrl = 'https://github.com/demo/repo';
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector('table[data-rf-table="disharmony-GOD"] tbody td.rf-text-left');
+    expect(cell.querySelector('a').getAttribute('href'))
+      .toBe('https://github.com/demo/repo/src/main/java/C%23Foo.java');
   });
 
   it('renders cells without a path as before', () => {
@@ -689,6 +736,23 @@ describe('largest cycle breakdown source-link cell rendering', () => {
         expect(['href', 'target', 'rel']).toContain(attribute.name);
       }
     }
+  });
+
+  it('encodes breakdown class path segments and tolerates a missing repoUrl trailing slash', () => {
+    const data = reportWithBreakdownRows([
+      {
+        className: 'C#Foo',
+        classPath: 'src/main/java/C#Foo.java',
+        marked: false,
+        edgesHtml: 'edge 1'
+      }
+    ]);
+    data.project.repoUrl = 'https://github.com/demo/repo';
+    const html = renderTemplate(template, prepareReportData(data));
+    const doc = new JSDOM(html).window.document;
+    const cell = doc.querySelector('table[data-rf-table="largest-cycle-breakdown"] tbody tr td:first-child');
+    expect(cell.querySelector('a').getAttribute('href'))
+      .toBe('https://github.com/demo/repo/src/main/java/C%23Foo.java');
   });
 
   it('renders rows without a class path as plain names with markers', () => {
