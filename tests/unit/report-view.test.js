@@ -144,6 +144,60 @@ describe('initBubbleChart', () => {
     delete window.Chart;
   });
 
+  it('constructs the bubble source urls from the report repoUrl and the bubble paths', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [
+        { x: 1, y: 1, r: 24, label: 'Foo.java', path: 'src/main/java/Foo.java' },
+        {
+          x: 2, y: 2, r: 20, label: 'Both.java', path: 'src/main/java/Both.java',
+          url: 'https://legacy.example/Both.java'
+        },
+        { x: 3, y: 3, r: 16, label: 'Legacy.java', url: 'https://legacy.example/Legacy.java' },
+        { x: 4, y: 4, r: 12, label: 'Bar.java' }
+      ]
+    }, 'https://github.com/demo/repo/blob/main/');
+    const data = created[0].data.datasets[0].data;
+    expect(data[0].raw.path).toBe('src/main/java/Foo.java');
+    expect(data[0].raw.url).toBe('https://github.com/demo/repo/blob/main/src/main/java/Foo.java');
+    // The constructed repoUrl + path wins over a legacy embedded url
+    expect(data[1].raw.url).toBe('https://github.com/demo/repo/blob/main/src/main/java/Both.java');
+    // A bubble without a path keeps the payload's legacy url (still gated by
+    // isHttpUrl in the click/hover handlers)
+    expect(data[2].raw.url).toBe('https://legacy.example/Legacy.java');
+    // A bubble with neither a path nor a legacy url stays non-clickable
+    expect(data[3].raw.url).toBeNull();
+    delete window.Chart;
+  });
+
+  it('encodes each path segment while preserving the / separators', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'C#Foo.java', path: 'src/main/java/C#Foo.java? v=1.java' }]
+    }, 'https://github.com/demo/repo/blob/main/');
+    // File-name characters such as # and ? stay part of the path instead of
+    // becoming URL fragment or query delimiters
+    expect(created[0].data.datasets[0].data[0].raw.url)
+      .toBe('https://github.com/demo/repo/blob/main/src/main/java/C%23Foo.java%3F%20v%3D1.java');
+    delete window.Chart;
+  });
+
+  it('inserts the separator when the repository url lacks a trailing slash', () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const canvas = document.getElementById('chart_GOD');
+    initBubbleChart(canvas, 'God Classes', {
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', path: 'src/Foo.java' }]
+    }, 'https://github.com/demo/repo');
+    expect(created[0].data.datasets[0].data[0].raw.url)
+      .toBe('https://github.com/demo/repo/src/Foo.java');
+    delete window.Chart;
+  });
+
   it('opens the clicked bubble source url in a new tab', () => {
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };
@@ -152,13 +206,10 @@ describe('initBubbleChart', () => {
     const opens = [];
     window.open = (...args) => { opens.push(args); };
     initBubbleChart(canvas, 'God Classes', {
-      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
-    });
-    const stubChart = {
-      data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: { url: 'https://example.com/Foo.java' } }] }] }
-    };
-    created[0].options.onClick(new window.MouseEvent('click'), [{ datasetIndex: 0, index: 0 }], stubChart);
-    expect(opens).toEqual([['https://example.com/Foo.java', '_blank', 'noopener']]);
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', path: 'src/main/java/Foo.java' }]
+    }, 'https://example.com/');
+    created[0].options.onClick(new window.MouseEvent('click'), [{ datasetIndex: 0, index: 0 }], created[0]);
+    expect(opens).toEqual([['https://example.com/src/main/java/Foo.java', '_blank', 'noopener']]);
     window.open = originalOpen;
   });
 
@@ -170,12 +221,9 @@ describe('initBubbleChart', () => {
     const opens = [];
     window.open = (...args) => { opens.push(args); };
     initBubbleChart(canvas, 'God Classes', {
-      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
-    });
-    const stubChart = {
-      data: { datasets: [{ data: [{ x: 1, y: 1, r: 24, raw: { url: 'https://example.com/Foo.java' } }] }] }
-    };
-    created[0].options.onClick(new window.MouseEvent('click'), [], stubChart);
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', path: 'src/main/java/Foo.java' }]
+    }, 'https://example.com/');
+    created[0].options.onClick(new window.MouseEvent('click'), [], created[0]);
     created[0].options.onClick(
       new window.MouseEvent('click'),
       [{ datasetIndex: 0, index: 0 }],
@@ -193,8 +241,8 @@ describe('initBubbleChart', () => {
     const opens = [];
     window.open = (...args) => { opens.push(args); };
     initBubbleChart(canvas, 'God Classes', {
-      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' }]
-    });
+      bubbles: [{ x: 1, y: 1, r: 24, label: 'Foo.java', path: 'src/main/java/Foo.java' }]
+    }, 'https://example.com/');
     const onClick = created[0].options.onClick;
     const clickEvent = new window.MouseEvent('click');
     for (const url of [
@@ -238,11 +286,11 @@ describe('initBubbleChart', () => {
     const canvas = document.getElementById('chart_GOD');
     initBubbleChart(canvas, 'God Classes', {
       bubbles: [
-        { x: 1, y: 1, r: 24, label: 'Foo.java', url: 'https://example.com/Foo.java' },
-        { x: 2, y: 2, r: 24, label: 'Bar.java', url: 'javascript:alert(1)' },
+        { x: 1, y: 1, r: 24, label: 'Foo.java', path: 'src/main/java/Foo.java' },
+        { x: 2, y: 2, r: 24, label: 'Bar.java' },
         { x: 3, y: 3, r: 24, label: 'Baz.java' }
       ]
-    });
+    }, 'https://example.com/');
     const onHover = created[0].options.onHover;
     const hoverEvent = { native: { target: canvas } };
     onHover(hoverEvent, [{ datasetIndex: 0, index: 0 }], created[0]);
@@ -541,10 +589,24 @@ describe('initDisharmonyCharts', () => {
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };
     initDisharmonyCharts([
-      { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 5 }] } },
-      { anchorId: 'BRAIN', title: 'Brain Methods', chart: { bubbles: [{ x: 2, y: 3, r: 2 }] } }
-    ]);
+      { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 5, path: 'src/Foo.java' }] } },
+      { anchorId: 'BRAIN', title: 'Brain Methods', chart: { bubbles: [{ x: 2, y: 3, r: 2, path: 'src/Bar.java' }] } }
+    ], 'https://example.com/');
     expect(created.length).toBe(1); // no canvas for BRAIN
+    // The report repoUrl is combined with each bubble's path
+    expect(created[0].data.datasets[0].data[0].raw.url).toBe('https://example.com/src/Foo.java');
+    delete window.Chart;
+  });
+
+  it('leaves bubble urls unset when no repoUrl is available', () => {
+    document.body.innerHTML = '<canvas id="chart_GOD"></canvas>';
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    initDisharmonyCharts([
+      { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 5, path: 'src/Foo.java' }] } }
+    ]);
+    expect(created.length).toBe(1);
+    expect(created[0].data.datasets[0].data[0].raw.url).toBeNull();
     delete window.Chart;
   });
 
@@ -552,7 +614,7 @@ describe('initDisharmonyCharts', () => {
     document.body.innerHTML = '<canvas id="chart_GOD"></canvas>';
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };
-    initDisharmonyCharts([{ anchorId: 'GOD', title: 'God Classes' }]);
+    initDisharmonyCharts([{ anchorId: 'GOD', title: 'God Classes' }], 'https://example.com/');
     expect(created.length).toBe(0);
     delete window.Chart;
   });

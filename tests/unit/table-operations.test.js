@@ -416,6 +416,56 @@ describe('TABLE_CONFIG defaults', () => {
   });
 });
 
+describe('REPORT_TABLES class-relationships relationship column', () => {
+  const column = REPORT_TABLES['class-relationships'].columns[0];
+
+  it('derives the plain text from the simple class names and removal markers', () => {
+    expect(column.key).toBe('classRelationship');
+    expect(column.label).toBe('Class Relationship');
+    expect(columnValue(column, {
+      simpleSourceClassName: 'Request',
+      simpleTargetClassName: 'SortingRequest',
+      sourceMarked: true,
+      targetMarked: false
+    })).toBe('Request* → SortingRequest');
+    expect(columnValue(column, {
+      simpleSourceClassName: 'A',
+      simpleTargetClassName: 'B'
+    })).toBe('A → B');
+  });
+
+  it('falls back to an empty value when the structured fields are absent', () => {
+    expect(columnValue(column, {})).toBe('');
+    expect(columnValue(column, { sourceClass: 'org.example.A' })).toBe('');
+    expect(columnValue(column, { renderedLabel: '<a href="https://x">A</a> &#8594; B : 1' })).toBe('');
+  });
+});
+
+describe('REPORT_TABLES package-relationships relationship column', () => {
+  const column = REPORT_TABLES['package-relationships'].columns[0];
+
+  it('derives the plain text from the package names and removal markers', () => {
+    expect(column.key).toBe('packageRelationship');
+    expect(column.label).toBe('Package Relationship');
+    expect(columnValue(column, {
+      sourcePackage: 'org.junit.runner',
+      targetPackage: 'org.junit.internal',
+      sourceMarked: false,
+      targetMarked: true
+    })).toBe('org.junit.runner → org.junit.internal*');
+    expect(columnValue(column, {
+      sourcePackage: 'org.a',
+      targetPackage: 'org.b'
+    })).toBe('org.a → org.b');
+  });
+
+  it('falls back to an empty value when the structured fields are absent', () => {
+    expect(columnValue(column, {})).toBe('');
+    expect(columnValue(column, { sourceMarked: true })).toBe('');
+    expect(columnValue(column, { renderedLabel: 'org.a &#8594; org.b : 1' })).toBe('');
+  });
+});
+
 describe('REPORT_TABLES package-relationships class-break column', () => {
   const column = REPORT_TABLES['package-relationships'].columns.find(
     col => col.key === 'classRelationshipsToBreakPackage'
@@ -426,29 +476,29 @@ describe('REPORT_TABLES package-relationships class-break column', () => {
     expect(column.label).toBe('Class Relationships to Remove To Break Package Relationship');
   });
 
-  it('reads the rendered label of structured ClassRelationshipDTO entries', () => {
+  it('reads the simple class names of structured ClassRelationshipDTO entries', () => {
     const row = {
       classRelationshipsToBreakPackage: [
         {
           sourceClass: 'org.junit.runner.Request',
           targetClass: 'org.junit.internal.requests.SortingRequest',
+          sourceClassPath: 'src/main/java/org/junit/runner/Request.java',
+          targetClassPath: 'src/main/java/org/junit/internal/requests/SortingRequest.java',
+          simpleSourceClassName: 'Request',
+          simpleTargetClassName: 'SortingRequest',
           sourceMarked: true,
           targetMarked: false,
-          weight: 2,
-          renderedLabel:
-            '<a href="https://example.com/Request.java" target="_blank">Request</a>* &#8594; ' +
-            '<a href="https://example.com/SortingRequest.java" target="_blank">SortingRequest</a> : 2'
+          weight: 2
         },
         {
           sourceClass: 'org.junit.runner.Request',
           targetClass: 'org.junit.internal.requests.ClassRequest',
-          renderedLabel:
-            '<a href="https://example.com/Request.java" target="_blank">Request</a> &#8594; ' +
-            '<a href="https://example.com/ClassRequest.java" target="_blank">ClassRequest</a> : 2'
+          simpleSourceClassName: 'Request',
+          simpleTargetClassName: 'ClassRequest'
         }
       ]
     };
-    expect(columnValue(column, row)).toBe('Request * → SortingRequest : 2; Request → ClassRequest : 2');
+    expect(columnValue(column, row)).toBe('Request* → SortingRequest; Request → ClassRequest');
   });
 
   it('ignores pre-DTO string entries from older reports', () => {
@@ -469,6 +519,6 @@ describe('REPORT_TABLES package-relationships class-break column', () => {
       columnValue(column, {
         classRelationshipsToBreakPackage: [{ sourceClass: 'a.B' }, null, { renderedLabel: 'Plain label' }]
       })
-    ).toBe('; ; Plain label');
+    ).toBe('; ; ');
   });
 });
