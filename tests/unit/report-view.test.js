@@ -1114,21 +1114,41 @@ describe('showPopup sigma theme settings', () => {
     installRadiosAndPopup('dark');
     const constructed = stubSigmaStack();
     showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
-    const settings = constructed[0].settings;
+    // Representative resolved settings, as sigma's resolveSettings merges the
+    // popup partial over its DEFAULT_SETTINGS (labelSize 14, Arial, normal).
+    const resolved = {
+      labelSize: 14,
+      labelFont: 'Arial',
+      labelWeight: 'normal',
+      ...constructed[0].settings
+    };
 
     const fills = [];
     const drawn = [];
+    const coords = [];
     const context = {
       font: '',
       shadowOffsetX: 0, shadowOffsetY: 0, shadowBlur: 0, shadowColor: '',
       measureText: () => ({ width: 42 }),
-      beginPath() {}, moveTo() {}, lineTo() {}, arc() {}, closePath() {},
+      beginPath() {}, closePath() {},
+      moveTo: (...args) => coords.push(...args),
+      lineTo: (...args) => coords.push(...args),
+      arc: (...args) => coords.push(...args),
       fill() { drawn.push({ op: 'fill', color: fills[fills.length - 1] }); },
-      fillText(text) { drawn.push({ op: 'text', text, color: fills[fills.length - 1] }); },
+      fillText(text, ...args) {
+        drawn.push({ op: 'text', text, color: fills[fills.length - 1] });
+        coords.push(...args);
+      },
       set fillStyle(value) { fills.push(value); },
       get fillStyle() { return fills[fills.length - 1]; }
     };
-    settings.hoverRenderer(context, { x: 10, y: 20, size: 5, label: 'Foo' }, settings);
+    resolved.hoverRenderer(context, { x: 10, y: 20, size: 5, label: 'Foo' }, resolved);
+    // The label-box geometry must be finite everywhere (NaN coordinates would
+    // silently skip painting the box and the label).
+    expect(coords.length).toBeGreaterThan(0);
+    expect(coords.every(Number.isFinite)).toBe(true);
+    // The label font comes from the resolved label settings.
+    expect(context.font).toBe('normal 14px Arial');
     // The hovered node's label box fills with the dark --card-bg surface…
     expect(drawn.some(d => d.op === 'fill' && d.color === '#1a2330')).toBe(true);
     // …and its text uses the dark chart legend color (>= 4.5:1 on it).
