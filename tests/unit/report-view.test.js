@@ -14,6 +14,7 @@ import {
   enhanceReport,
   resolveLegendTextColor,
   bindThemeChartRedraw,
+  bindSigmaHoverHighlight,
   destroyBubbleCharts,
   statefulElementIds,
   stashStatefulDom,
@@ -1067,7 +1068,8 @@ describe('showPopup sigma theme settings', () => {
 
   // Minimal widget stubs so showPopup reaches the Sigma constructor: an
   // empty graphlib-dot graph (the sugiyama layout then no-ops) and a Sigma
-  // "constructor" recording its arguments.
+  // "constructor" recording its arguments and returning an instance stub
+  // (handlers by event, settings installed via setSetting, refresh count).
   function stubSigmaStack() {
     const constructed = [];
     window.graphlibDot = { read: () => ({ nodes: () => [], edges: () => [] }) };
@@ -1081,7 +1083,19 @@ describe('showPopup sigma theme settings', () => {
       }
     };
     window.Sigma = function (graph, container, settings) {
-      constructed.push({ graph, container, settings });
+      const entry = {
+        graph, settings,
+        instance: {
+          handlers: {},
+          installed: {},
+          scheduledRefreshes: 0,
+          on(event, handler) { this.handlers[event] = handler; },
+          setSetting(key, value) { this.installed[key] = value; },
+          scheduleRefresh() { this.scheduledRefreshes += 1; }
+        }
+      };
+      constructed.push(entry);
+      return entry.instance;
     };
     return constructed;
   }
@@ -1166,6 +1180,119 @@ describe('showPopup sigma theme settings', () => {
     const constructed = stubSigmaStack();
     showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
     expect(constructed[0].settings).toBeUndefined();
+  });
+
+  it('binds neighbor and edge hover highlighting onto the sigma instance', () => {
+    installRadiosAndPopup('light');
+    const constructed = stubSigmaStack();
+    showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
+    const instance = constructed[0].instance;
+    expect(typeof instance.handlers.enterNode).toBe('function');
+    expect(typeof instance.handlers.leaveNode).toBe('function');
+    expect(typeof instance.installed.nodeReducer).toBe('function');
+    expect(typeof instance.installed.edgeReducer).toBe('function');
+  });
+});
+
+describe('bindSigmaHoverHighlight', () => {
+  // A stub graphology graph: edges eAB (A-B), eAC (A-C), eBD (B-D). D is a
+  // non-neighbor of A; eBD is not incident to A.
+  function stubHoverGraph() {
+    return {
+      forEachNeighbor(node, callback) {
+        ({ A: ['B', 'C'], B: ['A', 'D'], C: ['A'], D: ['B'] })[node].forEach(callback);
+      },
+      edges(node) {
+        return ({ A: ['eAB', 'eAC'], B: ['eAB', 'eBD'], C: ['eAC'], D: ['eBD'] })[node];
+      }
+    };
+  }
+
+  function stubSigmaInstance() {
+    const instance = {
+      handlers: {},
+      installed: {},
+      scheduledRefreshes: 0,
+      on(event, handler) { instance.handlers[event] = handler; },
+      setSetting(key, value) { instance.installed[key] = value; },
+      scheduleRefresh() { instance.scheduledRefreshes += 1; },
+      fire(event, payload) { instance.handlers[event](payload); }
+    };
+    return instance;
+  }
+
+  it('flags neighbor nodes and thickens the incident edges of the hovered node', () => {
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph());
+    instance.fire('enterNode', { node: 'A' });
+    expect(instance.scheduledRefreshes).toBe(1);
+
+    const neighbor = { label: 'B', size: 5 };
+    const stranger = { label: 'D', size: 5 };
+    const hovered = { label: 'A', size: 5 };
+    // Nodes across the hovered node's edges are re-rendered above labels…
+    expect(instance.installed.nodeReducer('B', neighbor)).toEqual({ label: 'B', size: 5, highlighted: true });
+    // …while the hovered node itself (already emphasized by sigma's hover
+    // layer) and everything else keep their display data untouched.
+    expect(instance.installed.nodeReducer('D', stranger)).toBe(stranger);
+    expect(instance.installed.nodeReducer('A', hovered)).toBe(hovered);
+
+    const incident = { size: 1, color: 'black' };
+    const unrelated = { size: 1, color: 'black' };
+    // Edges directly connected to the hovered node thicken…
+    expect(instance.installed.edgeReducer('eAB', incident)).toEqual({ size: 3, color: 'black' });
+    expect(instance.installed.edgeReducer('eAC', incident)).toEqual({ size: 3, color: 'black' });
+    // …while unrelated edges keep their display data untouched.
+    expect(instance.installed.edgeReducer('eBD', unrelated)).toBe(unrelated);
+  });
+
+  it('clears the highlighting when the node is left', () => {
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph());
+    instance.fire('enterNode', { node: 'A' });
+    instance.fire('leaveNode', {});
+    expect(instance.scheduledRefreshes).toBe(2);
+
+    const data = { label: 'B', size: 5 };
+    expect(instance.installed.nodeReducer('B', data)).toBe(data);
+    expect(instance.installed.edgeReducer('eAB', data)).toBe(data);
+  });
+
+  it('re-populates cleanly when hopping straight from one node to another', () => {
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph());
+    instance.fire('enterNode', { node: 'A' });
+    instance.fire('enterNode', { node: 'B' });
+
+    // Highlighting follows B: neighbors A and D, incident edges eAB and eBD.
+    const gone = { label: 'C', size: 5 };
+    expect(instance.installed.nodeReducer('C', gone)).toBe(gone);
+    expect(instance.installed.nodeReducer('D', { size: 5 })).toEqual({ size: 5, highlighted: true });
+    const dropped = { size: 1, color: 'black' };
+    expect(instance.installed.edgeReducer('eAC', dropped)).toBe(dropped);
+    expect(instance.installed.edgeReducer('eBD', { size: 1, color: 'black' })).toEqual({ size: 3, color: 'black' });
+  });
+
+  it('ignores leave events when nothing is highlighted', () => {
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph());
+    instance.fire('leaveNode', {});
+    expect(instance.scheduledRefreshes).toBe(0);
+  });
+
+  it('ignores enter payloads without a node', () => {
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph());
+    instance.fire('enterNode', {});
+    expect(instance.scheduledRefreshes).toBe(0);
+    const data = { label: 'B', size: 5 };
+    expect(instance.installed.nodeReducer('B', data)).toBe(data);
+  });
+
+  it('does not throw for a missing sigma, event-less sigma or missing graph', () => {
+    expect(() => bindSigmaHoverHighlight(null, stubHoverGraph())).not.toThrow();
+    expect(() => bindSigmaHoverHighlight({ scheduleRefresh() {} }, stubHoverGraph())).not.toThrow();
+    expect(() => bindSigmaHoverHighlight(stubSigmaInstance(), null)).not.toThrow();
   });
 });
 
