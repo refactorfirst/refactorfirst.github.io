@@ -1038,6 +1038,117 @@ describe('popup helpers', () => {
   });
 });
 
+describe('showPopup sigma theme settings', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="overlay" id="overlay" style="display:none"></div>
+      <div class="popup" id="popup-classGraph" style="display:none">
+        <div id="graph-container-classGraph"></div>
+      </div>`;
+  });
+
+  afterEach(() => {
+    delete window.graphlibDot;
+    delete window.graphology;
+    delete window.Sigma;
+    delete window.matchMedia;
+  });
+
+  // Installs the theme radios (which replace document.body.innerHTML) and
+  // re-appends the popup DOM they wiped, so showPopup finds its overlay.
+  function installRadiosAndPopup(mode, osPrefersDark) {
+    installThemeRadios(mode, osPrefersDark);
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="overlay" id="overlay" style="display:none"></div>
+      <div class="popup" id="popup-classGraph" style="display:none">
+        <div id="graph-container-classGraph"></div>
+      </div>`);
+  }
+
+  // Minimal widget stubs so showPopup reaches the Sigma constructor: an
+  // empty graphlib-dot graph (the sugiyama layout then no-ops) and a Sigma
+  // "constructor" recording its arguments.
+  function stubSigmaStack() {
+    const constructed = [];
+    window.graphlibDot = { read: () => ({ nodes: () => [], edges: () => [] }) };
+    window.graphology = {
+      Graph: class {
+        addNode() {}
+        addEdge() {}
+        nodes() { return []; }
+        forEachNeighbor() {}
+        setNodeAttribute() {}
+      }
+    };
+    window.Sigma = function (graph, container, settings) {
+      constructed.push({ graph, container, settings });
+    };
+    return constructed;
+  }
+
+  it('keeps the sigma defaults in light mode', () => {
+    installRadiosAndPopup('light');
+    const constructed = stubSigmaStack();
+    showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
+    expect(constructed.length).toBe(1);
+    expect(constructed[0].settings).toBeUndefined();
+  });
+
+  it('passes the dark legend text color and a hover renderer in dark mode', () => {
+    installRadiosAndPopup('dark');
+    const constructed = stubSigmaStack();
+    showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
+    const settings = constructed[0].settings;
+    expect(settings.labelColor.color).toBe('#9fb0c0');
+    expect(typeof settings.hoverRenderer).toBe('function');
+  });
+
+  it('resolves the dark settings for the system radio when the OS prefers dark', () => {
+    installRadiosAndPopup('system', true);
+    const constructed = stubSigmaStack();
+    showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
+    expect(constructed[0].settings.labelColor.color).toBe('#9fb0c0');
+  });
+
+  it('draws the hover box in the dark popup surface with light label text', () => {
+    installRadiosAndPopup('dark');
+    const constructed = stubSigmaStack();
+    showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
+    const settings = constructed[0].settings;
+
+    const fills = [];
+    const drawn = [];
+    const context = {
+      font: '',
+      shadowOffsetX: 0, shadowOffsetY: 0, shadowBlur: 0, shadowColor: '',
+      measureText: () => ({ width: 42 }),
+      beginPath() {}, moveTo() {}, lineTo() {}, arc() {}, closePath() {},
+      fill() { drawn.push({ op: 'fill', color: fills[fills.length - 1] }); },
+      fillText(text) { drawn.push({ op: 'text', text, color: fills[fills.length - 1] }); },
+      set fillStyle(value) { fills.push(value); },
+      get fillStyle() { return fills[fills.length - 1]; }
+    };
+    settings.hoverRenderer(context, { x: 10, y: 20, size: 5, label: 'Foo' }, settings);
+    // The hovered node's label box fills with the dark --card-bg surface…
+    expect(drawn.some(d => d.op === 'fill' && d.color === '#1a2330')).toBe(true);
+    // …and its text uses the dark chart legend color (>= 4.5:1 on it).
+    expect(drawn.some(d => d.op === 'text' && d.text === 'Foo' && d.color === '#9fb0c0')).toBe(true);
+  });
+
+  it('keeps the dark sigma label readable on the dark hover box (>= 4.5:1)', () => {
+    // #1a2330 is the dark palette's --card-bg (the popup surface) in
+    // app/globals.css; #9fb0c0 is CHART_LEGEND_TEXT.dark.
+    expect(contrastAgainst('#9fb0c0', [0x1a, 0x23, 0x30])).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('falls back to sigma defaults for the system radio when the OS prefers light', () => {
+    installRadiosAndPopup('system', false);
+    const constructed = stubSigmaStack();
+    showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
+    expect(constructed[0].settings).toBeUndefined();
+  });
+});
+
 describe('bindPopupHandlers (template uses data attributes, no inline handlers)', () => {
   beforeEach(() => {
     document.body.innerHTML = `
