@@ -54,11 +54,11 @@ export default function RootLayout({ children }) {
             vertically centered on one line. The row reuses the breadcrumbs'
             alignment formula (--width-content column, 0.8rem horizontal
             padding, border-box), so the first crumb's glyph sits at the menu
-            bar's left content edge and the toggle at its right content edge
-            — the two edges mirror each other (plans/css-only-dark-mode.md).
-            Suspense is required for useSearchParams (static export; the
-            fallback keeps prerendered HTML crumb-free and the toggle still
-            renders — an empty flex slot). */}
+             bar's left content edge and the toggle at its right content edge
+             — the two edges mirror each other (plans/css-only-dark-mode.md).
+             The Suspense boundary mirrors the fallback-free static-export
+             pattern (the prerendered HTML stays crumb-free and the toggle
+             still renders — an empty flex slot). */}
         <div className="theme-bar">
           <Suspense fallback={null}>
             <Breadcrumbs />

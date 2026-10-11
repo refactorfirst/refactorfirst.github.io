@@ -6,7 +6,6 @@ import {
   classifyRoute,
   buildReportUrl,
   buildRepositoryListUrl,
-  getQueryParam,
   DEFAULT_BRANCH,
   STATIC_PAGES
 } from '../../lib/routes.js';
@@ -111,6 +110,24 @@ describe('classifyRoute branch validation', () => {
     expect(classifyRoute('/alice/repo/..')).toEqual({ type: 'not-found' });
     expect(classifyRoute('/alice/repo/..&#47;.evil')).toEqual({ type: 'not-found' });
   });
+
+  it('joins multi-segment branch names into a single report branch', () => {
+    expect(classifyRoute('/alice/repo/feature/login')).toEqual({
+      type: 'report', username: 'alice', repository: 'repo', branch: 'feature/login'
+    });
+  });
+
+  it('accepts deep multi-segment branch names', () => {
+    const result = classifyRoute('/alice/repo/release/1.2/fix');
+    expect(result.type).toBe('report');
+    expect(result.branch).toBe('release/1.2/fix');
+  });
+
+  it('rejects multi-segment branches with any invalid segment', () => {
+    expect(classifyRoute('/alice/repo/feature/..').type).toBe('not-found');
+    expect(classifyRoute('/alice/repo/feature/<script>').type).toBe('not-found');
+    expect(classifyRoute('/alice/repo/feature/ok then').type).toBe('not-found');
+  });
 });
 
 describe('classifyRoute', () => {
@@ -154,8 +171,11 @@ describe('classifyRoute', () => {
     expect(result.branch).toBe('develop');
   });
 
-  it('classifies unknown routes with more segments as not-found', () => {
-    expect(classifyRoute('/a/b/c/d').type).toBe('not-found');
+  it('classifies routes with an invalid branch segment as not-found', () => {
+    // Extra segments are part of the branch name now; only invalid
+    // segments (injection attempts, bad characters) are not-found.
+    expect(classifyRoute('/alice/repo/develop/<script>').type).toBe('not-found');
+    expect(classifyRoute('/alice/repo/../evil').type).toBe('not-found');
   });
 
   it('classifies invalid names as not-found', () => {
@@ -164,7 +184,7 @@ describe('classifyRoute', () => {
   });
 });
 
-describe('URL builders and query params', () => {
+describe('URL builders', () => {
   it('buildReportUrl builds report URLs', () => {
     expect(buildReportUrl('u', 'r')).toBe('/u/r');
     expect(buildReportUrl('u', 'r', 'develop')).toBe('/u/r/develop');
@@ -173,12 +193,5 @@ describe('URL builders and query params', () => {
 
   it('buildRepositoryListUrl separates owner and repo', () => {
     expect(buildRepositoryListUrl('refactorfirst/refactorfirst')).toBe('/refactorfirst/refactorfirst');
-  });
-
-  it('getQueryParam parses query strings', () => {
-    expect(getQueryParam('?page=2', 'page')).toBe('2');
-    expect(getQueryParam('?page=2&q=x', 'q')).toBe('x');
-    expect(getQueryParam('', 'page')).toBeNull();
-    expect(getQueryParam('?other=1', 'page')).toBeNull();
   });
 });

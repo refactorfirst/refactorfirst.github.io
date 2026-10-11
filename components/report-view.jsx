@@ -9,7 +9,6 @@
 // lib/widget-loader.js.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import { withBasePath } from '../lib/base-path';
 import { detectHostingEnvironment, getPlatformBaseUrl, readMetaTag } from '../lib/host';
@@ -66,7 +65,6 @@ export default function ReportView({
   enhanceTablesImpl = enhanceTables
 }) {
   const containerRef = useRef(null);
-  const searchParams = useSearchParams();
   const [attempt, setAttempt] = useState(0);
   const [payload, setPayload] = useState(null);
   const [tableStates, setTableStates] = useState({});
@@ -80,7 +78,9 @@ export default function ReportView({
     duration: toastDurationMs
   });
 
-  const branch = branchProp || searchParams.get('branch') || undefined;
+  // The branch comes exclusively from the route (pre-generated shells pass
+  // it as a prop; the 404 shell renders unlisted branches in place).
+  const branch = branchProp || undefined;
 
   const handleTableAction = useCallback((tableId, patch, meta) => {
     if (meta?.restoreFocus) {

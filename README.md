@@ -268,7 +268,7 @@ GitLab Pages deploys from the `pages` job and serves
 ### 4. GitLab-specific considerations
 
 - **Client-side routing**: GitLab Pages serves `404.html` for unknown paths; the Next.js export already produces
-  `out/404.html` (from `app/not-found.jsx`), which handles branch deep-link recovery — no extra copy step needed.
+  `out/404.html` (from `app/not-found.jsx`), which renders branch deep links in place at their path URLs — no extra copy step needed.
 - **Submission processing**: set `submission-target` in `app/layout.jsx` to your
   `<group>/<project>`, extend the CSP `connect-src` with your GitLab base (`https://gitlab.com` or your self-managed
   host), and create a pipeline schedule (**CI/CD → Schedules**, e.g. every 10 minutes) — GitLab has no issue-triggered

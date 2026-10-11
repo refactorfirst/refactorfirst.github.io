@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 
 // Static-export parity (Technical Appendix §9): every repositories.txt entry
 // must resolve to generated HTML; unknown paths serve the app 404 with a
-// real 404 status; branch deep links render the requested branch after the
-// client-side redirect.
+// real 404 status; branch deep links render the requested branch in place
+// on the 404 shell, keeping the path-parameter URL.
 
 const repositories = readFileSync('repositories.txt', 'utf8')
   .split('\n')
@@ -48,7 +48,7 @@ const SAMPLE_REPORT = {
   classCycles: { hasCycles: false, summary: [], largestCycle: { hasCycleMap: false } }
 };
 
-test('branch deep link redirects to the repo shell and renders that branch', async ({ page }) => {
+test('branch deep link renders the requested branch in place, keeping the URL', async ({ page }) => {
   const requested = [];
   await page.route('**/raw.githubusercontent.com/**', route => {
     const url = route.request().url();
@@ -61,10 +61,29 @@ test('branch deep link redirects to the repo shell and renders that branch', asy
   });
 
   await page.goto('/refactorfirst/refactorfirst/develop');
-  // Client redirect rewrites the URL to the repo shell carrying the branch
-  await page.waitForURL('**/refactorfirst/refactorfirst/**?branch=develop**');
+  // No redirect: the report renders on the 404 shell at the original URL
+  await expect(page).toHaveURL(/.*\/refactorfirst\/refactorfirst\/develop\/?$/);
   await expect(page.locator('h1').first()).toContainText('RefactorFirst Report for refactorfirst');
   expect(requested.some(u => u.includes('/develop/.refactorfirst/refactor-first.json'))).toBe(true);
+  // The 404 copy must not co-render with the report
+  await expect(page.locator('.error-page')).toHaveCount(0);
+  // Title matches the pre-generated branch shells
+  await expect(page).toHaveTitle('refactorfirst/refactorfirst@develop - RefactorFirst');
+});
+
+test('branch deep links with slashes render the full branch name', async ({ page }) => {
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    const url = route.request().url();
+    if (url.includes('/refs/heads/feature/login/.refactorfirst/refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SAMPLE_REPORT) });
+    } else {
+      route.fulfill({ status: 404 });
+    }
+  });
+
+  await page.goto('/refactorfirst/refactorfirst/feature/login');
+  await expect(page).toHaveURL(/.*\/refactorfirst\/refactorfirst\/feature\/login\/?$/);
+  await expect(page.locator('h1').first()).toContainText('RefactorFirst Report for refactorfirst');
 });
 
 test('recently added repo note shows for unlisted /user/repo 404s', async ({ page }) => {

@@ -73,7 +73,7 @@ npx eslint "lib/**/*.js" "app/**/*.{js,jsx}" "components/**/*" "tests/**/*"
 ```
 app/                        # Next.js App Router (static export)
   layout.jsx                # CSP meta, header/footer, submission-target meta
-  not-found.jsx             # 404 page + branch deep-link redirect (§6)
+  not-found.jsx             # 404 page + in-place branch deep-link render (§6)
   error.jsx                 # global error boundary (+ per-route boundaries)
   page.jsx                  # landing (/)
   add-repo|about|api|.../page.jsx    # static content pages
@@ -139,8 +139,9 @@ coverage there when introducing new markup patterns.
 - **Static export constraints:** `dynamicParams = false` on dynamic routes;
   `generateStaticParams` enumerates `(username)`, `(username, repository)` and
   `(username, repository, main|master)` from `repositories.txt`; new repos render
-  client-side immediately thanks to the client-side listing refresh and the
-  `?branch=` deep-link redirect in `app/not-found.jsx`.
+  client-side immediately thanks to the client-side listing refresh, and
+  branch deep links (the branch is always a path parameter) are rendered
+  in place by the 404 shell (`app/not-found.jsx`) at their original URL.
 - **Widget loading:** CDN scripts load via `next/script` `lazyOnload` inside
   `components/report-view.jsx`, registered through `lib/widget-loader.js`);
   wasm/ESM bridges in `public/widgets/` run as native module scripts.

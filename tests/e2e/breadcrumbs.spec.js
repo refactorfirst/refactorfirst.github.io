@@ -71,8 +71,10 @@ test('a main 404 falls back to master and the trail relabels to the displayed br
   await expect(nav.locator('[aria-current="page"]')).toHaveText('master');
 });
 
-test('branch deep link (?branch=) shows the deep-linked branch', async ({ page }) => {
-  await page.goto('/refactorfirst/refactorfirst/?branch=feature%2Flogin');
+test('branch deep link shows the deep-linked branch from the path', async ({ page }) => {
+  // Served by the 404 shell (feature/login is not pre-generated) — the
+  // branch path segments are joined into one crumb label.
+  await page.goto('/refactorfirst/refactorfirst/feature/login');
   const nav = page.getByRole('navigation', { name: 'Breadcrumb' });
   await expect(nav.locator('[aria-current="page"]')).toHaveText('feature/login');
 });

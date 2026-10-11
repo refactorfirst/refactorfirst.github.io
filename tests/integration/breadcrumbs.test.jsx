@@ -1,17 +1,15 @@
 // Breadcrumb navigation under the top menu: the trail mirrors the current
 // /<user>/<repo>/<branch> route with links back up the hierarchy. Pathname
-// and query string are injected via mutable next/navigation mocks (same
-// pattern as not-found.test.jsx).
+// is injected via a mutable next/navigation mock (same pattern as
+// not-found.test.jsx).
 import { describe, test, expect } from 'bun:test';
 import { mock } from 'bun:test';
 
 import { sharedNextNavigationMock } from './next-navigation-stub';
 
 let currentPath = '/';
-let currentSearch = '';
 mock.module('next/navigation', () => sharedNextNavigationMock({
-  usePathname: () => currentPath,
-  useSearchParams: () => new URLSearchParams(currentSearch)
+  usePathname: () => currentPath
 }));
 
 import { render, installRtlDom } from './rtl';
@@ -25,12 +23,10 @@ installRtlDom();
  * Sets the mocked route and mounts the breadcrumb component for assertions.
  *
  * @param {string} pathname - Path exposed by the navigation mock.
- * @param {string} [search=''] - Query string exposed by the navigation mock.
  * @returns {import('@testing-library/react').RenderResult} Rendered test utilities.
  */
-function renderBreadcrumbs(pathname, search = '') {
+function renderBreadcrumbs(pathname) {
   currentPath = pathname;
-  currentSearch = search;
   return render(_jsx(Breadcrumbs, {}));
 }
 
@@ -58,7 +54,7 @@ describe('Breadcrumbs', () => {
   });
 
   test('renders no breadcrumb nav on not-found paths', () => {
-    const { container } = renderBreadcrumbs('/alice/repo/main/extra');
+    const { container } = renderBreadcrumbs('/alice/repo/<script>');
     expect(container.querySelector('nav[aria-label="Breadcrumb"]')).toBeNull();
   });
 
@@ -148,11 +144,18 @@ describe('Breadcrumbs', () => {
     expect(items[3].querySelector('[aria-current="page"]')).toBeTruthy();
   });
 
-  test('shows the ?branch= deep-link branch on the report shell', () => {
-    const { container } = renderBreadcrumbs('/alice/some-repo', '?branch=develop');
+  test('shows the deep-linked branch from the path segment', () => {
+    const { container } = renderBreadcrumbs('/alice/some-repo/develop');
     const items = crumbs(container);
     expect(items.at(-1).textContent).toBe('develop');
     expect(items.at(-1).querySelector('[aria-current="page"]')).toBeTruthy();
+  });
+
+  test('joins multi-segment branch names into one current crumb', () => {
+    const { container } = renderBreadcrumbs('/alice/some-repo/feature/login');
+    const items = crumbs(container);
+    expect(items.at(-1).textContent).toBe('feature/login');
+    expect(items[2].querySelector('a').getAttribute('href')).toBe('/alice/some-repo');
   });
 
   test('duplicate crumb labels (user == repository) do not produce duplicate keys', () => {

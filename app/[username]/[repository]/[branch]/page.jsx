@@ -1,7 +1,7 @@
 // /{username}/{repository}/{branch} — report shell pinned to a branch.
-// Pre-generated for main/master; other branches reach this route via the
-// not-found client redirect which conveys the branch through the ?branch=
-// query parameter handled by ReportView.
+// Pre-generated for main/master; other branches have no exported HTML and
+// are rendered in place by the 404 shell (app/not-found.jsx) at the
+// original path-parameter URL.
 
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';

@@ -10,7 +10,7 @@
 // to the resolved branch so the trail identifies the displayed report.
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
   breadcrumbsFor,
   reportMatchesFor,
@@ -25,9 +25,7 @@ import {
  */
 export default function Breadcrumbs() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const search = searchParams ? searchParams.toString() : '';
-  const routeKey = `${pathname}?${search}`;
+  const routeKey = pathname || '/';
   // The announced branch is keyed to the route it was announced on; a route
   // change resets it during render (the React-sanctioned alternative to a
   // setState call inside an effect).
@@ -55,7 +53,6 @@ export default function Breadcrumbs() {
 
   const crumbs = breadcrumbsFor(
     pathname || '/',
-    search,
     resolved.key === routeKey ? resolved.branch : null
   );
   if (crumbs.length === 0) return null;

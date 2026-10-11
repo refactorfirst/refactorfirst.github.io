@@ -1,23 +1,25 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { isValidGitHubName, STATIC_PAGES } from '../lib/routes.js';
 import { getBasePath } from '../lib/base-path';
 
+// Lazy-loaded so the report-rendering bundle (renderer, table enhancement)
+// stays out of the first-party budget of pages that never show a report —
+// the chunk is only fetched when a branch deep link actually renders one.
+const ReportView = lazy(() => import('../components/report-view'));
+
 // Exported for the 404.html produced by the static export. GitHub Pages (and
 // similar static hosts) serve this page for any path that has no exported
 // HTML file. Two recovery behaviors:
 //  - Branch deep links (/user/repo/<branch>) that are not pre-generated are
-//    redirected to the repo shell (/user/repo/) which loads the requested
-//    branch client-side (Technical Appendix §6).
+//    rendered in place by ReportView at the original URL — the branch is a
+//    path parameter, so no redirect is needed (Technical Appendix §6).
 //  - Repos added after the last deploy get the "recently added" note
 //    (Technical Appendix §5).
-//
-// `performRedirect` is injectable for tests (window.location is not
-// configurable under jsdom).
-export default function NotFound({ performRedirect }) {
+export default function NotFound() {
   const pathname = usePathname() || '';
   const basePath = getBasePath();
   const path = basePath && pathname.startsWith(basePath)
@@ -33,21 +35,32 @@ export default function NotFound({ performRedirect }) {
     isValidGitHubName(username) &&
     isValidGitHubName(repository);
 
-  // Branch deep links are redirected to the statically generated repo shell;
-  // ReportView picks the requested branch back up from the query parameter
-  // (Technical Appendix §6). Branch names may contain slashes, so any
-  // segments beyond user/repo belong to the branch name.
-  const redirectTarget =
-    segments.length >= 3 && isRepoLike
-      ? `/${username}/${repository}/?branch=${encodeURIComponent(segments.slice(2).join('/'))}`
-      : null;
+  // Branch names may contain slashes, so any segments beyond user/repo
+  // belong to the branch name. Each segment must pass the same validation
+  // as classifyRoute's branch guard: the branch is interpolated into raw
+  // content URLs, so path-injection values must fall through to the 404
+  // copy instead of being fetched.
+  const branchSegments = segments.slice(2);
+  const isBranchDeepLink =
+    segments.length >= 3 &&
+    isRepoLike &&
+    branchSegments.every(segment => isValidGitHubName(segment));
 
+  // The exported 404.html statically carries the site title; report shells
+  // pre-generate `<user>/<repo>@<branch>` titles, so match them here.
   useEffect(() => {
-    const redirect = performRedirect || (url => window.location.replace(url));
-    if (redirectTarget) {
-      redirect(`${basePath}${redirectTarget}`);
+    if (isBranchDeepLink) {
+      document.title = `${username}/${repository}@${branchSegments.join('/')} - RefactorFirst`;
     }
-  }, [redirectTarget, basePath, performRedirect]);
+  }, [isBranchDeepLink, username, repository, branchSegments]);
+
+  if (isBranchDeepLink) {
+    return (
+      <Suspense fallback={<p className="loading" role="status">Loading report&hellip;</p>}>
+        <ReportView username={username} repository={repository} branch={branchSegments.join('/')} />
+      </Suspense>
+    );
+  }
 
   return (
     <section className="error-page error-404" role="alert">

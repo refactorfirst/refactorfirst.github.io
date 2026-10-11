@@ -1,6 +1,6 @@
 // Phase 5: <ReportView> client component — ports the report-rendering
 // integration suite to the React report page, plus client-only behaviors
-// (widget gating, retry, ?branch= deep links, template/auth failures).
+// (widget gating, retry, branch prop deep links, template/auth failures).
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mock } from 'bun:test';
 import fs from 'node:fs';
@@ -8,10 +8,8 @@ import path from 'node:path';
 
 import { sharedNextNavigationMock } from './next-navigation-stub';
 
-let currentSearch = '';
 mock.module('next/navigation', () => sharedNextNavigationMock({
-  usePathname: () => '/junit-team/junit4',
-  useSearchParams: () => new URLSearchParams(currentSearch)
+  usePathname: () => '/junit-team/junit4'
 }));
 mock.module('next/script', () => ({
   default: () => null // widget scripts are marked manually in tests
@@ -68,7 +66,6 @@ async function renderReport(props = {}) {
 }
 
 beforeEach(() => {
-  currentSearch = '';
   resetWidgetRegistry();
   window.Vizdom = undefined;
   delete window.showPopup;
@@ -269,20 +266,11 @@ describe('ReportView', () => {
     expect(container.textContent).toContain('Class Map');
   });
 
-  test('fetches the branch from the ?branch= deep-link query parameter', async () => {
-    currentSearch = '?branch=develop';
+  test('fetches the branch passed as a prop (route path parameter)', async () => {
     respondJsonFor(sampleJson);
-    const { container } = await renderReport();
+    const { container } = await renderReport({ branch: 'develop' });
     expect(mockFetch.mock.calls.some(c => String(c[0]).includes('/develop/'))).toBe(true);
     expect(container.querySelector('[data-resolved-branch="develop"]')).not.toBeNull();
-  });
-
-  test('a fixed branch prop wins over the query parameter', async () => {
-    currentSearch = '?branch=develop';
-    respondJsonFor(sampleJson);
-    await renderReport({ branch: 'master' });
-    expect(mockFetch.mock.calls.some(c => String(c[0]).includes('/develop/'))).toBe(false);
-    expect(mockFetch.mock.calls.some(c => String(c[0]).includes('/master/'))).toBe(true);
   });
 
   test('shows the rate-limit error page on 429 and retries on demand', async () => {
