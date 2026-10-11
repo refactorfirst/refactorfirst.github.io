@@ -191,6 +191,13 @@ describe('URL builders', () => {
     expect(buildReportUrl('u', 'r', 'main')).toBe('/u/r');
   });
 
+  it('buildReportUrl encodes each branch component, preserving separators', () => {
+    // Slashed branches must stay real path segments so classifyRoute and
+    // the 404-shell deep-link render recognize them.
+    expect(buildReportUrl('u', 'r', 'feature/login')).toBe('/u/r/feature/login');
+    expect(buildReportUrl('u', 'r', 'release/1.2/fix')).toBe('/u/r/release/1.2/fix');
+  });
+
   it('buildRepositoryListUrl separates owner and repo', () => {
     expect(buildRepositoryListUrl('refactorfirst/refactorfirst')).toBe('/refactorfirst/refactorfirst');
   });
