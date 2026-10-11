@@ -59,6 +59,18 @@ describe('URL Routing', () => {
     expect(result.branch).toBe('main');
   });
 
+  it('should join multi-segment branch names with slashes, matching classifyRoute', () => {
+    const result = parseRoute('/alice/repo/feature/login');
+    expect(result.username).toBe('alice');
+    expect(result.repository).toBe('repo');
+    expect(result.branch).toBe('feature/login');
+  });
+
+  it('should default the branch when no branch segments are present', () => {
+    const result = parseRoute('/alice/repo');
+    expect(result.branch).toBe('main');
+  });
+
   it('getDefaultBranch should return main as default', () => {
     expect(getDefaultBranch()).toBe('main');
     expect(DEFAULT_BRANCH).toBe('main');
