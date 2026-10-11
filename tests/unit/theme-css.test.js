@@ -408,6 +408,53 @@ describe('table filter accessibility', () => {
   }
 });
 
+// Hamburger toggle (mobile view): mvp.css paints every button's text in
+// var(--color-bg), and .menu-toggle only overrode background/border, so the
+// ☰ glyph rendered in the page background color and the 1px --input-border
+// edge fell below 3:1 on the menu surface. Both must be re-driven from a
+// per-palette variable.
+describe('menu toggle contrast', () => {
+  /**
+   * Concatenates every declaration block for a selector: the rules map keeps
+   * only the last occurrence (the responsive block) for repeated selectors,
+   * so assertions must run against all of them together.
+   *
+   * @param {string} selector - CSS selector to collect.
+   * @returns {string} Combined declarations.
+   */
+  function combinedRule(selector) {
+    const bodies = [];
+    const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+    let match;
+    while ((match = ruleRe.exec(noComments)) !== null) {
+      if (match[1].trim() === selector) bodies.push(match[2]);
+    }
+    return bodies.join(';');
+  }
+
+  it('re-drives the glyph and border from the palette', () => {
+    const toggle = combinedRule('.menu-toggle');
+    expect(toggle).toMatch(/(?:^|;)\s*color:\s*var\(--menu-toggle-color\)/);
+    expect(toggle).toMatch(/border:\s*1px solid var\(--menu-toggle-color\)/);
+  });
+
+  for (const [name, palette] of [['light', lightPalette], ['dark', darkPalette]]) {
+    it(`declares a ${name} palette color for the toggle`, () => {
+      expect(palette.get('--menu-toggle-color')).toBeTruthy();
+    });
+
+    it(`the glyph keeps AA text contrast on the menu surface (${name}, SC 1.4.3)`, () => {
+      expect(contrastOf(palette, '--surface-color', '--menu-toggle-color'))
+        .toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`the border is perceivable on the menu surface (${name}, SC 1.4.11)`, () => {
+      expect(contrastOf(palette, '--surface-color', '--menu-toggle-color'))
+        .toBeGreaterThanOrEqual(3);
+    });
+  }
+});
+
 describe('report CSS selector boundaries', () => {
   it('themes only graph edges and arrowheads, preserving red cycles and node glyphs', () => {
     const fixture = document.createElement('div');
