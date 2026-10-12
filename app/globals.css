@@ -28,6 +28,10 @@
   --card-bg: #ffffff;
   --border-color: #dde4ea;
   --input-border: #c6d2dc;
+  /* Hamburger glyph + 1px border on the menu surface: mvp.css paints every
+     button in --color-bg (the page background), which is invisible here, so
+     the toggle re-drives from this accent (7.8:1 on --surface-color). */
+  --menu-toggle-color: #1f5273;
   /* vizdom WASM graph edges bake black stroke/fill attributes into the SVG;
      palette-driven so the dark theme can swap them to a readable tint. */
   --graph-line: #000000;
@@ -94,6 +98,8 @@ html:root {
   --card-bg: #1a2330;
   --border-color: #2c3a4d;
   --input-border: #5b7396;
+  /* Hamburger glyph + 1px border on the dark menu surface (6.8:1). */
+  --menu-toggle-color: #6fb1d9;
   --graph-line: #9fb0c0;
   --error-color: #f0928c;
   --success-color: #5bbd8b;
@@ -136,6 +142,8 @@ html:root {
     --card-bg: #1a2330;
     --border-color: #2c3a4d;
     --input-border: #5b7396;
+    /* Hamburger glyph + 1px border on the dark menu surface (6.8:1). */
+    --menu-toggle-color: #6fb1d9;
     --graph-line: #9fb0c0;
     --error-color: #f0928c;
     --success-color: #5bbd8b;
@@ -326,7 +334,11 @@ pre {
 .menu-toggle {
   display: none;
   background: none;
-  border: 1px solid var(--input-border);
+  /* mvp.css paints every button in var(--color-bg) — the page background —
+     which is invisible on the menu surface; re-drive glyph and border from
+     the palette so the control stays perceivable in both themes. */
+  color: var(--menu-toggle-color);
+  border: 1px solid var(--menu-toggle-color);
   border-radius: var(--radius);
   font-size: 1.1rem;
   padding: 0.25rem 0.6rem;
