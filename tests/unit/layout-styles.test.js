@@ -56,13 +56,37 @@ describe('layout styles (mvp.css section-flex reset)', () => {
     expect(body).toMatch(/margin:\s*0\s+auto\s*;/);
   });
 
+  test('the menu surface spans the viewport, its content stays centered', () => {
+    // mvp.css caps every header (and footer/main) at --width-content; the
+    // menu surface must reach the page's left/right edges instead, while
+    // the inner bar keeps the centered --width-content content column and
+    // the margin reset of mvp.css's 7rem nav margin. The .theme-bar row
+    // below mirrors the bar's content edges (guarded in
+    // tests/unit/theme-css.test.js and the E2E alignment checks).
+    // ruleMap keeps only the last block per selector (#top-menu and
+    // .menu-bar also appear inside the 900px media query), so scan every
+    // block in the raw source instead.
+    const menuBlocks = [...css.matchAll(/#top-menu\s*\{([^}]*)\}/g)]
+      .map((m) => m[1]);
+    expect(menuBlocks.length).toBeGreaterThan(0);
+    expect(menuBlocks.some((b) => /max-width:\s*none/.test(b))).toBe(true);
+    const barBlocks = [...css.matchAll(/\.menu-bar\s*\{([^}]*)\}/g)]
+      .map((m) => m[1]);
+    expect(barBlocks.length).toBeGreaterThan(0);
+    expect(barBlocks.some((b) => /max-width:\s*var\(--width-content\)/.test(b))).toBe(true);
+    // border-box keeps the padding inside the capped column, matching
+    // .theme-bar's geometry (guarded in tests/unit/theme-css.test.js).
+    expect(barBlocks.some((b) => /box-sizing:\s*border-box/.test(b))).toBe(true);
+    expect(barBlocks.some((b) => /margin:\s*0\s+auto/.test(b))).toBe(true);
+  });
+
   test('the breadcrumb trail stretches inside the theme bar row (menu column)', () => {
     // The trail now shares the .theme-bar row with the color theme toggle:
-    // the row carries the alignment formula (max-width: var(--width-content)
-    // + 0.8rem horizontal padding, guarded in tests/unit/theme-css.test.js),
-    // so .breadcrumbs must not add its own box-model offsets — it grows to
-    // fill the row's left side, keeping the first crumb's glyph at the menu
-    // column's left content edge while the toggle pins to the right edge.
+    // the row is edge to edge like the menu bar (guarded in
+    // tests/unit/theme-css.test.js), so .breadcrumbs must not add its own
+    // box-model offsets — it grows to fill the row's left side, keeping the
+    // first crumb's glyph at the menu bar's left content edge while the
+    // toggle pins to the right edge.
     const body = rules.get('.breadcrumbs');
     expect(body).toBeTruthy();
     expect(body).toMatch(/flex:\s*1\s+1\s+auto/);

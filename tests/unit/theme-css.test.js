@@ -289,11 +289,12 @@ describe('toggle styles', () => {
     expect(height).toBeGreaterThanOrEqual(1.5);
   });
 
-  it('the row below the header mirrors the breadcrumb alignment formula', () => {
-    // Same invariant layout-styles.test.js pinned for the standalone
-    // .breadcrumbs bar: the row shares #top-menu's --width-content column
-    // and the 0.8rem horizontal padding insets its children to the menu
-    // bar's content edges at every viewport — the toggle on the right, the
+  it('the row below the header mirrors the menu content column', () => {
+    // The top menu surface is edge to edge (globals.css overrides mvp.css's
+    // --width-content cap on #top-menu), but the .menu-bar content inside
+    // keeps the centered --width-content column; the row must share it so
+    // its 0.8rem horizontal padding insets its children to the menu bar's
+    // content edges at every viewport — the toggle on the right, the
     // breadcrumb trail on the left (flex-grow), vertically centered.
     const row = rules.get('.theme-bar');
     expect(row).toBeTruthy();
