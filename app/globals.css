@@ -55,7 +55,8 @@
   --shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   /* mvp.css caps header/footer/main at --width-content (1080px by default).
      Report pages and listings should fill the view: content uses 95% of the
-     viewport width instead. */
+     viewport width instead. (The top menu opts out entirely — #top-menu
+     sets max-width: none so the menu surface reaches the page edges.) */
   --width-content: min(3840px, 95vw);
 }
 
@@ -289,6 +290,9 @@ pre {
      whole rendered box (padding contributes outside max-height). */
   padding: 0;
   max-height: var(--menu-max-height);
+  /* mvp.css also caps every header at --width-content; the menu surface
+     must reach the left and right edges of the page instead. */
+  max-width: none;
 }
 
 .menu-bar {
@@ -296,7 +300,14 @@ pre {
   align-items: center;
   gap: 0.4rem;
   flex-wrap: nowrap;
-  max-width: 1200px;
+  /* The menu surface (#top-menu) spans the full viewport, but its content
+     keeps the centered --width-content column. border-box makes the cap
+     bound the rendered box (padding inside), matching .theme-bar so the
+     two rows' content edges align. The margin: 0 auto both centers the
+     column and resets mvp.css's 7rem nav margin — without the reset the
+     bar's bottom margin pushes #top-menu past its max-height cap. */
+  max-width: var(--width-content);
+  box-sizing: border-box;
   margin: 0 auto;
   padding: 0.3rem 0.8rem;
   min-height: 48px;
@@ -382,12 +393,12 @@ pre {
 /* ---- Breadcrumbs (user/report trail under the top menu) ---- */
 .breadcrumbs {
   /* Lives on the .theme-bar row (rendered by app/layout.jsx), sharing the
-     line with the color theme toggle: the row owns the menu-column
-     alignment formula (max-width: var(--width-content) + 0.8rem horizontal
-     padding, see .theme-bar above), so the trail must add no box-model
-     offsets of its own — flex-grow fills the row's left side, keeping the
-     first crumb's glyph at the menu bar's left content edge while the
-     toggle pins to the right edge, both vertically centered. */
+      line with the color theme toggle: the row carries the menu-column
+      alignment formula (max-width: var(--width-content) + 0.8rem horizontal
+      padding, see .theme-bar below), so the trail must add no box-model
+      offsets of its own — flex-grow fills the row's left side, keeping the
+      first crumb's glyph at the menu bar's left content edge while the
+      toggle pins to the right edge, both vertically centered. */
   flex: 1 1 auto;
   min-width: 0;
   /* mvp.css gives bare nav a 7rem bottom margin, bold text and a spaced flex
@@ -459,9 +470,9 @@ pre {
 
 .hero-search {
   position: relative;
-  /* Exactly half the rendered width of the top menu (#top-menu is capped by
-     mvp.css at --width-content = 1080px, full width below that) and centered
-     under it. */
+  /* Exactly half the menu content column (.menu-bar is capped at
+     --width-content = 1080px, full width below that) and centered under
+     the edge-to-edge header. */
   width: min(540px, 50vw);
   margin: 1rem auto;
   text-align: left;
@@ -716,14 +727,14 @@ pre {
 /* ---- Color theme toggle (three radio modes, pure-CSS switching) ---- */
 /* Row below the site header (rendered by app/layout.jsx): the breadcrumb
    trail (when the route has one) on the left and the toggle on the right,
-   vertically centered on one line. The alignment formula .breadcrumbs used
-   to carry lives here now: --width-content column, 0.8rem horizontal
-   padding, border-box — keeping the first crumb's glyph at the menu bar's
-   left content edge and the toggle at its right content edge at every
-   viewport, the two edges mirroring each other. #top-menu is capped by
-   mvp.css at --width-content, so the row and the menu bar can never drift
-   apart. Crumb routes grow the trail (flex: 1 1 auto); crumb-less routes
-   leave only the toggle, pinned right by flex-end. */
+   vertically centered on one line. The row shares the menu bar's centered
+   --width-content content column (the #top-menu surface around it is edge
+   to edge, but the bar keeps the column): 0.8rem horizontal padding,
+   border-box — keeping the first crumb's glyph at the menu bar's left
+   content edge and the toggle at its right content edge at every viewport,
+   the two edges mirroring each other, so the row and the menu bar can
+   never drift apart. Crumb routes grow the trail (flex: 1 1 auto);
+   crumb-less routes leave only the toggle, pinned right by flex-end. */
 .theme-bar {
   display: flex;
   align-items: center;
