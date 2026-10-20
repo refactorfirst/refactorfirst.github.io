@@ -33,6 +33,16 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
   branch (`rf:branch-resolved` event) so the label matches the loaded report
   (`main` 404 → `master` fallback)
 - Reports rendered with Mustache.js (bundled template is authoritative)
+- Graphs synthesized client-side from the nested hierarchy in
+  refactor-first.json (`lib/hierarchy-dot.js`, byte-identical to the report
+  module's Java `NestedDotBuilder`; packages nest as clusters, classes as
+  ellipses, break-up packages fill pink). The package graph renders its own
+  compound DOT shape — parent packages once as clusters, childless packages
+  once as filled rectangles, edges clipped to cluster borders via
+  invisible anchors + `ltail`/`lhead` — through
+  `@hpcc-js/wasm-graphviz@1.7.0` (`public/widgets/graphviz-bridge.js`,
+  the only engine honoring compound cluster edges); the class and cycle
+  graphs stay on vizdom
 - Enhanced report tables: sticky headers, pagination (>20 rows), sortable
   columns, in-table search, CSV export, click/keyboard cell copy with toasts
 - Repository submission via pre-filled platform issues — no login, apps or tokens
@@ -91,7 +101,10 @@ lib/                        # shared logic (client + RSC): routes, fetcher,
                             # renderer, search, utils, host, rate-limiter,
                             # cache-manager, error-handler, repo-submission,
                             # report-view, static-params, widget-loader,
-                            # breadcrumbs,
+                            # breadcrumbs, hierarchy-dot (hierarchy-to-DOT
+                            # synthesis mirroring the Java NestedDotBuilder in
+                            # the report module; byte-identical goldens in
+                            # tests/unit/hierarchy-dot.test.js),
                             # table-operations (filter/sort/paginate/CSV/copy +
                             # TABLE_CONFIG + REPORT_TABLES descriptors),
                             # table-enhancer (binds toolbar/sort/pagination/
@@ -101,8 +114,9 @@ public/                     # static files copied verbatim into out/:
   repositories.txt          #   synced from the repo root (sync-repositories.mjs)
   assets/                   #   mustache template, logo
   templates/                #   workflow-sample-*.html fragments
-  widgets/                  #   module bridges: vizdom WASM, three-spritetext,
-                            #   sentry (runtime CDN imports cannot be bundled)
+  widgets/                  #   module bridges: vizdom WASM, wasm-graphviz,
+                            #   three-spritetext, sentry (runtime CDN imports
+                            #   cannot be bundled)
 templates/                  # user CI samples (user-refactorfirst-*.yml) for the docs
 ci/process-submissions.sh   # shared submission validator for GH/Gl/BB CI
 .github/workflows/          # test.yml, static.yml, redeploy.yml,
@@ -158,12 +172,15 @@ coverage there when introducing new markup patterns.
   SVGs' embedded black strokes/fills are likewise re-themed to
   `--graph-line` (`#9fb0c0` dark = `CHART_LEGEND_TEXT.dark`) via
   `path[stroke]`/`polygon` selectors on `.fullscreen-svg` — red cycle
-  edges stay red. Edge labels are glyph paths baked by vizdom, so CSS
-  can't reach them: `withEdgeFontColor` in `lib/report-view.js` rewrites
-  the DOT with `fontcolor = "#9fb0c0"` per edge when the dark palette
-  is active (vizdom uppercases the hex in the SVG), and theme switches
-  re-parse the graphs via `redrawGraphsForTheme` alongside the chart
-  legend redraw in `bindThemeChartRedraw`.
+  edges stay red. Graph DOT is synthesized from the `.hierarchy` payloads
+  (`classMap`/`packageMap`/`largestCycle`, see `lib/hierarchy-dot.js`);
+  edge labels are fill-only glyph paths baked by vizdom, so CSS can't
+  reach them: the dark palette bakes `fontcolor = "#9fb0c0"` into every
+  edge at synthesis time via `graphDotOptions()` in `lib/report-view.js`
+  (vizdom uppercases the hex in the SVG), and theme switches
+  re-synthesize + re-render the graphs via `redrawGraphsForTheme` alongside
+  the chart legend redraw in `bindThemeChartRedraw`. Node/cluster labels
+  sit on vizdom's white shapes and stay default-colored in both palettes.
 
 ## Report Tables (Enhanced)
 
@@ -220,7 +237,7 @@ coverage there when introducing new markup patterns.
 
 ## Current Test Count
 
-~584 unit/integration + ~229 E2E (~202 across three browsers + 4 basePath leg + 27 dark mode).
+~733 unit/integration + ~229 E2E (~202 across three browsers + 4 basePath leg + 27 dark mode).
 
 WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
 tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and

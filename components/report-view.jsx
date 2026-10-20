@@ -40,11 +40,11 @@ const CLASSIC_WIDGETS = [
 
 // Module bridges (CSP 'script-src self' — vendored files) report readiness
 // themselves via window.__rfMarkWidgetReady.
-const BRIDGE_WIDGETS = ['/widgets/vizdom-bridge.js', '/widgets/three-spritetext-bridge.js'];
+const BRIDGE_WIDGETS = ['/widgets/vizdom-bridge.js', '/widgets/graphviz-bridge.js', '/widgets/three-spritetext-bridge.js'];
 
 // Widgets that enhanceReport consumes synchronously; all others degrade
 // gracefully at popup-open time.
-const ENHANCE_WIDGETS = ['chart', 'vizdom'];
+const ENHANCE_WIDGETS = ['chart', 'vizdom', 'graphviz'];
 
 /**
  * Fetches and renders a repository report with interactive table controls.

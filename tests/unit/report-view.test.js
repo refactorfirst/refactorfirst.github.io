@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import {
   exposeGraphDots,
-  withEdgeFontColor,
   initBubbleChart,
   initDisharmonyCharts,
   initWasmGraphs,
@@ -20,6 +19,7 @@ import {
   stashStatefulDom,
   graftStatefulDom
 } from '../../lib/report-view.js';
+import { hierarchyToDot, packageHierarchyToDot } from '../../lib/hierarchy-dot.js';
 
 // Theme radios as rendered by components/theme-toggle.jsx in app/layout.jsx.
 // The palette switch itself is pure CSS; these tests only pin what the
@@ -63,22 +63,89 @@ const DARK_BG = [0x10, 0x16, 0x1d];
 // U+27F6 LONG RIGHTWARDS ARROW: suffix for every chart axis title.
 const LONG_ARROW = '\u27F6';
 
+// Minimal hierarchy payloads mirroring the refactor-first.json graph contract
+// (classMap/packageMap/largestCycle `.hierarchy`). The exact synthesized DOT
+// is pinned byte-for-byte in hierarchy-dot.test.js; these fixtures only need
+// realistic shapes, so expectations here derive from hierarchyToDot.
+const classHierarchy = {
+  packages: [{
+    name: 'c', id: 'cluster_c', nodeId: null, renderAsNode: false, needsBreakUp: false,
+    children: [], classes: [
+      { fqn: 'c.A', id: 'A', label: 'A', path: '', markedForRemoval: false },
+      { fqn: 'c.B', id: 'B', label: 'B', path: '', markedForRemoval: false }
+    ]
+  }],
+  edges: [{ source: 'A', target: 'B', weight: 1, markedForRemoval: false }]
+};
+
+const packageHierarchy = {
+  packages: [{
+    name: 'p', id: 'cluster_p', nodeId: null, renderAsNode: false, needsBreakUp: false,
+    children: [
+      { name: 'p.p1', id: 'cluster_p1', nodeId: 'package_p1', renderAsNode: true, needsBreakUp: false, children: [], classes: [] },
+      { name: 'p.p2', id: 'cluster_p2', nodeId: 'package_p2', renderAsNode: true, needsBreakUp: false, children: [], classes: [] }
+    ], classes: []
+  }],
+  edges: [{ source: 'package_p1', target: 'package_p2', weight: 2, markedForRemoval: false }]
+};
+
+const cycleHierarchy = {
+  packages: [{
+    name: 'z', id: 'cluster_z', nodeId: null, renderAsNode: false, needsBreakUp: false,
+    children: [], classes: [
+      { fqn: 'z.X', id: 'X', label: 'X', path: '', markedForRemoval: false },
+      { fqn: 'z.Y', id: 'Y', label: 'Y', path: '', markedForRemoval: false }
+    ]
+  }],
+  edges: [{ source: 'X', target: 'Y', weight: 3, markedForRemoval: true }]
+};
+
+const replacementHierarchy = {
+  packages: [{
+    name: 'n', id: 'cluster_n', nodeId: null, renderAsNode: false, needsBreakUp: false,
+    children: [], classes: [
+      { fqn: 'n.C', id: 'C', label: 'C', path: '', markedForRemoval: false },
+      { fqn: 'n.D', id: 'D', label: 'D', path: '', markedForRemoval: false }
+    ]
+  }],
+  edges: [{ source: 'C', target: 'D', weight: 9, markedForRemoval: false }]
+};
+
+// The DOT each hierarchy renders per palette: light keeps vizdom's default
+// black edge labels; dark bakes the muted label color in at synthesis time.
+const lightDot = hierarchy => hierarchyToDot(hierarchy);
+const darkDot = hierarchy => hierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' });
+// The package graph renders as its own compound DOT shape (clusters for
+// parents, rectangles for leaves) through @hpcc-js/wasm-graphviz.
+const lightPackageDot = hierarchy => packageHierarchyToDot(hierarchy);
+const darkPackageDot = hierarchy => packageHierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' });
+
 describe('exposeGraphDots', () => {
-  it('exposes class, package and cycle DOT strings as window globals', () => {
+  it('exposes synthesized class, package and cycle DOT as window globals', () => {
+    // Pin the light palette so the expectation is deterministic even when a
+    // previous test left a matchMedia stub behind.
+    installThemeRadios('light');
     exposeGraphDots({
-      classMap: { dot: 'strict digraph C {}' },
-      packageMap: { dot: 'strict digraph P {}' },
-      classCycles: { largestCycle: { cycleIdentifier: 'cycle0', dot: 'strict digraph Z {}' } }
+      classMap: { hierarchy: classHierarchy },
+      packageMap: { hierarchy: packageHierarchy, hasEdges: true },
+      classCycles: { largestCycle: { cycleIdentifier: 'cycle0', hierarchy: cycleHierarchy } }
     });
-    expect(window.classGraph_dot).toBe('strict digraph C {}');
-    expect(window.packageGraph_dot).toBe('strict digraph P {}');
-    expect(window.cycle0_dot).toBe('strict digraph Z {}');
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
+    expect(window.packageGraph_dot).toBe(lightPackageDot(packageHierarchy));
+    expect(window.cycle0_dot).toBe(lightDot(cycleHierarchy));
   });
 
   it('tolerates missing graph sections', () => {
     delete window.classGraph_dot;
     expect(() => exposeGraphDots({})).not.toThrow();
     expect(window.classGraph_dot).toBeUndefined();
+  });
+
+  it('skips the package map popup DOT when the report has no package edges', () => {
+    installThemeRadios('light');
+    delete window.packageGraph_dot;
+    exposeGraphDots({ packageMap: { hierarchy: packageHierarchy, hasEdges: false } });
+    expect(window.packageGraph_dot).toBeUndefined();
   });
 });
 
@@ -621,77 +688,6 @@ describe('initDisharmonyCharts', () => {
   });
 });
 
-describe('withEdgeFontColor (vizdom bakes label color at parse time)', () => {
-  it('appends fontcolor to edge statements with an attribute list', () => {
-    const dot = 'strict digraph G {\nActiveTestSuite -> TestSuite [ label = "6" weight = "6" ];\n}';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
-      'strict digraph G {\nActiveTestSuite -> TestSuite [ label = "6" weight = "6" fontcolor = "#9fb0c0" ];\n}');
-  });
-
-  it('appends fontcolor to every edge in the graph', () => {
-    const dot = 'strict digraph G {\nA -> B [ label = "1" ];\nB -> C [ label = "2" ];\n}';
-    const themed = withEdgeFontColor(dot, '#9fb0c0');
-    expect(themed).toContain('B [ label = "1" fontcolor = "#9fb0c0" ];');
-    expect(themed).toContain('C [ label = "2" fontcolor = "#9fb0c0" ];');
-  });
-
-  it('keeps red cycle edges red while recoloring their labels', () => {
-    const dot = 'A -> B [ label = "2" weight = "2" color = "red" ];';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
-      'A -> B [ label = "2" weight = "2" color = "red" fontcolor = "#9fb0c0" ];');
-  });
-
-  it('respects an edge-level fontcolor already set in the dot', () => {
-    const dot = 'A -> B [ label = "1" fontcolor = "blue" ];';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
-  });
-
-  it('does not touch node statements or graph headers', () => {
-    const dot = 'strict digraph G {\nTestSuite [ label = "TestSuite" ];\n}';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
-  });
-
-  it('returns non-string input unchanged', () => {
-    expect(withEdgeFontColor(undefined, '#9fb0c0')).toBeUndefined();
-    expect(withEdgeFontColor('', '#9fb0c0')).toBe('');
-  });
-
-  it('handles compact attribute spacing', () => {
-    expect(withEdgeFontColor('A -> B [label = "6"];', '#abc')).toBe('A -> B [label = "6" fontcolor = "#abc"];');
-  });
-});
-
-describe('edge font color boundaries', () => {
-  it.each([undefined, null, ''])('leaves DOT unchanged when color is %p', color => {
-    const dot = 'digraph G { A -> B [label="1"]; }';
-    expect(withEdgeFontColor(dot, color)).toBe(dot);
-  });
-
-  it.each([null, 0, false, {}])('preserves non-string input %p by identity', dot => {
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
-  });
-
-  it('does not recolor a node following an edge without attributes', () => {
-    const dot = 'digraph G { A -> B; C [label="Node"]; D -> E [label="2"]; }';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
-      'digraph G { A -> B; C [label="Node"]; D -> E [label="2" fontcolor = "#9fb0c0"]; }');
-  });
-
-  it('preserves explicit colors while theming other edges and is idempotent', () => {
-    const dot = 'A -> B [fontcolor="blue" label="1"]; B -> C [label="2"];';
-    const expected = 'A -> B [fontcolor="blue" label="1"]; B -> C [label="2" fontcolor = "#9fb0c0"];';
-    const themed = withEdgeFontColor(dot, '#9fb0c0');
-    expect(themed).toBe(expected);
-    expect(withEdgeFontColor(themed, '#9fb0c0')).toBe(expected);
-  });
-
-  it('handles quoted node IDs, ports, and multiline edge attributes', () => {
-    const dot = '"org.example.A":out -> "org.example.B":in [\n label="3"\n color="red"\n];';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
-      '"org.example.A":out -> "org.example.B":in [\n label="3"\n color="red" fontcolor = "#9fb0c0"\n];');
-  });
-});
-
 // Each case owns its document so event subscriptions do not accumulate and
 // exact redraw counts can catch accidental duplicate binding.
 describe('theme redraw regressions', () => {
@@ -701,15 +697,13 @@ describe('theme redraw regressions', () => {
   let media;
   let mediaListener;
   let parsed;
+  let graphvizRendered;
   let zoomed;
   let rejectDot;
-  const classDot = 'digraph C { A -> B [label="1"]; }';
-  const packageDot = 'digraph P { P -> Q [label="2"]; }';
-  const cycleDot = 'digraph Z { X -> Y [label="3" color="red"]; }';
   const data = {
-    classMap: { dot: classDot },
-    packageMap: { dot: packageDot, hasEdges: true },
-    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dot: cycleDot } }
+    classMap: { hierarchy: classHierarchy },
+    packageMap: { hierarchy: packageHierarchy, hasEdges: true },
+    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', hierarchy: cycleHierarchy } }
   };
 
   beforeEach(() => {
@@ -729,6 +723,7 @@ describe('theme redraw regressions', () => {
     };
     window.matchMedia = () => media;
     parsed = [];
+    graphvizRendered = [];
     zoomed = [];
     rejectDot = () => false;
     window.Vizdom = {
@@ -743,6 +738,16 @@ describe('theme redraw regressions', () => {
           };
         }
       }
+    };
+    // The package graph renders through @hpcc-js/wasm-graphviz (compound
+    // cluster edges); its stub records the rendered DOT per call.
+    window.Graphviz = {
+      load: async () => ({
+        dot: dotString => {
+          graphvizRendered.push(dotString);
+          return '<?xml version="1.0"?>\n<!DOCTYPE svg>\n<svg width="1"></svg>';
+        }
+      })
     };
     window.svgPanZoom = (selector, options) => {
       zoomed.push({ svg: document.querySelector(selector), options });
@@ -772,17 +777,17 @@ describe('theme redraw regressions', () => {
 
   it('recolors every graph on OS changes and reattaches pan/zoom to fresh SVGs', async () => {
     await initWasmGraphs(data);
-    expect(parsed).toEqual([classDot, packageDot, cycleDot]);
+    expect(parsed).toEqual([lightDot(classHierarchy), lightDot(cycleHierarchy)]);
+    expect(graphvizRendered).toEqual([lightPackageDot(packageHierarchy)]);
     const originalSvgs = zoomed.map(entry => entry.svg);
     parsed.length = 0;
+    graphvizRendered.length = 0;
     zoomed.length = 0;
     media.matches = true;
     mediaListener();
-    expect(parsed).toEqual([
-      'digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }',
-      'digraph P { P -> Q [label="2" fontcolor = "#9fb0c0"]; }',
-      'digraph Z { X -> Y [label="3" color="red" fontcolor = "#9fb0c0"]; }'
-    ]);
+    expect(parsed).toEqual([darkDot(classHierarchy), darkDot(cycleHierarchy)]);
+    expect(graphvizRendered).toEqual([darkPackageDot(packageHierarchy)]);
+    expect(graphvizRendered[0]).toContain('fontcolor = "#9fb0c0"');
     expect(zoomed).toHaveLength(3);
     zoomed.forEach(({ svg, options }, i) => {
       expect(svg).not.toBeNull();
@@ -791,16 +796,17 @@ describe('theme redraw regressions', () => {
       expect(options).toEqual({ zoomEnabled: true, controlIconsEnabled: true });
     });
     parsed.length = 0;
+    graphvizRendered.length = 0;
     media.matches = false;
     mediaListener();
-    expect(parsed).toEqual([classDot, packageDot, cycleDot]);
+    expect(parsed).toEqual([lightDot(classHierarchy), lightDot(cycleHierarchy)]);
+    expect(graphvizRendered).toEqual([lightPackageDot(packageHierarchy)]);
   });
 
   it.each(['light', 'dark'])('honors explicit %s mode when the OS preference changes', async mode => {
     selectTheme(mode);
     await initWasmGraphs({ classMap: data.classMap });
-    const expected = mode === 'light' ? classDot
-      : 'digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }';
+    const expected = mode === 'light' ? lightDot(classHierarchy) : darkDot(classHierarchy);
     expect(parsed).toEqual([expected]);
     parsed.length = 0;
     media.matches = true;
@@ -820,19 +826,16 @@ describe('theme redraw regressions', () => {
     unrelated.dispatchEvent(new window.Event('change', { bubbles: true }));
     expect(parsed).toEqual([]);
     selectTheme('dark');
-    expect(parsed).toEqual(['digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }']);
+    expect(parsed).toEqual([darkDot(classHierarchy)]);
   });
 
-  it('uses the latest report DOT when a container is reused', async () => {
+  it('uses the latest report hierarchy when a container is reused', async () => {
     await initWasmGraphs({ classMap: data.classMap });
-    const replacement = 'digraph New { C -> D [label="9"]; }';
-    await initWasmGraphs({ classMap: { dot: replacement } });
+    await initWasmGraphs({ classMap: { hierarchy: replacementHierarchy } });
     parsed.length = 0;
     selectTheme('dark');
     selectTheme('light');
-    expect(parsed).toEqual([
-      'digraph New { C -> D [label="9" fontcolor = "#9fb0c0"]; }', replacement
-    ]);
+    expect(parsed).toEqual([darkDot(replacementHierarchy), lightDot(replacementHierarchy)]);
   });
 
   it('continues redrawing healthy graphs when another graph cannot be parsed', async () => {
@@ -840,16 +843,19 @@ describe('theme redraw regressions', () => {
     const previousClassSvg = document.querySelector('#classGraph svg');
     const previousPackageSvg = document.querySelector('#packageGraph svg');
     parsed.length = 0;
-    rejectDot = dot => dot.startsWith('digraph C');
+    graphvizRendered.length = 0;
+    // All synthesized DOT shares the `strict digraph G` header, so reject on
+    // the class graph's own cluster label instead.
+    rejectDot = dot => dot.includes('label="c"');
     const warning = spyOn(console, 'warn').mockImplementation(() => {});
     try {
       selectTheme('dark');
       expect(warning).toHaveBeenCalledTimes(1);
       expect(warning.mock.calls[0][0]).toBe('WASM graph re-render failed:');
-      expect(parsed).toHaveLength(3);
+      expect(parsed).toHaveLength(2);
+      expect(graphvizRendered).toEqual([darkPackageDot(packageHierarchy)]);
       expect(document.querySelector('#classGraph svg')).toBe(previousClassSvg);
       expect(document.querySelector('#packageGraph svg')).not.toBe(previousPackageSvg);
-      expect(parsed[2]).toContain('fontcolor = "#9fb0c0"');
     } finally {
       warning.mockRestore();
     }
@@ -861,8 +867,10 @@ describe('theme redraw regressions', () => {
     mediaListener();
     document.body.insertAdjacentHTML('beforeend', '<div id="classGraph"></div>');
     parsed.length = 0;
+    graphvizRendered.length = 0;
     mediaListener();
-    expect(parsed).toEqual([packageDot, cycleDot]);
+    expect(parsed).toEqual([lightDot(cycleHierarchy)]);
+    expect(graphvizRendered).toEqual([lightPackageDot(packageHierarchy)]);
     expect(document.getElementById('classGraph').innerHTML).toBe('');
   });
 
@@ -923,46 +931,94 @@ describe('initWasmGraphs', () => {
     };
     return captured;
   }
-  afterEach(() => { delete window.Vizdom; delete window.matchMedia; });
+
+  // Minimal wasm-graphviz stub: records the rendered package DOT and yields a
+  // fixed SVG with an xml/doctype preamble like the real engine.
+  function stubGraphviz() {
+    const rendered = [];
+    window.Graphviz = {
+      load: async () => ({
+        dot: dotString => {
+          rendered.push(dotString);
+          return '<?xml version="1.0"?>\n<!DOCTYPE svg>\n<svg width="1"></svg>';
+        }
+      })
+    };
+    return rendered;
+  }
+
+  afterEach(() => { delete window.Vizdom; delete window.Graphviz; delete window.matchMedia; });
 
   it('resolves gracefully when the WASM loader is unavailable', async () => {
     document.body.innerHTML = '<div id="classGraph"></div>';
     // No network/WASM in tests: must resolve, not reject
-    await initWasmGraphs({ classMap: { dot: 'strict digraph G {}', dotThresholdExceeded: false } });
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+  });
+
+  it('renders the package graph through wasm-graphviz while the light palette is active', async () => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'packageGraph';
+    document.body.appendChild(graph);
+    const vizdomCaptured = stubVizdom();
+    const graphvizRendered = stubGraphviz();
+    await initWasmGraphs({ packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true } });
+    expect(graphvizRendered).toEqual([lightPackageDot(packageHierarchy)]);
+    expect(vizdomCaptured).toEqual([], "the package graph must not render through vizdom");
+    expect(document.querySelector('#packageGraph svg').classList.contains('fullscreen-svg')).toBe(true);
+  });
+
+  it('renders the package graph with dark edge labels while the dark palette is active', async () => {
+    installThemeRadios('dark', false);
+    const graph = document.createElement('div');
+    graph.id = 'packageGraph';
+    document.body.appendChild(graph);
+    const graphvizRendered = stubGraphviz();
+    await initWasmGraphs({ packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true } });
+    expect(graphvizRendered).toEqual([darkPackageDot(packageHierarchy)]);
+    expect(graphvizRendered[0]).toContain('fontcolor = "#9fb0c0"');
+  });
+
+  it('skips the package graph when the wasm-graphviz widget is unavailable', async () => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'packageGraph';
+    document.body.appendChild(graph);
+    const vizdomCaptured = stubVizdom();
+    await initWasmGraphs({ packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true } });
+    expect(document.getElementById('packageGraph').innerHTML).toBe('');
+    expect(vizdomCaptured).toEqual([]);
   });
 
   it('skips graphs whose dot threshold was exceeded', async () => {
     document.body.innerHTML = '<div id="classGraph"></div>';
-    await initWasmGraphs({ classMap: { dot: 'x', dotThresholdExceeded: true } });
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: true } });
     expect(document.getElementById('classGraph').innerHTML).toBe('');
   });
 
-  it('parses the dot unchanged while the light palette is active', async () => {
+  it('synthesizes the hierarchy DOT while the light palette is active', async () => {
     installThemeRadios('light', false);
     const graph = document.createElement('div');
     graph.id = 'classGraph';
     document.body.appendChild(graph);
     const captured = stubVizdom();
-    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
-    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
-    expect(captured).toEqual([dot]);
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    expect(captured).toEqual([lightDot(classHierarchy)]);
   });
 
-  it('appends fontcolor = #9fb0c0 to edge labels while the dark palette is active', async () => {
+  it('synthesizes edge fontcolor = #9fb0c0 while the dark palette is active', async () => {
     installThemeRadios('dark', false);
     const graph = document.createElement('div');
     graph.id = 'classGraph';
     document.body.appendChild(graph);
     const captured = stubVizdom();
-    const dot = 'strict digraph G {\nA -> B [ label = "6" weight = "6" ];\n}';
-    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
-    expect(captured).toEqual([
-      'strict digraph G {\nA -> B [ label = "6" weight = "6" fontcolor = "#9fb0c0" ];\n}'
-    ]);
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    expect(captured).toEqual([darkDot(classHierarchy)]);
+    expect(captured[0]).toContain('fontcolor = "#9fb0c0"');
     expect(graph.innerHTML).toBe('<svg class="fullscreen-svg" width="1"></svg>');
   });
 
-  it('re-parses graphs with fresh label colors when a theme radio changes', async () => {
+  it('re-synthesizes graphs with fresh label colors when a theme radio changes', async () => {
     installThemeRadios('light', false);
     document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
     bindThemeChartRedraw();
@@ -970,8 +1026,7 @@ describe('initWasmGraphs', () => {
     graph.id = 'classGraph';
     document.body.appendChild(graph);
     const captured = stubVizdom();
-    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
-    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
     const lightParses = captured.length;
     expect(captured.every(d => !d.includes('fontcolor'))).toBe(true);
 
@@ -982,12 +1037,12 @@ describe('initWasmGraphs', () => {
     expect(captured.length).toBeGreaterThan(lightParses);
     expect(captured[captured.length - 1]).toContain('fontcolor = "#9fb0c0"');
 
-    // Switching back re-renders with the plain dot again.
+    // Switching back re-renders the plain light-palette DOT again.
     const lightBack = document.getElementById('rf-theme-light');
     lightBack.checked = true;
     lightBack.dispatchEvent(new window.Event('change', { bubbles: true }));
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(captured[captured.length - 1]).toBe(dot);
+    expect(captured[captured.length - 1]).toBe(lightDot(classHierarchy));
   });
 
   it('prunes graphs whose container left the DOM on theme change', async () => {
@@ -998,8 +1053,7 @@ describe('initWasmGraphs', () => {
     graph.id = 'classGraph';
     document.body.appendChild(graph);
     const captured = stubVizdom();
-    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
-    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
     const initial = captured.length;
 
     // The re-render threw the graph container away: next theme change must
@@ -1343,9 +1397,9 @@ describe('stateful DOM preservation across table-state re-renders', () => {
       { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 3 }] } },
       { anchorId: 'BRAIN', title: 'Brain Methods' } // no chart: not stateful
     ],
-    classMap: { dot: 'strict digraph C {}', dotThresholdExceeded: false },
-    packageMap: { dot: 'strict digraph P {}', dotThresholdExceeded: false, hasEdges: true },
-    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dot: 'x', dotThresholdExceeded: false } }
+    classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false },
+    packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true },
+    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', hierarchy: cycleHierarchy, dotThresholdExceeded: false } }
   };
 
   describe('statefulElementIds', () => {
@@ -1357,8 +1411,8 @@ describe('stateful DOM preservation across table-state re-renders', () => {
 
     it('skips graphs whose dot threshold was exceeded or which lack edges', () => {
       expect(statefulElementIds({
-        classMap: { dot: 'x', dotThresholdExceeded: true },
-        packageMap: { dot: 'x', dotThresholdExceeded: false, hasEdges: false },
+        classMap: { hierarchy: classHierarchy, dotThresholdExceeded: true },
+        packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: false },
         classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dotThresholdExceeded: true } }
       })).toEqual([]);
     });
@@ -1605,18 +1659,21 @@ describe('enhanceReport', () => {
         </div>
         <canvas id="chart_GOD"></canvas>
       </main>`;
+    // exposeGraphDots synthesizes per active palette; pin light (no radios
+    // in this DOM, no matchMedia stub) so the expectation is deterministic.
+    delete window.matchMedia;
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };
     const data = {
       project: { name: 'Demo' },
-      classMap: { dot: 'strict digraph C {}', dotThresholdExceeded: true },
+      classMap: { hierarchy: classHierarchy, dotThresholdExceeded: true },
       disharmonies: [
         { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 3 }] } }
       ]
     };
     await enhanceReport(document.getElementById('app'), data);
 
-    expect(window.classGraph_dot).toBe('strict digraph C {}');
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
     expect(typeof window.showPopup).toBe('function');
     expect(typeof window.hidePopup).toBe('function');
     expect(typeof window.createForceGraph).toBe('function');
