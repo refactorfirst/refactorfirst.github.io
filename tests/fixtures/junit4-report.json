@@ -956,7 +956,8 @@
               "renderAsNode": true,
               "needsBreakUp": false,
               "children": [],
-              "classes": []
+              "classes": [],
+              "path": "src/main/java/junit/framework/"
             },
             {
               "name": "junit.runner",
@@ -965,10 +966,12 @@
               "renderAsNode": true,
               "needsBreakUp": true,
               "children": [],
-              "classes": []
+              "classes": [],
+              "path": "src/main/java/junit/runner/"
             }
           ],
-          "classes": []
+          "classes": [],
+          "path": "src/main/java/junit/"
         }
       ],
       "edges": [

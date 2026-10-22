@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'bun:test';
 
-import { hierarchyToDot, packageHierarchyToDot, escapeDotQuoted } from '../../lib/hierarchy-dot.js';
+import {
+  hierarchyToDot,
+  packageHierarchyToDot,
+  escapeDotQuoted
+} from '../../lib/hierarchy-dot.js';
 
 // Mirrors NestedDotBuilderTest in the RefactorFirst report module (Java): the
 // client-side synthesis must render the exact DOT the server-side builder
@@ -154,6 +158,27 @@ describe('hierarchyToDot (nested package clusters)', () => {
     );
   });
 
+  it('hyperlinks class nodes with a path when the repository URL resolves to http(s)', () => {
+    const hierarchy = {
+      packages: [
+        packageNode('(default package)', 'cluster_default', {
+          classes: [
+            classNode('A', 'A', 'A', 'src/main/java/A.java', false),
+            classNode('B', 'B', 'B', '', false)
+          ]
+        })
+      ],
+      edges: []
+    };
+
+    const withRepoUrl = hierarchyToDot(hierarchy, { repoUrl: 'https://github.com/x/y/blob/main/' });
+    expect(withRepoUrl).toContain(
+      'A [ shape=ellipse URL="https://github.com/x/y/blob/main/src/main/java/A.java" target="_blank"]');
+    expect(withRepoUrl).not.toContain('URL="https://github.com/x/y/blob/main/"');
+    expect(hierarchyToDot(hierarchy)).not.toContain('URL=');
+    expect(hierarchyToDot(hierarchy, { repoUrl: 'javascript:alert(1)/' })).not.toContain('URL=');
+  });
+
   it('escapes package names and labels; $ stays literal', () => {
     const hierarchy = {
       packages: [
@@ -232,110 +257,78 @@ describe('hierarchyToDot (nested package clusters)', () => {
   });
 });
 
-describe('packageHierarchyToDot (parents as clusters, leaves as rectangles)', () => {
+describe('packageHierarchyToDot (flat ellipse nodes + relationship edges)', () => {
   function packageTree() {
     return [
       packageNode('org.hjug', 'cluster_hjug', {
         nodeId: 'package_hjug',
         renderAsNode: false,
+        path: 'src/main/java/org/hjug/',
         children: [
-          packageNode('org.hjug.cbc', 'cluster_cbc', { nodeId: 'package_cbc', renderAsNode: true }),
+          packageNode('org.hjug.cbc', 'cluster_cbc', { nodeId: 'package_cbc', renderAsNode: true, needsBreakUp: true }),
           packageNode('org.hjug.dsm', 'cluster_dsm', { nodeId: 'package_dsm', renderAsNode: true })
         ]
       })
     ];
   }
 
-  it('renders parent clusters once, leaf rectangles once, and compound edges', () => {
+  it('renders one ellipse per package with only the relationship edges', () => {
     const hierarchy = {
       packages: packageTree(),
       edges: [
         { source: 'package_hjug', target: 'package_cbc', weight: 1, markedForRemoval: false },
-        { source: 'package_cbc', target: 'package_dsm', weight: 1, markedForRemoval: false }
+        { source: 'package_cbc', target: 'package_dsm', weight: 2, markedForRemoval: true }
       ]
     };
 
     expect(packageHierarchyToDot(hierarchy)).toBe(
       'strict digraph G {\n' +
-      'compound=true;\n' +
-      'subgraph cluster_hjug {\n' +
-      'label="org.hjug";\n' +
-      'style=filled fillcolor=white;\n' +
-      'package_hjug [shape=point style=invis];\n' +
-      'package_cbc [label="org.hjug.cbc" shape=rectangle style=filled fillcolor=white];\n' +
-      'package_dsm [label="org.hjug.dsm" shape=rectangle style=filled fillcolor=white];\n' +
-      '}\n' +
-      'package_hjug -> package_cbc [ label = "1" weight = "1" ltail = "cluster_hjug" ];\n' +
-      'package_cbc -> package_dsm [ label = "1" weight = "1" ];\n' +
+      'package_hjug [label="org.hjug" shape=ellipse];\n' +
+      'package_cbc [label="org.hjug.cbc" shape=ellipse color=red style=filled];\n' +
+      'package_dsm [label="org.hjug.dsm" shape=ellipse];\n' +
+      'package_hjug -> package_cbc [ label = "1" weight = "1" ];\n' +
+      'package_cbc -> package_dsm [ label = "2" weight = "2" color = "red" ];\n' +
       '}'
     );
   });
 
-  it('flags pink shapes, keeps red edges red, and clips cluster heads with lhead', () => {
+  it('bakes the dark palette fontcolor into the package edges', () => {
+    const hierarchy = {
+      packages: packageTree(),
+      edges: [{ source: 'package_cbc', target: 'package_dsm', weight: 2, markedForRemoval: true }]
+    };
+
+    const dot = packageHierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' });
+    expect(dot).toContain('package_cbc -> package_dsm [ label = "2" weight = "2" color = "red" fontcolor = "#9fb0c0" ];');
+    expect(dot).toContain('shape=ellipse color=red style=filled');
+  });
+
+  it('hyperlinks package nodes with a path when the repository URL resolves to http(s)', () => {
     const hierarchy = {
       packages: [
         packageNode('org.hjug', 'cluster_hjug', {
           nodeId: 'package_hjug',
+          path: 'src/main/java/org/hjug/',
           renderAsNode: false,
-          needsBreakUp: true,
           children: [
-            packageNode('org.hjug.dsm', 'cluster_dsm', { nodeId: 'package_dsm', renderAsNode: true, needsBreakUp: true })
+            packageNode('org.hjug.cbc', 'cluster_cbc', { nodeId: 'package_cbc', path: 'src/main/java/org/hjug/cbc/' }),
+            packageNode('org.hjug.dsm', 'cluster_dsm', { nodeId: 'package_dsm' })
           ]
         })
       ],
-      edges: [{ source: 'package_dsm', target: 'package_hjug', weight: 2, markedForRemoval: true }]
+      edges: [{ source: 'package_cbc', target: 'package_dsm', weight: 1, markedForRemoval: false }]
     };
 
-    expect(packageHierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' })).toBe(
-      'strict digraph G {\n' +
-      'compound=true;\n' +
-      'subgraph cluster_hjug {\n' +
-      'label="org.hjug";\n' +
-      'style=filled fillcolor=pink;\n' +
-      'package_hjug [shape=point style=invis];\n' +
-      'package_dsm [label="org.hjug.dsm" shape=rectangle style=filled fillcolor=pink];\n' +
-      '}\n' +
-      'package_dsm -> package_hjug [ label = "2" weight = "2" color = "red" fontcolor = "#9fb0c0" lhead = "cluster_hjug" ];\n' +
-      '}'
-    );
+    const withRepoUrl = packageHierarchyToDot(hierarchy, { repoUrl: 'https://github.com/x/y/blob/main/' });
+    expect(withRepoUrl).toContain(
+      'package_cbc [label="org.hjug.cbc" shape=ellipse URL="https://github.com/x/y/blob/main/src/main/java/org/hjug/cbc/" target="_blank"]');
+    expect(withRepoUrl).not.toContain('URL="https://github.com/x/y/blob/main/"');
+    expect(packageHierarchyToDot(hierarchy)).not.toContain('URL=');
+    expect(packageHierarchyToDot(hierarchy, { repoUrl: 'javascript:alert(1)/' })).not.toContain('URL=');
   });
 
-  it('emits anchors only for edge-referenced parents', () => {
-    const hierarchy = {
-      packages: [
-        packageNode('a', 'cluster_a', {
-          children: [
-            packageNode('a.b', 'cluster_b', {
-              nodeId: 'package_b',
-              renderAsNode: false,
-              children: [packageNode('a.b.c', 'cluster_c', { nodeId: 'package_c', renderAsNode: true })]
-            })
-          ]
-        })
-      ],
-      edges: [{ source: 'package_b', target: 'package_c', weight: 1, markedForRemoval: false }]
-    };
-
-    expect(packageHierarchyToDot(hierarchy)).toBe(
-      'strict digraph G {\n' +
-      'compound=true;\n' +
-      'subgraph cluster_a {\n' +
-      'label="a";\n' +
-      'style=filled fillcolor=white;\n' +
-      'subgraph cluster_b {\n' +
-      'label="a.b";\n' +
-      'style=filled fillcolor=white;\n' +
-      'package_b [shape=point style=invis];\n' +
-      'package_c [label="a.b.c" shape=rectangle style=filled fillcolor=white];\n' +
-      '}\n' +
-      '}\n' +
-      'package_b -> package_c [ label = "1" weight = "1" ltail = "cluster_b" ];\n' +
-      '}'
-    );
-  });
-
-  it('renders empty and null hierarchies as the bare compound skeleton', () => {
-    const bare = 'strict digraph G {\ncompound=true;\n}';
+  it('renders empty, null and undefined hierarchies as a bare digraph', () => {
+    const bare = 'strict digraph G {\n}';
     expect(packageHierarchyToDot({ packages: [], edges: [] })).toBe(bare);
     expect(packageHierarchyToDot(null)).toBe(bare);
     expect(packageHierarchyToDot(undefined)).toBe(bare);

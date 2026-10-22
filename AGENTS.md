@@ -36,13 +36,13 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
 - Graphs synthesized client-side from the nested hierarchy in
   refactor-first.json (`lib/hierarchy-dot.js`, byte-identical to the report
   module's Java `NestedDotBuilder`; packages nest as clusters, classes as
-  ellipses, break-up packages fill pink). The package graph renders its own
-  compound DOT shape — parent packages once as clusters, childless packages
-  once as filled rectangles, edges clipped to cluster borders via
-  invisible anchors + `ltail`/`lhead` — through
-  `@hpcc-js/wasm-graphviz@1.7.0` (`public/widgets/graphviz-bridge.js`,
-  the only engine honoring compound cluster edges); the class and cycle
-  graphs stay on vizdom
+  ellipses, break-up packages fill pink). The package map renders the flat
+  relationship graph — one ellipse per package with only the weighted
+  edges, break-up packages in red — through vizdom like the class and
+  cycle graphs; every graph's nodes are hyperlinked to their source
+  files/directories via `project.repoUrl` (http(s)-gated, new tab
+  restored post-render since vizdom drops the target); the full
+  hierarchy stays in refactor-first.json for LLM consumption
 - Enhanced report tables: sticky headers, pagination (>20 rows), sortable
   columns, in-table search, CSV export, click/keyboard cell copy with toasts
 - Repository submission via pre-filled platform issues — no login, apps or tokens
@@ -114,9 +114,8 @@ public/                     # static files copied verbatim into out/:
   repositories.txt          #   synced from the repo root (sync-repositories.mjs)
   assets/                   #   mustache template, logo
   templates/                #   workflow-sample-*.html fragments
-  widgets/                  #   module bridges: vizdom WASM, wasm-graphviz,
-                            #   three-spritetext, sentry (runtime CDN imports
-                            #   cannot be bundled)
+  widgets/                  #   module bridges: vizdom WASM, three-spritetext,
+                            #   sentry (runtime CDN imports cannot be bundled)
 templates/                  # user CI samples (user-refactorfirst-*.yml) for the docs
 ci/process-submissions.sh   # shared submission validator for GH/Gl/BB CI
 .github/workflows/          # test.yml, static.yml, redeploy.yml,
@@ -237,7 +236,7 @@ coverage there when introducing new markup patterns.
 
 ## Current Test Count
 
-~733 unit/integration + ~229 E2E (~202 across three browsers + 4 basePath leg + 27 dark mode).
+~736 unit/integration + ~229 E2E (~202 across three browsers + 4 basePath leg + 27 dark mode).
 
 WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
 tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and

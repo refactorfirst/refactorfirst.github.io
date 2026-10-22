@@ -71,7 +71,6 @@ beforeEach(() => {
   currentSearch = '';
   resetWidgetRegistry();
   window.Vizdom = undefined;
-  window.Graphviz = undefined;
   delete window.showPopup;
   delete window.hidePopup;
   delete window.createForceGraph;
@@ -86,7 +85,6 @@ afterEach(() => {
   mockFetch.mockRestore();
   cleanup();
   window.Vizdom = undefined;
-  window.Graphviz = undefined;
   window.Chart = undefined;
 });
 
@@ -153,26 +151,36 @@ describe('ReportView', () => {
     expect(container.querySelector('#classGraph svg')).not.toBeNull();
   });
 
-  test('renders the inline package graph through wasm-graphviz when the graphviz widget is ready', async () => {
-    const renderedDots = [];
-    window.Graphviz = {
-      load: async () => ({
-        dot: dotString => {
-          renderedDots.push(dotString);
-          return '<?xml version="1.0"?>\n<!DOCTYPE svg>\n<svg version="1.1"><g/></svg>';
+  test('renders the inline package graph through vizdom when the widget is ready', async () => {
+    const renderedSvgs = [];
+    const capturedDots = [];
+    window.Vizdom = {
+      DotParser: class {
+        parse(dot) {
+          capturedDots.push(dot);
+          return {
+            to_directed: () => ({
+              layout: () => ({
+                to_svg: () => ({
+                  to_string: () => { renderedSvgs.push(true); return '<svg version="1.1"><g/></svg>'; }
+                })
+              })
+            })
+          };
         }
-      })
+      }
     };
-    markWidgetReady('graphviz');
+    markWidgetReady('vizdom');
     respondJsonFor(sampleJson);
     const { container } = await renderReport();
-    expect(renderedDots.length).toBeGreaterThan(0);
-    // The package graph renders its own compound DOT shape: parents as
-    // clusters with invisible anchors, leaves as rectangles.
-    expect(renderedDots[0]).toContain('compound=true;');
-    expect(renderedDots[0]).toContain('shape=point style=invis');
+    expect(renderedSvgs.length).toBeGreaterThan(0);
+    // the package graph renders its flat ellipse DOT through the same vizdom path
+    const packageDot = capturedDots.find(dot => dot.includes('label="junit.framework" shape=ellipse'));
+    expect(packageDot).toBeDefined();
+    expect(packageDot).toContain('color=red style=filled');
+    expect(packageDot).not.toContain('compound=true');
+    expect(packageDot).not.toContain('subgraph');
     expect(container.querySelector('#packageGraph svg')).not.toBeNull();
-    expect(container.querySelector('#packageGraph svg').classList.contains('fullscreen-svg')).toBe(true);
   });
 
   test('shows the analysis-incomplete alert when project.analysisFailed is set', async () => {
@@ -382,7 +390,6 @@ describe('widget settle fallback timer', () => {
       // creates no timers; the only SETTLE_MS timer is the race fallback.
       markWidgetReady('chart');
       markWidgetReady('vizdom');
-      markWidgetReady('graphviz');
       respondJsonFor(sampleJson);
       await renderReport({ widgetSettleMs: SETTLE_MS });
 

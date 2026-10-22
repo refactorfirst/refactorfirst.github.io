@@ -6,6 +6,7 @@ import {
   initDisharmonyCharts,
   initWasmGraphs,
   showPopup,
+  createForceGraph,
   hidePopup,
   bindPopupHandlers,
   bindSectionNavLinks,
@@ -115,8 +116,8 @@ const replacementHierarchy = {
 // black edge labels; dark bakes the muted label color in at synthesis time.
 const lightDot = hierarchy => hierarchyToDot(hierarchy);
 const darkDot = hierarchy => hierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' });
-// The package graph renders as its own compound DOT shape (clusters for
-// parents, rectangles for leaves) through @hpcc-js/wasm-graphviz.
+// The package graph renders the flat ellipse DOT through vizdom, like the
+// class and cycle maps.
 const lightPackageDot = hierarchy => packageHierarchyToDot(hierarchy);
 const darkPackageDot = hierarchy => packageHierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' });
 
@@ -697,7 +698,6 @@ describe('theme redraw regressions', () => {
   let media;
   let mediaListener;
   let parsed;
-  let graphvizRendered;
   let zoomed;
   let rejectDot;
   const data = {
@@ -723,7 +723,6 @@ describe('theme redraw regressions', () => {
     };
     window.matchMedia = () => media;
     parsed = [];
-    graphvizRendered = [];
     zoomed = [];
     rejectDot = () => false;
     window.Vizdom = {
@@ -738,16 +737,6 @@ describe('theme redraw regressions', () => {
           };
         }
       }
-    };
-    // The package graph renders through @hpcc-js/wasm-graphviz (compound
-    // cluster edges); its stub records the rendered DOT per call.
-    window.Graphviz = {
-      load: async () => ({
-        dot: dotString => {
-          graphvizRendered.push(dotString);
-          return '<?xml version="1.0"?>\n<!DOCTYPE svg>\n<svg width="1"></svg>';
-        }
-      })
     };
     window.svgPanZoom = (selector, options) => {
       zoomed.push({ svg: document.querySelector(selector), options });
@@ -777,17 +766,14 @@ describe('theme redraw regressions', () => {
 
   it('recolors every graph on OS changes and reattaches pan/zoom to fresh SVGs', async () => {
     await initWasmGraphs(data);
-    expect(parsed).toEqual([lightDot(classHierarchy), lightDot(cycleHierarchy)]);
-    expect(graphvizRendered).toEqual([lightPackageDot(packageHierarchy)]);
+    expect(parsed).toEqual([lightDot(classHierarchy), lightPackageDot(packageHierarchy), lightDot(cycleHierarchy)]);
     const originalSvgs = zoomed.map(entry => entry.svg);
     parsed.length = 0;
-    graphvizRendered.length = 0;
     zoomed.length = 0;
     media.matches = true;
     mediaListener();
-    expect(parsed).toEqual([darkDot(classHierarchy), darkDot(cycleHierarchy)]);
-    expect(graphvizRendered).toEqual([darkPackageDot(packageHierarchy)]);
-    expect(graphvizRendered[0]).toContain('fontcolor = "#9fb0c0"');
+    expect(parsed).toEqual([darkDot(classHierarchy), darkPackageDot(packageHierarchy), darkDot(cycleHierarchy)]);
+    expect(parsed[1]).toContain('fontcolor = "#9fb0c0"');
     expect(zoomed).toHaveLength(3);
     zoomed.forEach(({ svg, options }, i) => {
       expect(svg).not.toBeNull();
@@ -796,11 +782,9 @@ describe('theme redraw regressions', () => {
       expect(options).toEqual({ zoomEnabled: true, controlIconsEnabled: true });
     });
     parsed.length = 0;
-    graphvizRendered.length = 0;
     media.matches = false;
     mediaListener();
-    expect(parsed).toEqual([lightDot(classHierarchy), lightDot(cycleHierarchy)]);
-    expect(graphvizRendered).toEqual([lightPackageDot(packageHierarchy)]);
+    expect(parsed).toEqual([lightDot(classHierarchy), lightPackageDot(packageHierarchy), lightDot(cycleHierarchy)]);
   });
 
   it.each(['light', 'dark'])('honors explicit %s mode when the OS preference changes', async mode => {
@@ -843,7 +827,6 @@ describe('theme redraw regressions', () => {
     const previousClassSvg = document.querySelector('#classGraph svg');
     const previousPackageSvg = document.querySelector('#packageGraph svg');
     parsed.length = 0;
-    graphvizRendered.length = 0;
     // All synthesized DOT shares the `strict digraph G` header, so reject on
     // the class graph's own cluster label instead.
     rejectDot = dot => dot.includes('label="c"');
@@ -852,8 +835,7 @@ describe('theme redraw regressions', () => {
       selectTheme('dark');
       expect(warning).toHaveBeenCalledTimes(1);
       expect(warning.mock.calls[0][0]).toBe('WASM graph re-render failed:');
-      expect(parsed).toHaveLength(2);
-      expect(graphvizRendered).toEqual([darkPackageDot(packageHierarchy)]);
+      expect(parsed).toHaveLength(3);
       expect(document.querySelector('#classGraph svg')).toBe(previousClassSvg);
       expect(document.querySelector('#packageGraph svg')).not.toBe(previousPackageSvg);
     } finally {
@@ -867,10 +849,8 @@ describe('theme redraw regressions', () => {
     mediaListener();
     document.body.insertAdjacentHTML('beforeend', '<div id="classGraph"></div>');
     parsed.length = 0;
-    graphvizRendered.length = 0;
     mediaListener();
-    expect(parsed).toEqual([lightDot(cycleHierarchy)]);
-    expect(graphvizRendered).toEqual([lightPackageDot(packageHierarchy)]);
+    expect(parsed).toEqual([lightPackageDot(packageHierarchy), lightDot(cycleHierarchy)]);
     expect(document.getElementById('classGraph').innerHTML).toBe('');
   });
 
@@ -924,7 +904,13 @@ describe('initWasmGraphs', () => {
           return {
             to_directed() { return this; },
             layout() { return this; },
-            to_svg() { return { to_string: () => '<svg width="1"></svg>' }; }
+            to_svg() {
+              return {
+                // mirrors real vizdom: hyperlinked nodes wrap in <a href=...> without a target
+                to_string: () =>
+                  '<svg width="1"><a href="https://github.com/x/y/blob/main/src/A.java"><ellipse/></a></svg>'
+              };
+            }
           };
         }
       }
@@ -932,22 +918,7 @@ describe('initWasmGraphs', () => {
     return captured;
   }
 
-  // Minimal wasm-graphviz stub: records the rendered package DOT and yields a
-  // fixed SVG with an xml/doctype preamble like the real engine.
-  function stubGraphviz() {
-    const rendered = [];
-    window.Graphviz = {
-      load: async () => ({
-        dot: dotString => {
-          rendered.push(dotString);
-          return '<?xml version="1.0"?>\n<!DOCTYPE svg>\n<svg width="1"></svg>';
-        }
-      })
-    };
-    return rendered;
-  }
-
-  afterEach(() => { delete window.Vizdom; delete window.Graphviz; delete window.matchMedia; });
+  afterEach(() => { delete window.Vizdom; delete window.matchMedia; });
 
   it('resolves gracefully when the WASM loader is unavailable', async () => {
     document.body.innerHTML = '<div id="classGraph"></div>';
@@ -955,17 +926,43 @@ describe('initWasmGraphs', () => {
     await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
   });
 
-  it('renders the package graph through wasm-graphviz while the light palette is active', async () => {
+  it('renders the package graph through vizdom with its flat ellipse DOT', async () => {
     installThemeRadios('light', false);
     const graph = document.createElement('div');
     graph.id = 'packageGraph';
     document.body.appendChild(graph);
-    const vizdomCaptured = stubVizdom();
-    const graphvizRendered = stubGraphviz();
+    const captured = stubVizdom();
     await initWasmGraphs({ packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true } });
-    expect(graphvizRendered).toEqual([lightPackageDot(packageHierarchy)]);
-    expect(vizdomCaptured).toEqual([], "the package graph must not render through vizdom");
+    expect(captured).toEqual([lightPackageDot(packageHierarchy)]);
+    expect(captured[0]).toContain('shape=ellipse');
     expect(document.querySelector('#packageGraph svg').classList.contains('fullscreen-svg')).toBe(true);
+  });
+
+  it('hyperlinks rendered class and package nodes when the report carries a repository URL', async () => {
+    installThemeRadios('light', false);
+    const classGraph = document.createElement('div');
+    classGraph.id = 'classGraph';
+    const packageGraph = document.createElement('div');
+    packageGraph.id = 'packageGraph';
+    document.body.append(classGraph, packageGraph);
+    const captured = stubVizdom();
+    const withPaths = JSON.parse(JSON.stringify(classHierarchy));
+    withPaths.packages[0].classes[0].path = 'src/main/java/c/A.java';
+    const packageWithPaths = JSON.parse(JSON.stringify(packageHierarchy));
+    packageWithPaths.packages[0].children[0].path = 'src/main/java/p/p1/';
+    await initWasmGraphs({
+      project: { repoUrl: 'https://github.com/x/y/blob/main/' },
+      classMap: { hierarchy: withPaths, dotThresholdExceeded: false },
+      packageMap: { hierarchy: packageWithPaths, dotThresholdExceeded: false, hasEdges: true }
+    });
+    const classDot = captured[0];
+    expect(classDot).toContain(
+      'A [ shape=ellipse URL="https://github.com/x/y/blob/main/src/main/java/c/A.java" target="_blank"]');
+    const packageDot = captured[1];
+    expect(packageDot).toContain(
+      'package_p1 [label="p.p1" shape=ellipse URL="https://github.com/x/y/blob/main/src/main/java/p/p1/" target="_blank"]');
+    // and the inline render restores the anchor target vizdom drops
+    expect(classGraph.innerHTML).toContain('<a target="_blank" href=');
   });
 
   it('renders the package graph with dark edge labels while the dark palette is active', async () => {
@@ -973,21 +970,10 @@ describe('initWasmGraphs', () => {
     const graph = document.createElement('div');
     graph.id = 'packageGraph';
     document.body.appendChild(graph);
-    const graphvizRendered = stubGraphviz();
+    const captured = stubVizdom();
     await initWasmGraphs({ packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true } });
-    expect(graphvizRendered).toEqual([darkPackageDot(packageHierarchy)]);
-    expect(graphvizRendered[0]).toContain('fontcolor = "#9fb0c0"');
-  });
-
-  it('skips the package graph when the wasm-graphviz widget is unavailable', async () => {
-    installThemeRadios('light', false);
-    const graph = document.createElement('div');
-    graph.id = 'packageGraph';
-    document.body.appendChild(graph);
-    const vizdomCaptured = stubVizdom();
-    await initWasmGraphs({ packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true } });
-    expect(document.getElementById('packageGraph').innerHTML).toBe('');
-    expect(vizdomCaptured).toEqual([]);
+    expect(captured).toEqual([darkPackageDot(packageHierarchy)]);
+    expect(captured[0]).toContain('fontcolor = "#9fb0c0"');
   });
 
   it('skips graphs whose dot threshold was exceeded', async () => {
@@ -1015,7 +1001,8 @@ describe('initWasmGraphs', () => {
     await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
     expect(captured).toEqual([darkDot(classHierarchy)]);
     expect(captured[0]).toContain('fontcolor = "#9fb0c0"');
-    expect(graph.innerHTML).toBe('<svg class="fullscreen-svg" width="1"></svg>');
+    expect(graph.innerHTML).toContain('<a target="_blank" href=');
+    expect(graph.innerHTML).toContain('<svg class="fullscreen-svg" width="1">');
   });
 
   it('re-synthesizes graphs with fresh label colors when a theme radio changes', async () => {
@@ -1090,6 +1077,98 @@ describe('popup helpers', () => {
     expect(document.getElementById('overlay').style.display).toBe('none');
     expect(document.getElementById('popup-classGraph').style.display).toBe('none');
     expect(document.getElementById('graph-container-classGraph').innerHTML).toBe('');
+  });
+});
+
+describe('popup cluster filtering (packages are noise)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="overlay" id="overlay" style="display:none"></div>
+      <div class="popup" id="popup-classGraph" style="display:none">
+        <div id="graph-container-classGraph"></div>
+      </div>`;
+  });
+
+  afterEach(() => {
+    delete window.graphlibDot;
+    delete window.graphology;
+    delete window.Sigma;
+    delete window.ForceGraph3D;
+    delete window.SpriteText;
+  });
+
+  // graphlib-dot creates a node for every named subgraph: in the class map
+  // that is one cluster node per package, labelled with the package name.
+  // The popups must drop those cluster nodes while keeping every class node
+  // the clusters contained and the class-to-class edges.
+  function stubGraphlibWithCluster() {
+    window.graphlibDot = {
+      read: () => ({
+        nodes: () => ['cluster_abc123', 'Alpha', 'Beta'],
+        node(id) {
+            return id === 'cluster_abc123' ? {label: 'org.hjug.cbc'} : {label: id};
+        },
+        edges: () => [{v: 'Alpha', w: 'Beta'}],
+        edge: () => ({color: 'red', weight: 2})
+      })
+    };
+  }
+
+  it('drops cluster nodes from the 2D sugiyama popup while keeping contained nodes', () => {
+    stubGraphlibWithCluster();
+    const addedNodes = [];
+    const addedEdges = [];
+    window.graphology = {
+      Graph: class {
+        addNode(id, attrs) { addedNodes.push({id, attrs}); }
+        addEdge(v, w, attrs) { addedEdges.push({v, w, attrs}); }
+        nodes() { return []; }
+        forEachNeighbor() {}
+        setNodeAttribute() {}
+      }
+    };
+    const sigmaGraphs = [];
+    window.Sigma = function (graph) {
+      sigmaGraphs.push(graph);
+      return {on() {}, setSetting() {}, scheduleRefresh() {}};
+    };
+
+    showPopup('popup-classGraph', 'graph-container-classGraph', 'ignored-by-stub');
+
+    expect(addedNodes.map(n => n.id)).toEqual(['Alpha', 'Beta']);
+    expect(addedEdges).toEqual([{v: 'Alpha', w: 'Beta', attrs: {color: 'red', size: 1, type: 'arrow'}}]);
+    expect(sigmaGraphs).toHaveLength(1);
+  });
+
+  it('drops cluster nodes from the 3D force-graph popup while keeping contained nodes', async () => {
+    stubGraphlibWithCluster();
+    window.SpriteText = function () {
+      return {};
+    };
+    const capturedData = [];
+    const chain = {};
+    for (const method of [
+      'graphData', 'nodeLabel', 'width', 'height', 'nodeThreeObject', 'nodeColor',
+      'linkWidth', 'linkDirectionalParticles', 'linkDirectionalParticleWidth',
+      'onNodeHover', 'onLinkHover'
+    ]) {
+      chain[method] = function (arg) {
+        if (method === 'graphData') capturedData.push(arg);
+        return this;
+      };
+    }
+    window.ForceGraph3D = function () {
+      return chain;
+    };
+
+    await createForceGraph('popup-classGraph', 'graph-container-classGraph', 'ignored-by-stub');
+
+    expect(capturedData).toHaveLength(1);
+    expect(capturedData[0].nodes.map(n => n.id)).toEqual(['Alpha', 'Beta']);
+    expect(capturedData[0].nodes.map(n => n.label)).toEqual(['Alpha', 'Beta']);
+    expect(capturedData[0].links).toEqual([
+      {source: 'Alpha', target: 'Beta', color: 'red', weight: 2}
+    ]);
   });
 });
 
