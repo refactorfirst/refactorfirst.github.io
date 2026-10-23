@@ -171,7 +171,12 @@ coverage there when introducing new markup patterns.
   SVGs' embedded black strokes/fills are likewise re-themed to
   `--graph-line` (`#9fb0c0` dark = `CHART_LEGEND_TEXT.dark`) via
   `path[stroke]`/`polygon` selectors on `.fullscreen-svg` — red cycle
-  edges stay red. Graph DOT is synthesized from the `.hierarchy` payloads
+  edges stay red — and the regular package clusters (`g.cluster
+  rect[fill="white"]`, the packages that do not need to be broken up)
+  re-drive their fill to `--bg-color` with their label glyph paths via a
+  rect-sibling selector, so the boxes match the page in dark mode while
+  pink break-up clusters keep their baked signal. Graph DOT is synthesized
+  from the `.hierarchy` payloads
   (`classMap`/`packageMap`/`largestCycle`, see `lib/hierarchy-dot.js`);
   edge labels are fill-only glyph paths baked by vizdom, so CSS can't
   reach them: the dark palette bakes `fontcolor = "#9fb0c0"` into every

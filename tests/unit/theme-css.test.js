@@ -233,6 +233,40 @@ describe('vizdom graph edges in dark mode', () => {
   });
 });
 
+// vizdom renders every package cluster as a g.cluster rect carrying the DOT's
+// baked fillcolor (appendPackage emits fillcolor=white for regular packages,
+// fillcolor=pink for break-up candidates) with the cluster label drawn as a
+// black-filled glyph path following the rect as a sibling (probe against the
+// vendored vizdom 0.1.19). The white boxes glare on the dark page, so the
+// regular clusters re-drive fill, stroke and label from the palette like the
+// edges; the pink break-up signal keeps its baked colors in both palettes.
+describe('vizdom package clusters in dark mode', () => {
+  it('re-drives regular cluster boxes from the palette', () => {
+    const boxes = rules.get('main#app .fullscreen-svg g.cluster rect[fill="white"]');
+    expect(boxes).toBeTruthy();
+    // The dark fill mirrors the page background, exactly like vizdom's
+    // default white on the light page; the baked black stroke follows
+    // --graph-line so the boxes stay delineated.
+    expect(boxes).toMatch(/fill:\s*var\(--bg-color\)/);
+    expect(boxes).toMatch(/stroke:\s*var\(--graph-line\)/);
+  });
+
+  it('re-drives cluster labels on the re-themed boxes', () => {
+    const labels = rules.get(
+      'main#app .fullscreen-svg g.cluster rect[fill="white"] ~ path[fill="black"]');
+    expect(labels).toBeTruthy();
+    expect(labels).toMatch(/fill:\s*var\(--graph-line\)/);
+    // The sibling anchor is the white rect: pink break-up clusters never
+    // match, so their labels keep the baked black on the pink fill.
+  });
+
+  it('keeps cluster labels readable on the re-themed boxes (SC 1.4.3, both palettes)', () => {
+    for (const palette of [lightPalette, darkPalette]) {
+      expect(contrastOf(palette, '--bg-color', '--graph-line')).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 describe('popup close button', () => {
   it('is a red square re-driven from palette variables', () => {
     // The template ships a bare × button; the red-square chrome must come
@@ -456,7 +490,7 @@ describe('menu toggle contrast', () => {
 });
 
 describe('report CSS selector boundaries', () => {
-  it('themes only graph edges and arrowheads, preserving red cycles and node glyphs', () => {
+  it('themes graph edges, arrowheads and regular clusters; red cycles, pink break-up clusters and node glyphs stay baked', () => {
     const fixture = document.createElement('div');
     fixture.innerHTML = `
       <main id="app"><svg class="fullscreen-svg">
@@ -466,13 +500,22 @@ describe('report CSS selector boundaries', () => {
         <polygon id="arrow" fill="black"/>
         <polygon id="cycle-arrow" fill="red"/>
         <ellipse id="node" fill="white"/>
+        <g class="cluster"><a>
+          <rect id="cluster-box" fill="white" stroke="black"/>
+          <path id="cluster-label" fill="black"/>
+        </a></g>
+        <g class="cluster"><a>
+          <rect id="breakup-box" fill="pink" stroke="black"/>
+          <path id="breakup-label" fill="black"/>
+        </a></g>
+        <g class="node"><a><rect id="rect-node" fill="white" stroke="black"/></a></g>
       </svg><svg><path id="other-icon" stroke="black"/></svg></main>
       <svg class="fullscreen-svg"><path id="outside-report" stroke="black"/></svg>`;
     const selectors = [...rules].filter(([, body]) => /var\(--graph-line\)/.test(body))
       .map(([selector]) => selector);
     expect(selectors.length).toBeGreaterThan(0);
     expect([...fixture.querySelectorAll(selectors.join(','))].map(el => el.id))
-      .toEqual(['edge', 'arrow']);
+      .toEqual(['edge', 'arrow', 'cluster-box', 'cluster-label']);
   });
 
   it('applies the unwrapped-table scrolling rule only to report data tables without enhancement', () => {

@@ -1115,6 +1115,83 @@ describe('initWasmGraphs', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(captured.length).toBe(initial);
   });
+
+  it('renders the legacy classMap.dot through vizdom when no hierarchy exists', async () => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    // Older RefactorFirst reports ship only the raw classMap.dot string with
+    // no hierarchy to synthesize from: the inline graph renders it verbatim,
+    // like the popup path does.
+    const legacyDot = 'strict digraph legacy { A; B; A -> B [ label = "1" weight = "1" ]; }';
+    await initWasmGraphs({ classMap: { dot: legacyDot, dotThresholdExceeded: false } });
+    expect(captured).toEqual([legacyDot]);
+    expect(graph.innerHTML).toContain('<svg class="fullscreen-svg" width="1">');
+  });
+
+  it('retains the legacy dot so theme redraws re-render it verbatim', async () => {
+    installThemeRadios('light', false);
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    const legacyDot = 'strict digraph legacy { A; B; A -> B [ label = "1" weight = "1" ]; }';
+    await initWasmGraphs({ classMap: { dot: legacyDot, dotThresholdExceeded: false } });
+    expect(captured).toEqual([legacyDot]);
+
+    // The retained entry re-parses the raw DOT on every theme change: there
+    // is no hierarchy to re-synthesize and no palette fontcolor to bake in,
+    // so the legacy report renders consistently on both palettes.
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured[captured.length - 1]).toBe(legacyDot);
+
+    const lightBack = document.getElementById('rf-theme-light');
+    lightBack.checked = true;
+    lightBack.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured[captured.length - 1]).toBe(legacyDot);
+    expect(captured.every(dot => dot === legacyDot)).toBe(true);
+  });
+
+  it('renders nothing when the classMap carries neither hierarchy nor dot', async () => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    await initWasmGraphs({ classMap: { dotThresholdExceeded: false } });
+    expect(captured).toEqual([]);
+    expect(graph.innerHTML).toBe('');
+  });
+
+  it('keeps synthesizing from the hierarchy when the report also ships a raw dot', async () => {
+    installThemeRadios('light', false);
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    // Modern reports may still carry the raw dot next to the hierarchy: the
+    // synthesis wins, and the retained entry carries no dot to fall back to.
+    await initWasmGraphs({
+      classMap: { hierarchy: classHierarchy, dot: 'strict digraph legacy { L; }', dotThresholdExceeded: false }
+    });
+    expect(captured).toEqual([lightDot(classHierarchy)]);
+
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured[captured.length - 1]).toBe(darkDot(classHierarchy));
+  });
 });
 
 

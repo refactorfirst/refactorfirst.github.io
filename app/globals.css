@@ -953,3 +953,25 @@ main#app .fullscreen-svg polygon:not([fill="red"]) {
   stroke: var(--graph-line);
   fill: var(--graph-line);
 }
+
+/* Package clusters: vizdom bakes the DOT's fillcolor onto each cluster rect
+   (probe against the vendored 0.1.19: g.cluster > a > rect fill="white"
+   stroke="black", with the cluster label as a black glyph path following the
+   rect as a sibling). appendPackage only ever emits fillcolor=white (regular
+   packages) or fillcolor=pink (break-up candidates), so the white boxes are
+   the packages that do not need to be broken up: their fill re-drives from
+   the palette so it matches the page — vizdom's default white on the light
+   page, the dark --bg-color in dark mode — and the baked black stroke follows
+   --graph-line like the rest of the graph. The cluster label glyphs ride on
+   the re-driven fill, so they follow --graph-line too; anchored to the white
+   rect sibling so pink break-up clusters keep their baked black-on-pink
+   signal in both palettes. Pure CSS: the DOT (and its byte-identical
+   lockstep with the Java NestedDotBuilder) keeps fillcolor=white. */
+main#app .fullscreen-svg g.cluster rect[fill="white"] {
+  fill: var(--bg-color);
+  stroke: var(--graph-line);
+}
+
+main#app .fullscreen-svg g.cluster rect[fill="white"] ~ path[fill="black"] {
+  fill: var(--graph-line);
+}

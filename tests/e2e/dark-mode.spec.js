@@ -208,6 +208,46 @@ test('graph edge labels re-tint to the dark palette, restore in light', async ({
   expect((await labelFills()).some(f => f === '#9fb0c0')).toBe(false);
 });
 
+test('package cluster boxes re-theme in dark mode, labels follow the palette', async ({ page }) => {
+  test.skip(test.info().project.name !== 'chromium', 'wasm-heavy check runs once');
+  // Mock GitHub raw content so the report page never hits the network.
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    if (route.request().url().endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: SAMPLE_REPORT });
+    } else {
+      route.continue();
+    }
+  });
+  await page.goto('/refactorfirst/refactorfirst/master/');
+  // vizdom renders package clusters as g.cluster rects carrying the DOT's
+  // fillcolor=white, with the cluster label as a black glyph path.
+  await page.waitForSelector('#classGraph svg g.cluster rect[fill="white"]', { timeout: 120000 });
+  const fillOf = selector => page.evaluate(
+    sel => getComputedStyle(document.querySelector(sel)).fill, selector);
+  const strokeOf = selector => page.evaluate(
+    sel => getComputedStyle(document.querySelector(sel)).stroke, selector);
+  const CLUSTER_BOX = '#classGraph svg g.cluster rect[fill="white"]';
+  const CLUSTER_LABEL = '#classGraph svg g.cluster rect[fill="white"] ~ path[fill="black"]';
+
+  // Light theme: vizdom's baked white boxes with black strokes and labels.
+  expect(await fillOf(CLUSTER_BOX)).toBe('rgb(255, 255, 255)');
+  expect(await strokeOf(CLUSTER_BOX)).toBe('rgb(0, 0, 0)');
+  expect(await fillOf(CLUSTER_LABEL)).toBe('rgb(0, 0, 0)');
+
+  await page.locator('#rf-theme-dark').check();
+  // Dark theme: regular package clusters match the dark page background
+  // (#10161d = --bg-color) and their strokes/labels follow --graph-line
+  // (#9fb0c0), pure CSS on the already-rendered SVG.
+  expect(await fillOf(CLUSTER_BOX)).toBe('rgb(16, 22, 29)');
+  expect(await strokeOf(CLUSTER_BOX)).toBe('rgb(159, 176, 192)');
+  expect(await fillOf(CLUSTER_LABEL)).toBe('rgb(159, 176, 192)');
+
+  // Switching back to light restores the baked white/black without a re-parse.
+  await page.locator('#rf-theme-light').check();
+  expect(await fillOf(CLUSTER_BOX)).toBe('rgb(255, 255, 255)');
+  expect(await fillOf(CLUSTER_LABEL)).toBe('rgb(0, 0, 0)');
+});
+
 test('breadcrumbs and the toggle share one vertically centered row on report pages', async ({ page }) => {
   test.skip(test.info().project.name !== 'chromium', 'geometry check runs once');
   // Mock GitHub raw content so the report page never hits the network.
