@@ -335,6 +335,231 @@ describe('packageHierarchyToDot (flat ellipse nodes + relationship edges)', () =
   });
 });
 
+describe('untrusted payload validation (NestedDotBuilder producer contract)', () => {
+  // Identifiers and weights are interpolated raw — a bare DOT token cannot be
+  // re-quoted without breaking the byte-identical lockstep with the Java
+  // builder — so both graphs gate them against the producer contract before
+  // emission: ids are letters/digits/underscores (`cluster_<hex>`,
+  // `package_<hex>`, or class ids with `.`, `$`, `<`, `>` mapped away) and
+  // weights finite numbers. Out-of-contract entries are dropped, never
+  // emitted raw; labels and URLs keep their own escaping and http(s) gate.
+
+  it('drops edges whose endpoints are not producer-shaped DOT ids (hierarchyToDot)', () => {
+    const hierarchy = {
+      packages: [
+        packageNode('(default package)', 'cluster_default', {
+          classes: [classNode('A', 'A', 'A', '', false), classNode('B', 'B', 'B', '', false)]
+        })
+      ],
+      edges: [
+        { source: 'A -> B [ label = "injected" ]; evil', target: 'B', weight: 1, markedForRemoval: false },
+        { source: 'A', target: 'B; evil [ label = "boom"', weight: 1, markedForRemoval: false },
+        { source: 'A B', target: 'B', weight: 1, markedForRemoval: false },
+        { source: 'A"B', target: 'B', weight: 1, markedForRemoval: false },
+        { source: 'A.B', target: 'B', weight: 1, markedForRemoval: false },
+        { source: 'A$B', target: 'B', weight: 1, markedForRemoval: false },
+        { source: 'cluster_default {', target: 'B', weight: 1, markedForRemoval: false },
+        { source: '', target: 'B', weight: 1, markedForRemoval: false },
+        { source: null, target: 'B', weight: 1, markedForRemoval: false },
+        { source: 9, target: 'B', weight: 1, markedForRemoval: false },
+        { source: {}, target: 'B', weight: 1, markedForRemoval: false },
+        null,
+        { source: 'A', target: 'B', weight: 2, markedForRemoval: true }
+      ]
+    };
+
+    expect(hierarchyToDot(hierarchy)).toBe(
+      'strict digraph G {\n' +
+      'subgraph cluster_default {\n' +
+      'label="(default package)";\n' +
+      'style=filled fillcolor=white;\n' +
+      'A [ shape=ellipse];\n' +
+      'B [ shape=ellipse];\n' +
+      '}\n' +
+      'A -> B [ label = "2" weight = "2" color = "red" ];\n' +
+      '}'
+    );
+  });
+
+  it('drops edges whose endpoints are not producer-shaped DOT ids (packageHierarchyToDot)', () => {
+    const hierarchy = {
+      packages: [
+        packageNode('org.hjug', 'cluster_hjug', { nodeId: 'package_hjug' }),
+        packageNode('org.hjug.dsm', 'cluster_dsm', { nodeId: 'package_dsm' })
+      ],
+      edges: [
+        { source: 'package_hjug" -> package_dsm [ label = "evil" ]; ', target: 'package_dsm', weight: 9, markedForRemoval: false },
+        { source: 'package_hjug', target: 'package dsm', weight: 9, markedForRemoval: false },
+        { source: 'package_hjug', target: 12, weight: 9, markedForRemoval: false },
+        { source: 'package_hjug', target: 'package_dsm', weight: 4, markedForRemoval: true }
+      ]
+    };
+
+    expect(packageHierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' })).toBe(
+      'strict digraph G {\n' +
+      'package_hjug [label="org.hjug" shape=ellipse];\n' +
+      'package_dsm [label="org.hjug.dsm" shape=ellipse];\n' +
+      'package_hjug -> package_dsm [ label = "4" weight = "4" color = "red" fontcolor = "#9fb0c0" ];\n' +
+      '}'
+    );
+  });
+
+  it('rejects non-finite weights before emission in both graphs', () => {
+    const badWeights = [Number.NaN, Infinity, -Infinity, '3', null, undefined];
+    for (const weight of badWeights) {
+      const nested = hierarchyToDot({
+        packages: [
+          packageNode('(default package)', 'cluster_default', {
+            classes: [classNode('A', 'A', 'A', '', false), classNode('B', 'B', 'B', '', false)]
+          })
+        ],
+        edges: [{ source: 'A', target: 'B', weight, markedForRemoval: false }]
+      });
+      expect(nested).not.toContain('->');
+
+      const flat = packageHierarchyToDot({
+        packages: [packageNode('p', 'cluster_p', { nodeId: 'package_p' })],
+        edges: [{ source: 'package_p', target: 'package_q', weight, markedForRemoval: false }]
+      });
+      expect(flat).not.toContain('->');
+    }
+
+    // Finite weights keep rendering, zero included
+    expect(hierarchyToDot({
+      packages: [
+        packageNode('(default package)', 'cluster_default', {
+          classes: [classNode('A', 'A', 'A', '', false), classNode('B', 'B', 'B', '', false)]
+        })
+      ],
+      edges: [{ source: 'A', target: 'B', weight: 0, markedForRemoval: false }]
+    })).toContain('A -> B [ label = "0" weight = "0" ];');
+    expect(packageHierarchyToDot({
+      packages: [packageNode('p', 'cluster_p', { nodeId: 'package_p' })],
+      edges: [{ source: 'package_p', target: 'package_q', weight: 2.5, markedForRemoval: false }]
+    })).toContain('package_p -> package_q [ label = "2.5" weight = "2.5" ];');
+  });
+
+  it('drops packages whose cluster id is not a producer-shaped DOT id, subtree and all', () => {
+    const hierarchy = {
+      packages: [
+        null,
+        packageNode('evil', 'cluster_evil { injected', {
+          classes: [classNode('A', 'A', 'A', '', false)],
+          children: [packageNode('evil.child', 'child cluster"')]
+        }),
+        packageNode('numeric', 42),
+        packageNode('org', 'cluster_org', { classes: [classNode('B', 'B', 'B', '', false)] })
+      ],
+      edges: [{ source: 'A', target: 'B', weight: 1, markedForRemoval: false }]
+    };
+
+    // The dropped packages' classes disappear with them; the edge survives on
+    // its own valid ids (DOT creates implicit nodes for undefined endpoints).
+    expect(hierarchyToDot(hierarchy)).toBe(
+      'strict digraph G {\n' +
+      'subgraph cluster_org {\n' +
+      'label="org";\n' +
+      'style=filled fillcolor=white;\n' +
+      'B [ shape=ellipse];\n' +
+      '}\n' +
+      'A -> B [ label = "1" weight = "1" ];\n' +
+      '}'
+    );
+  });
+
+  it('drops rectangle package nodes with invalid node ids but keeps their clusters', () => {
+    const hierarchy = {
+      packages: [
+        packageNode('bad', 'cluster_bad', { renderAsNode: true, nodeId: 'bad node id' }),
+        packageNode('good', 'cluster_good', { renderAsNode: true, nodeId: 'package_good' })
+      ],
+      edges: []
+    };
+
+    expect(hierarchyToDot(hierarchy)).toBe(
+      'strict digraph G {\n' +
+      'subgraph cluster_bad {\n' +
+      'label="bad";\n' +
+      'style=filled fillcolor=white;\n' +
+      '}\n' +
+      'subgraph cluster_good {\n' +
+      'label="good";\n' +
+      'style=filled fillcolor=white;\n' +
+      'package_good [label="good" shape=rectangle];\n' +
+      '}\n' +
+      '}'
+    );
+  });
+
+  it('drops class nodes with invalid ids but keeps valid siblings', () => {
+    const hierarchy = {
+      packages: [
+        packageNode('org', 'cluster_org', {
+          classes: [
+            null,
+            classNode('org.Evil', 'Evil" [ shape=box ]', 'Evil', '', false),
+            classNode('org.Good', 'Good', 'Good', '', false)
+          ]
+        })
+      ],
+      edges: []
+    };
+
+    expect(hierarchyToDot(hierarchy)).toBe(
+      'strict digraph G {\n' +
+      'subgraph cluster_org {\n' +
+      'label="org";\n' +
+      'style=filled fillcolor=white;\n' +
+      'Good [ shape=ellipse];\n' +
+      '}\n' +
+      '}'
+    );
+  });
+
+  it('drops flat package nodes with invalid node ids (packageHierarchyToDot)', () => {
+    const hierarchy = {
+      packages: [
+        null,
+        packageNode('bad', 'cluster_bad', { nodeId: 'bad node id' }),
+        packageNode('good', 'cluster_good', { nodeId: 'package_good', needsBreakUp: true })
+      ],
+      edges: []
+    };
+
+    expect(packageHierarchyToDot(hierarchy)).toBe(
+      'strict digraph G {\n' +
+      'package_good [label="good" shape=ellipse color=red style=filled];\n' +
+      '}'
+    );
+  });
+
+  it('preserves label escaping and the http(s) URL gate alongside id validation', () => {
+    const hierarchy = {
+      packages: [
+        packageNode('p', 'cluster_p', {
+          classes: [
+            classNode('A', 'A', 'A" [ shape=box ] evil', '', false),
+            classNode('X', 'X" ] evil [ shape=box', 'X', '', false)
+          ]
+        })
+      ],
+      edges: []
+    };
+
+    const dot = hierarchyToDot(hierarchy, { repoUrl: 'javascript:alert(1)/' });
+    expect(dot).toBe(
+      'strict digraph G {\n' +
+      'subgraph cluster_p {\n' +
+      'label="p";\n' +
+      'style=filled fillcolor=white;\n' +
+      'A [ label="A\\" [ shape=box ] evil" shape=ellipse];\n' +
+      '}\n' +
+      '}'
+    );
+    expect(dot).not.toContain('URL=');
+  });
+});
+
 describe('hierarchyToDot edge font color (dark palette edge labels)', () => {
   const hierarchy = () => ({
     packages: [
