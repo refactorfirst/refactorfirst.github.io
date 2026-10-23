@@ -142,6 +142,34 @@ describe('exposeGraphDots', () => {
     expect(window.classGraph_dot).toBeUndefined();
   });
 
+  it('falls back to the report-provided classMap.dot when no hierarchy exists', () => {
+    installThemeRadios('light');
+    delete window.classGraph_dot;
+    // Older RefactorFirst reports carry only the raw classMap.dot string
+    // (no hierarchy to synthesize from); the popups parse it directly.
+    const legacyDot = 'strict digraph legacy { A; B; A -> B; }';
+    exposeGraphDots({ classMap: { dot: legacyDot } });
+    expect(window.classGraph_dot).toBe(legacyDot);
+  });
+
+  it('prefers the synthesized hierarchy DOT over a legacy classMap.dot', () => {
+    installThemeRadios('light');
+    delete window.classGraph_dot;
+    exposeGraphDots({ classMap: { hierarchy: classHierarchy, dot: 'strict digraph legacy { L; }' } });
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
+  });
+
+  it('clears a previous report’s class graph DOT when the current report has none', () => {
+    installThemeRadios('light');
+    // A report with a class map leaves its synthesized DOT on window...
+    exposeGraphDots({ classMap: { hierarchy: classHierarchy } });
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
+    // ...so the next report without class graph data must drop it, or its
+    // popup would silently render the previous report's graph.
+    exposeGraphDots({});
+    expect(window.classGraph_dot).toBeUndefined();
+  });
+
   it('skips the package map popup DOT when the report has no package edges', () => {
     installThemeRadios('light');
     delete window.packageGraph_dot;
@@ -906,9 +934,11 @@ describe('initWasmGraphs', () => {
             layout() { return this; },
             to_svg() {
               return {
-                // mirrors real vizdom: hyperlinked nodes wrap in <a href=...> without a target
+                // mirrors real vizdom: every hyperlinked node wraps in
+                // <a href=...> without a target — graphs carry several
                 to_string: () =>
-                  '<svg width="1"><a href="https://github.com/x/y/blob/main/src/A.java"><ellipse/></a></svg>'
+                  '<svg width="1"><a href="https://github.com/x/y/blob/main/src/A.java"><ellipse/></a>' +
+                  '<a href="https://github.com/x/y/blob/main/src/B.java"><ellipse/></a></svg>'
               };
             }
           };
@@ -1032,6 +1062,39 @@ describe('initWasmGraphs', () => {
     expect(captured[captured.length - 1]).toBe(lightDot(classHierarchy));
   });
 
+  it('restores target="_blank" on every encoded anchor, including after a theme redraw', async () => {
+    installThemeRadios('light', false);
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    stubVizdom();
+    const withPaths = JSON.parse(JSON.stringify(classHierarchy));
+    withPaths.packages[0].classes[0].path = 'src/main/java/c/A.java';
+    withPaths.packages[0].classes[1].path = 'src/main/java/c/B.java';
+    await initWasmGraphs({
+      project: { repoUrl: 'https://github.com/x/y/blob/main/' },
+      classMap: { hierarchy: withPaths, dotThresholdExceeded: false }
+    });
+    const assertAllAnchorsTargetBlank = () => {
+      const anchors = graph.querySelectorAll('a');
+      expect(anchors.length).toBe(2);
+      for (const anchor of anchors) {
+        expect(anchor.getAttribute('target')).toBe('_blank');
+      }
+    };
+    // initial render: both encoded anchors get the target vizdom drops
+    assertAllAnchorsTargetBlank();
+
+    // theme redraw re-renders through the same path: both must keep it
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assertAllAnchorsTargetBlank();
+  });
+
   it('prunes graphs whose container left the DOM on theme change', async () => {
     installThemeRadios('light', false);
     document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
@@ -1097,24 +1160,27 @@ describe('popup cluster filtering (packages are noise)', () => {
     delete window.SpriteText;
   });
 
-  // graphlib-dot creates a node for every named subgraph: in the class map
-  // that is one cluster node per package, labelled with the package name.
-  // The popups must drop those cluster nodes while keeping every class node
-  // the clusters contained and the class-to-class edges.
+  // graphlib-dot parses subgraphs as compound parents: every named subgraph
+  // becomes a node with the contained nodes parented to it (and empty
+  // subgraphs are pruned at parse time), so only actual subgraph ids ever
+  // have children. The popups must drop those subgraph nodes while keeping
+  // every node they contained and the edges between them — including
+  // ordinary nodes whose ID merely starts with cluster_ (cluster_worker).
   function stubGraphlibWithCluster() {
     window.graphlibDot = {
       read: () => ({
-        nodes: () => ['cluster_abc123', 'Alpha', 'Beta'],
+        nodes: () => ['cluster_abc123', 'Alpha', 'Beta', 'cluster_worker'],
         node(id) {
             return id === 'cluster_abc123' ? {label: 'org.hjug.cbc'} : {label: id};
         },
-        edges: () => [{v: 'Alpha', w: 'Beta'}],
-        edge: () => ({color: 'red', weight: 2})
+        children: id => (id === 'cluster_abc123' ? ['Alpha', 'Beta'] : []),
+        edges: () => [{v: 'Alpha', w: 'Beta'}, {v: 'cluster_worker', w: 'Beta'}],
+        edge: e => (e.v === 'cluster_worker' ? {color: 'blue', weight: 7} : {color: 'red', weight: 2})
       })
     };
   }
 
-  it('drops cluster nodes from the 2D sugiyama popup while keeping contained nodes', () => {
+  it('drops parsed subgraphs from the 2D sugiyama popup while keeping ordinary nodes', () => {
     stubGraphlibWithCluster();
     const addedNodes = [];
     const addedEdges = [];
@@ -1135,12 +1201,17 @@ describe('popup cluster filtering (packages are noise)', () => {
 
     showPopup('popup-classGraph', 'graph-container-classGraph', 'ignored-by-stub');
 
-    expect(addedNodes.map(n => n.id)).toEqual(['Alpha', 'Beta']);
-    expect(addedEdges).toEqual([{v: 'Alpha', w: 'Beta', attrs: {color: 'red', size: 1, type: 'arrow'}}]);
+    // the actual subgraph is dropped; the cluster_-prefixed ordinary node
+    // and its edge are kept
+    expect(addedNodes.map(n => n.id)).toEqual(['Alpha', 'Beta', 'cluster_worker']);
+    expect(addedEdges).toEqual([
+      {v: 'Alpha', w: 'Beta', attrs: {color: 'red', size: 1, type: 'arrow'}},
+      {v: 'cluster_worker', w: 'Beta', attrs: {color: 'blue', size: 1, type: 'arrow'}}
+    ]);
     expect(sigmaGraphs).toHaveLength(1);
   });
 
-  it('drops cluster nodes from the 3D force-graph popup while keeping contained nodes', async () => {
+  it('drops parsed subgraphs from the 3D force-graph popup while keeping ordinary nodes', async () => {
     stubGraphlibWithCluster();
     window.SpriteText = function () {
       return {};
@@ -1163,11 +1234,14 @@ describe('popup cluster filtering (packages are noise)', () => {
 
     await createForceGraph('popup-classGraph', 'graph-container-classGraph', 'ignored-by-stub');
 
+    // the actual subgraph is dropped; the cluster_-prefixed ordinary node
+    // and its edge are kept
     expect(capturedData).toHaveLength(1);
-    expect(capturedData[0].nodes.map(n => n.id)).toEqual(['Alpha', 'Beta']);
-    expect(capturedData[0].nodes.map(n => n.label)).toEqual(['Alpha', 'Beta']);
+    expect(capturedData[0].nodes.map(n => n.id)).toEqual(['Alpha', 'Beta', 'cluster_worker']);
+    expect(capturedData[0].nodes.map(n => n.label)).toEqual(['Alpha', 'Beta', 'cluster_worker']);
     expect(capturedData[0].links).toEqual([
-      {source: 'Alpha', target: 'Beta', color: 'red', weight: 2}
+      {source: 'Alpha', target: 'Beta', color: 'red', weight: 2},
+      {source: 'cluster_worker', target: 'Beta', color: 'blue', weight: 7}
     ]);
   });
 });
