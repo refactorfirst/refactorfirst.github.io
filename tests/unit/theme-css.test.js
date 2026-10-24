@@ -239,7 +239,15 @@ describe('vizdom graph edges in dark mode', () => {
 // black-filled glyph path following the rect as a sibling (probe against the
 // vendored vizdom 0.1.19). The white boxes glare on the dark page, so the
 // regular clusters re-drive fill, stroke and label from the palette like the
-// edges; the pink break-up signal keeps its baked colors in both palettes.
+// edges. The pink break-up boxes need the opposite treatment: baked pink is
+// 11.8:1 against the dark page (a glaring pastel slab) but only 1.45:1 against
+// the #9fb0c0 edges crossing it, so the dark fill drops to a deep rose that
+// keeps the edges visible while a light pink boundary/label ink carries the
+// signal. No fill can pass 3:1 against both the near-black page and the light
+// edges at once (the optimum balances at ~2.86:1), so the fill prioritizes
+// edge visibility and the pink ink provides the perceivable boundary (SC
+// 1.4.11). Light values equal vizdom's baked colors, so light mode does not
+// change by a pixel.
 describe('vizdom package clusters in dark mode', () => {
   it('re-drives regular cluster boxes from the palette', () => {
     const boxes = rules.get('main#app .fullscreen-svg g.cluster rect[fill="white"]');
@@ -256,14 +264,55 @@ describe('vizdom package clusters in dark mode', () => {
       'main#app .fullscreen-svg g.cluster rect[fill="white"] ~ path[fill="black"]');
     expect(labels).toBeTruthy();
     expect(labels).toMatch(/fill:\s*var\(--graph-line\)/);
-    // The sibling anchor is the white rect: pink break-up clusters never
-    // match, so their labels keep the baked black on the pink fill.
+    // The sibling anchor is the white rect: break-up labels are themed by
+    // their own rule below, never by this one.
   });
 
   it('keeps cluster labels readable on the re-themed boxes (SC 1.4.3, both palettes)', () => {
     for (const palette of [lightPalette, darkPalette]) {
       expect(contrastOf(palette, '--bg-color', '--graph-line')).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('re-drives break-up cluster boxes and their labels from the palette', () => {
+    const boxes = rules.get('main#app .fullscreen-svg g.cluster rect[fill="pink"]');
+    expect(boxes).toBeTruthy();
+    expect(boxes).toMatch(/fill:\s*var\(--graph-breakup-fill\)/);
+    expect(boxes).toMatch(/stroke:\s*var\(--graph-breakup-line\)/);
+    const labels = rules.get(
+      'main#app .fullscreen-svg g.cluster rect[fill="pink"] ~ path[fill="black"]');
+    expect(labels).toBeTruthy();
+    expect(labels).toMatch(/fill:\s*var\(--graph-breakup-line\)/);
+  });
+
+  it('keeps the light breakup values equal to vizdom\'s baked pink and black', () => {
+    // The light rules must be a visual no-op: the palette values equal the
+    // DOT's baked fillcolor=pink and the default black stroke/label glyphs.
+    expect(lightPalette.get('--graph-breakup-fill')).toBe('#ffc0cb');
+    expect(lightPalette.get('--graph-breakup-line')).toBe('#000000');
+  });
+
+  it('tunes the dark breakup surface for the dark page', () => {
+    expect(darkPalette.get('--graph-breakup-fill')).toBe('#7f3350');
+    expect(darkPalette.get('--graph-breakup-line')).toBe('#f2b8cd');
+  });
+
+  it('dark breakup boxes keep the edges visible and read as flagged', () => {
+    // Edges (--graph-line) cross the breakup boxes and must stay visible
+    // against the fill (SC 1.4.11, >= 3:1) — baked pink only reached 1.45:1.
+    expect(contrastOf(darkPalette, '--graph-line', '--graph-breakup-fill'))
+      .toBeGreaterThanOrEqual(3);
+    // The pink label ink keeps AA text contrast on the rose fill (SC 1.4.3)
+    // and the boundary stays perceivable against the page behind the box.
+    expect(contrastOf(darkPalette, '--graph-breakup-fill', '--graph-breakup-line'))
+      .toBeGreaterThanOrEqual(4.5);
+    expect(contrastOf(darkPalette, '--bg-color', '--graph-breakup-line'))
+      .toBeGreaterThanOrEqual(3);
+    // The rose fill reads clearly against the near-black regular clusters
+    // (large-area presence plus a warm hue shift; the site's own dark
+    // surfaces sit at 1.29:1). The perceivable boundary is the pink ink.
+    expect(contrastOf(darkPalette, '--bg-color', '--graph-breakup-fill'))
+      .toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -490,7 +539,11 @@ describe('menu toggle contrast', () => {
 });
 
 describe('report CSS selector boundaries', () => {
-  it('themes graph edges, arrowheads and regular clusters; red cycles, pink break-up clusters and node glyphs stay baked', () => {
+  // Mirrors the vizdom SVG structure (probe against the vendored 0.1.19):
+  // edge curves (stroke paths), arrowhead polygons, node ellipses with
+  // label glyph paths, and package clusters as g.cluster rects whose label
+  // glyph path follows the rect as a sibling.
+  const graphSvgFixture = () => {
     const fixture = document.createElement('div');
     fixture.innerHTML = `
       <main id="app"><svg class="fullscreen-svg">
@@ -511,11 +564,26 @@ describe('report CSS selector boundaries', () => {
         <g class="node"><a><rect id="rect-node" fill="white" stroke="black"/></a></g>
       </svg><svg><path id="other-icon" stroke="black"/></svg></main>
       <svg class="fullscreen-svg"><path id="outside-report" stroke="black"/></svg>`;
+    return fixture;
+  };
+
+  it('themes graph edges, arrowheads and regular clusters; red cycles and node glyphs stay untouched', () => {
+    const fixture = graphSvgFixture();
     const selectors = [...rules].filter(([, body]) => /var\(--graph-line\)/.test(body))
       .map(([selector]) => selector);
     expect(selectors.length).toBeGreaterThan(0);
     expect([...fixture.querySelectorAll(selectors.join(','))].map(el => el.id))
       .toEqual(['edge', 'arrow', 'cluster-box', 'cluster-label']);
+  });
+
+  it('themes break-up clusters only through the breakup rules', () => {
+    const fixture = graphSvgFixture();
+    const selectors = [...rules]
+      .filter(([, body]) => /var\(--graph-breakup-(?:fill|line)\)/.test(body))
+      .map(([selector]) => selector);
+    expect(selectors.length).toBeGreaterThan(0);
+    expect([...fixture.querySelectorAll(selectors.join(','))].map(el => el.id))
+      .toEqual(['breakup-box', 'breakup-label']);
   });
 
   it('applies the unwrapped-table scrolling rule only to report data tables without enhancement', () => {

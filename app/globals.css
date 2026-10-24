@@ -35,6 +35,12 @@
   /* vizdom WASM graph edges bake black stroke/fill attributes into the SVG;
      palette-driven so the dark theme can swap them to a readable tint. */
   --graph-line: #000000;
+  /* Break-up package clusters: vizdom bakes fillcolor=pink onto the cluster
+     rect with the default black stroke/label glyphs. The light values equal
+     those baked colors, so the re-driving rules below never change the
+     light theme by a pixel; the dark block swaps them for a tuned surface. */
+  --graph-breakup-fill: #ffc0cb;
+  --graph-breakup-line: #000000;
   --error-color: #c0392b;
   --success-color: #1e8449;
   --error-bg: #fdf6f5;
@@ -101,6 +107,14 @@ html:root {
   /* Hamburger glyph + 1px border on the dark menu surface (6.8:1). */
   --menu-toggle-color: #6fb1d9;
   --graph-line: #9fb0c0;
+  /* Break-up package clusters: the baked pink is a glaring pastel slab on
+     the dark page (11.8:1) and swallows the #9fb0c0 edges crossing it
+     (1.45:1), so the box drops to a deep rose — flagged against the
+     near-black regular clusters (2.2:1 plus a warm hue shift) while the
+     edges stay visible on it (3.8:1) — and a light pink ink carries the
+     boundary and label (5.0:1 on the fill, 10.8:1 on the page). */
+  --graph-breakup-fill: #7f3350;
+  --graph-breakup-line: #f2b8cd;
   --error-color: #f0928c;
   --success-color: #5bbd8b;
   --error-bg: #2b1d1f;
@@ -145,6 +159,14 @@ html:root {
     /* Hamburger glyph + 1px border on the dark menu surface (6.8:1). */
     --menu-toggle-color: #6fb1d9;
     --graph-line: #9fb0c0;
+    /* Break-up package clusters: the baked pink is a glaring pastel slab on
+       the dark page (11.8:1) and swallows the #9fb0c0 edges crossing it
+       (1.45:1), so the box drops to a deep rose — flagged against the
+       near-black regular clusters (2.2:1 plus a warm hue shift) while the
+       edges stay visible on it (3.8:1) — and a light pink ink carries the
+       boundary and label (5.0:1 on the fill, 10.8:1 on the page). */
+    --graph-breakup-fill: #7f3350;
+    --graph-breakup-line: #f2b8cd;
     --error-color: #f0928c;
     --success-color: #5bbd8b;
     --error-bg: #2b1d1f;
@@ -964,9 +986,10 @@ main#app .fullscreen-svg polygon:not([fill="red"]) {
    page, the dark --bg-color in dark mode — and the baked black stroke follows
    --graph-line like the rest of the graph. The cluster label glyphs ride on
    the re-driven fill, so they follow --graph-line too; anchored to the white
-   rect sibling so pink break-up clusters keep their baked black-on-pink
-   signal in both palettes. Pure CSS: the DOT (and its byte-identical
-   lockstep with the Java NestedDotBuilder) keeps fillcolor=white. */
+   rect sibling so the rule never touches the break-up clusters, which the
+   rules below theme through their own palette. Pure CSS: the DOT (and its
+   byte-identical lockstep with the Java NestedDotBuilder) keeps
+   fillcolor=white/fillcolor=pink. */
 main#app .fullscreen-svg g.cluster rect[fill="white"] {
   fill: var(--bg-color);
   stroke: var(--graph-line);
@@ -974,4 +997,20 @@ main#app .fullscreen-svg g.cluster rect[fill="white"] {
 
 main#app .fullscreen-svg g.cluster rect[fill="white"] ~ path[fill="black"] {
   fill: var(--graph-line);
+}
+
+/* Break-up packages (the pink rects) invert that treatment: their problem
+   signal survives the dark page best as a deep rose box with a light pink
+   boundary and label, because no single fill can pass 3:1 against both the
+   near-black page and the light --graph-line edges crossing the box — the
+   rose fill keeps the edges visible (SC 1.4.11) and the pink ink keeps the
+   box boundary and its label readable (SC 1.4.3). The light palette values
+   equal vizdom's baked pink/black, so this never changes light mode. */
+main#app .fullscreen-svg g.cluster rect[fill="pink"] {
+  fill: var(--graph-breakup-fill);
+  stroke: var(--graph-breakup-line);
+}
+
+main#app .fullscreen-svg g.cluster rect[fill="pink"] ~ path[fill="black"] {
+  fill: var(--graph-breakup-line);
 }

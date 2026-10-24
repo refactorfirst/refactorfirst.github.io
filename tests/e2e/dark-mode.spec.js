@@ -248,6 +248,48 @@ test('package cluster boxes re-theme in dark mode, labels follow the palette', a
   expect(await fillOf(CLUSTER_LABEL)).toBe('rgb(0, 0, 0)');
 });
 
+test('break-up package clusters read as flagged in dark mode, edges stay visible', async ({ page }) => {
+  test.skip(test.info().project.name !== 'chromium', 'wasm-heavy check runs once');
+  // Flag one package for break-up so the class map renders a pink cluster;
+  // the shipped fixture has none.
+  const flagged = JSON.parse(SAMPLE_REPORT);
+  flagged.classMap.hierarchy.packages[0].needsBreakUp = true;
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    if (route.request().url().endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flagged) });
+    } else {
+      route.continue();
+    }
+  });
+  await page.goto('/refactorfirst/refactorfirst/master/');
+  // vizdom bakes the DOT's fillcolor=pink onto the break-up cluster rect.
+  await page.waitForSelector('#classGraph svg g.cluster rect[fill="pink"]', { timeout: 120000 });
+  const fillOf = selector => page.evaluate(
+    sel => getComputedStyle(document.querySelector(sel)).fill, selector);
+  const strokeOf = selector => page.evaluate(
+    sel => getComputedStyle(document.querySelector(sel)).stroke, selector);
+  const BREAKUP_BOX = '#classGraph svg g.cluster rect[fill="pink"]';
+  const BREAKUP_LABEL = '#classGraph svg g.cluster rect[fill="pink"] ~ path[fill="black"]';
+
+  // Light theme: vizdom's baked pink box with black label glyphs.
+  expect(await fillOf(BREAKUP_BOX)).toBe('rgb(255, 192, 203)');
+  expect(await fillOf(BREAKUP_LABEL)).toBe('rgb(0, 0, 0)');
+
+  await page.locator('#rf-theme-dark').check();
+  // Dark theme: the box drops to a deep rose (#7f3350 = --graph-breakup-fill)
+  // — clearly flagged against the near-black regular clusters without
+  // swallowing the #9fb0c0 edges crossing it — and the boundary stroke and
+  // label glyphs follow the light pink ink (#f2b8cd = --graph-breakup-line).
+  expect(await fillOf(BREAKUP_BOX)).toBe('rgb(127, 51, 80)');
+  expect(await strokeOf(BREAKUP_BOX)).toBe('rgb(242, 184, 205)');
+  expect(await fillOf(BREAKUP_LABEL)).toBe('rgb(242, 184, 205)');
+
+  // Switching back to light restores the baked pink/black (pure CSS).
+  await page.locator('#rf-theme-light').check();
+  expect(await fillOf(BREAKUP_BOX)).toBe('rgb(255, 192, 203)');
+  expect(await fillOf(BREAKUP_LABEL)).toBe('rgb(0, 0, 0)');
+});
+
 test('breadcrumbs and the toggle share one vertically centered row on report pages', async ({ page }) => {
   test.skip(test.info().project.name !== 'chromium', 'geometry check runs once');
   // Mock GitHub raw content so the report page never hits the network.
