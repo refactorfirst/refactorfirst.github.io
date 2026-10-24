@@ -41,8 +41,16 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
   edges, break-up packages in red — through vizdom like the class and
   cycle graphs; every graph's nodes are hyperlinked to their source
   files/directories via `project.repoUrl` (http(s)-gated, new tab
-  restored post-render since vizdom drops the target); the full
-  hierarchy stays in refactor-first.json for LLM consumption
+  restored post-render since vizdom drops the target); hovering a vizdom
+  edge highlights it plus both endpoints, hovering (or keyboard-focusing)
+  a node highlights its incoming edges + source nodes and outgoing edges +
+  sink nodes in two directional colors (`bindGraphHoverHighlights` in
+  `lib/report-view.js` derives the neighbor model from the vizdom
+  `<title>` texts and toggles `rf-hover-*` classes, styled per palette via
+  `--graph-hover-*`); highlighted nodes fill with their accent and their
+  label glyphs re-ink to `--graph-hover-on` (white on the dark light-mode
+  accents, black on the bright dark-mode accents) to keep AA contrast; the
+  full hierarchy stays in refactor-first.json for LLM consumption
 - Enhanced report tables: sticky headers, pagination (>20 rows), sortable
   columns, in-table search, CSV export, click/keyboard cell copy with toasts
 - Repository submission via pre-filled platform issues — no login, apps or tokens

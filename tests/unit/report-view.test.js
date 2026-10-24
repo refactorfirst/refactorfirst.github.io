@@ -1220,6 +1220,169 @@ describe('popup helpers', () => {
   });
 });
 
+// DOT-graph hover highlights (vizdom SVGs): mousing over an edge emphasizes
+// the edge and both endpoint nodes; mousing over a node colors the incoming
+// edges + source nodes and the outgoing edges + sink nodes differently. The
+// neighbor model derives from the vizdom <title> texts (node ids and
+// "Source -> Target" edge titles); lib/report-view.js toggles rf-hover-*
+// state classes, and the palette rules in globals.css do the restyling.
+describe('graph hover highlights', () => {
+  // Mirrors the vizdom 0.1.19 SVG structure: g.edge/g.node groups carrying
+  // <title> with the DOT node ids, curves as stroke paths, arrowheads as
+  // polygons, node shapes as ellipses inside <a> wrappers.
+  const HOVER_SVG = ''
+    + '<svg width="1">'
+    + '<g class="graph" id="graph-0"><title>G</title><g id="a-graph-0">'
+    + '<a title="G"><rect id="graph-bg" fill="transparent" stroke="transparent"/></a></g></g>'
+    + '<g class="cluster" id="cluster-0"><title>c</title><g id="a-cluster-0">'
+    + '<a title="c"><rect fill="white" stroke="black"/></a></g></g>'
+    + '<g class="edge" id="edge-0"><title>A -> B</title><g id="a-edge-0">'
+    + '<a title="A -> B"><path id="curve-0" d="M0 0" fill="none" stroke="black"/>'
+    + '<polygon id="arrow-0" fill="black"/></a></g></g>'
+    + '<g class="edge" id="edge-1"><title>C -> A</title><g id="a-edge-1">'
+    + '<a title="C -> A"><path id="curve-1" d="M0 0" fill="none" stroke="black"/>'
+    + '<polygon id="arrow-1" fill="black"/></a></g></g>'
+    + '<g class="edge" id="edge-2"><title>B -> A</title><g id="a-edge-2">'
+    + '<a title="B -> A"><path id="curve-2" d="M0 0" fill="none" stroke="black"/>'
+    + '<polygon id="arrow-2" fill="black"/></a></g></g>'
+    + '<g class="edge" id="edge-bad"><title>unparsable</title><g id="a-edge-bad">'
+    + '<a><path id="curve-bad" d="M0 0" fill="none" stroke="black"/></a></g></g>'
+    + '<g class="node" id="node-A"><title>A</title><g id="a-node-A">'
+    + '<a id="anchor-A" title="A" href="https://example/A">'
+    + '<ellipse id="shape-A" fill="white" stroke="black"/></a></g></g>'
+    + '<g class="node" id="node-B"><title>B</title><g id="a-node-B">'
+    + '<a id="anchor-B" title="B" href="https://example/B">'
+    + '<ellipse id="shape-B" fill="white" stroke="black"/></a></g></g>'
+    + '<g class="node" id="node-C"><title>C</title><g id="a-node-C">'
+    + '<a id="anchor-C" title="C"><ellipse id="shape-C" fill="white" stroke="black"/></a></g></g>'
+    + '</svg>';
+
+  function stubHoverVizdom() {
+    window.Vizdom = {
+      DotParser: class {
+        parse() {
+          return {
+            to_directed() { return this; },
+            layout() { return this; },
+            to_svg() { return { to_string: () => HOVER_SVG }; }
+          };
+        }
+      }
+    };
+  }
+
+  function hoverOver(element) {
+    element.dispatchEvent(new window.MouseEvent('mouseover', {bubbles: true}));
+  }
+
+  function flagged(selector, state) {
+    return [...document.querySelectorAll(selector)]
+      .filter(el => el.classList.contains(state)).map(el => el.id);
+  }
+
+  beforeEach(() => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    stubHoverVizdom();
+  });
+
+  afterEach(() => { delete window.Vizdom; delete window.matchMedia; });
+
+  it('highlights the hovered edge and both endpoint nodes', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('curve-0'));
+    expect(flagged('g.edge', 'rf-hover-edge')).toEqual(['edge-0']);
+    expect(flagged('g.node', 'rf-hover-edge')).toEqual(['node-A', 'node-B']);
+    // Nothing else is flagged, and no directional state leaks in.
+    expect(flagged('g.edge', 'rf-hover-in')).toEqual([]);
+    expect(flagged('g.edge', 'rf-hover-out')).toEqual([]);
+    expect(document.getElementById('node-C').getAttribute('class')).toBe('node');
+  });
+
+  it('keeps the edge highlighted while the pointer moves within its shapes', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('curve-0'));
+    hoverOver(document.getElementById('arrow-0'));
+    expect(flagged('g.edge', 'rf-hover-edge')).toEqual(['edge-0']);
+    expect(flagged('g.node', 'rf-hover-edge')).toEqual(['node-A', 'node-B']);
+  });
+
+  it('colors a hovered node\'s incoming and outgoing neighborhoods differently', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('shape-A'));
+    // The hovered node carries the focus ring.
+    expect(flagged('g.node', 'rf-hover-focus')).toEqual(['node-A']);
+    // Incoming: C -> A and B -> A, with their source nodes, in green state.
+    expect(flagged('g.edge', 'rf-hover-in')).toEqual(['edge-1', 'edge-2']);
+    expect(flagged('g.node', 'rf-hover-in')).toEqual(['node-B', 'node-C']);
+    // Outgoing: A -> B with its sink node, in blue state.
+    expect(flagged('g.edge', 'rf-hover-out')).toEqual(['edge-0']);
+    expect(flagged('g.node', 'rf-hover-out')).toEqual(['node-B']);
+    // B is both a source (of B -> A) and a sink (of A -> B): a bidirectional
+    // partner flagged with both states.
+    expect(document.getElementById('node-B').classList.contains('rf-hover-in')).toBe(true);
+    expect(document.getElementById('node-B').classList.contains('rf-hover-out')).toBe(true);
+    // The edge whose title carries no " -> " never binds a highlight.
+    expect(document.getElementById('edge-bad').getAttribute('class')).toBe('edge');
+  });
+
+  it('clears every state when the pointer moves onto the graph background', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('shape-A'));
+    hoverOver(document.getElementById('graph-bg'));
+    expect(flagged('g.edge', 'rf-hover-edge').length
+      + flagged('g.edge', 'rf-hover-in').length
+      + flagged('g.edge', 'rf-hover-out').length).toBe(0);
+    expect(flagged('g.node', 'rf-hover-edge').length
+      + flagged('g.node', 'rf-hover-in').length
+      + flagged('g.node', 'rf-hover-out').length
+      + flagged('g.node', 'rf-hover-focus').length).toBe(0);
+  });
+
+  it('clears every state when the pointer leaves the svg', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('curve-0'));
+    document.querySelector('#classGraph svg')
+      .dispatchEvent(new window.MouseEvent('mouseleave'));
+    expect(flagged('g.edge', 'rf-hover-edge')).toEqual([]);
+    expect(flagged('g.node', 'rf-hover-edge')).toEqual([]);
+  });
+
+  it('re-uses the node hover state on keyboard focus and clears on blur', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    // Node anchors are real tab stops; focusing one flags the same state as
+    // hovering (SC 2.1.1 parity for pointer-only affordances).
+    document.getElementById('anchor-A')
+      .dispatchEvent(new window.FocusEvent('focusin', {bubbles: true}));
+    expect(flagged('g.node', 'rf-hover-focus')).toEqual(['node-A']);
+    expect(flagged('g.edge', 'rf-hover-in')).toEqual(['edge-1', 'edge-2']);
+    expect(flagged('g.edge', 'rf-hover-out')).toEqual(['edge-0']);
+
+    document.getElementById('anchor-A')
+      .dispatchEvent(new window.FocusEvent('focusout', {bubbles: true}));
+    expect(flagged('g.node', 'rf-hover-focus')).toEqual([]);
+    expect(flagged('g.edge', 'rf-hover-in')).toEqual([]);
+    expect(flagged('g.edge', 'rf-hover-out')).toEqual([]);
+  });
+
+  it('re-binds the highlights after a theme redraw re-injects the svg', async () => {
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // The freshly injected svg carries fresh listeners.
+    hoverOver(document.querySelector('#classGraph svg #curve-1'));
+    expect(flagged('g.edge', 'rf-hover-edge')).toEqual(['edge-1']);
+    expect(flagged('g.node', 'rf-hover-edge')).toEqual(['node-A', 'node-C']);
+  });
+});
+
 describe('popup cluster filtering (packages are noise)', () => {
   beforeEach(() => {
     document.body.innerHTML = `

@@ -290,6 +290,75 @@ test('break-up package clusters read as flagged in dark mode, edges stay visible
   expect(await fillOf(BREAKUP_LABEL)).toBe('rgb(0, 0, 0)');
 });
 
+test('hovering graph edges and nodes highlights them per palette', async ({ page }) => {
+  test.skip(test.info().project.name !== 'chromium', 'wasm-heavy check runs once');
+  // Mock GitHub raw content so the report page never hits the network.
+  await page.route('**/raw.githubusercontent.com/**', route => {
+    if (route.request().url().endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: SAMPLE_REPORT });
+    } else {
+      route.continue();
+    }
+  });
+  await page.goto('/refactorfirst/refactorfirst/master/');
+  // vizdom renders edges as g.edge groups (curve path + arrowhead polygon).
+  await page.waitForSelector('#classGraph svg g.edge path', { timeout: 120000 });
+  const strokeOf = selector => page.evaluate(
+    sel => getComputedStyle(document.querySelector(sel)).stroke, selector);
+  const fillOf = selector => page.evaluate(
+    sel => getComputedStyle(document.querySelector(sel)).fill, selector);
+  const count = selector => page.evaluate(
+    sel => document.querySelectorAll(sel).length, selector);
+
+  // Hovering an edge highlights and fills the edge plus both endpoint nodes
+  // (amber accent, labels re-inked white on the fill).
+  await page.hover('#classGraph svg g.edge path');
+  expect(await count('#classGraph svg g.edge.rf-hover-edge')).toBe(1);
+  expect(await count('#classGraph svg g.node.rf-hover-edge')).toBe(2);
+  expect(await strokeOf('#classGraph svg g.edge.rf-hover-edge path'))
+    .toBe('rgb(180, 83, 9)'); // #b45309 light amber
+  expect(await fillOf('#classGraph svg g.node.rf-hover-edge ellipse'))
+    .toBe('rgb(180, 83, 9)');
+  expect(await fillOf('#classGraph svg g.node.rf-hover-edge path'))
+    .toBe('rgb(255, 255, 255)'); // #ffffff light on-accent label ink
+
+  // Hovering a node colors incoming (green) and outgoing (blue) separately;
+  // TestCase has both directions in the fixture (TestCase -> TestResult and
+  // TestResult -> TestCase), so both states apply.
+  const TEST_CASE_NODE = '#classGraph svg g.node:has-text("TestCase") ellipse';
+  await page.hover(TEST_CASE_NODE);
+  expect(await count('#classGraph svg g.edge.rf-hover-in')).toBeGreaterThan(0);
+  expect(await count('#classGraph svg g.edge.rf-hover-out')).toBeGreaterThan(0);
+  expect(await strokeOf('#classGraph svg g.edge.rf-hover-in path'))
+    .toBe('rgb(30, 132, 73)'); // #1e8449 light green
+  expect(await strokeOf('#classGraph svg g.edge.rf-hover-out path'))
+    .toBe('rgb(42, 111, 151)'); // #2a6f97 light blue
+  // The hovered node fills amber; the bidirectional partner (TestResult,
+  // flagged both in and out) fills amber too, while the out-only sink
+  // (BaseTestRunner) fills blue.
+  expect(await fillOf('#classGraph svg g.node.rf-hover-focus ellipse'))
+    .toBe('rgb(180, 83, 9)');
+  expect(await fillOf('#classGraph svg g.node.rf-hover-in.rf-hover-out ellipse'))
+    .toBe('rgb(180, 83, 9)');
+  expect(await fillOf('#classGraph svg g.node.rf-hover-out:not(.rf-hover-in) ellipse'))
+    .toBe('rgb(42, 111, 151)');
+
+  // The dark palette swaps to its own bright accents with black label ink.
+  await page.locator('#rf-theme-dark').check();
+  await page.hover('#classGraph svg g.edge path');
+  expect(await strokeOf('#classGraph svg g.edge.rf-hover-edge path'))
+    .toBe('rgb(240, 185, 90)'); // #f0b95a dark amber
+  expect(await fillOf('#classGraph svg g.node.rf-hover-edge ellipse'))
+    .toBe('rgb(240, 185, 90)');
+  expect(await fillOf('#classGraph svg g.node.rf-hover-edge path'))
+    .toBe('rgb(0, 0, 0)'); // #000000 dark on-accent label ink
+  await page.hover(TEST_CASE_NODE);
+  expect(await strokeOf('#classGraph svg g.edge.rf-hover-in path'))
+    .toBe('rgb(126, 226, 168)'); // #7ee2a8 dark green
+  expect(await strokeOf('#classGraph svg g.edge.rf-hover-out path'))
+    .toBe('rgb(142, 208, 250)'); // #8ed0fa dark blue
+});
+
 test('breadcrumbs and the toggle share one vertically centered row on report pages', async ({ page }) => {
   test.skip(test.info().project.name !== 'chromium', 'geometry check runs once');
   // Mock GitHub raw content so the report page never hits the network.
