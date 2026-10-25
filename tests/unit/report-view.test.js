@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { JSDOM } from 'jsdom';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import {
   exposeGraphDots,
   initBubbleChart,
@@ -15,6 +18,7 @@ import {
   resolveLegendTextColor,
   bindThemeChartRedraw,
   bindSigmaHoverHighlight,
+  GRAPH_HOVER_ACCENTS,
   destroyBubbleCharts,
   statefulElementIds,
   stashStatefulDom,
@@ -1459,7 +1463,7 @@ describe('popup cluster filtering (packages are noise)', () => {
     const capturedData = [];
     const chain = {};
     for (const method of [
-      'graphData', 'nodeLabel', 'width', 'height', 'nodeThreeObject', 'nodeColor',
+      'graphData', 'nodeLabel', 'width', 'height', 'nodeThreeObject', 'linkColor',
       'linkWidth', 'linkDirectionalParticles', 'linkDirectionalParticleWidth',
       'onNodeHover', 'onLinkHover'
     ]) {
@@ -1479,10 +1483,254 @@ describe('popup cluster filtering (packages are noise)', () => {
     expect(capturedData).toHaveLength(1);
     expect(capturedData[0].nodes.map(n => n.id)).toEqual(['Alpha', 'Beta', 'cluster_worker']);
     expect(capturedData[0].nodes.map(n => n.label)).toEqual(['Alpha', 'Beta', 'cluster_worker']);
+    const [alpha, beta, worker] = capturedData[0].nodes;
+    // Each link carries its resolved endpoint objects so the hover handlers
+    // never depend on force-graph's ingestion-time source/target rewiring.
     expect(capturedData[0].links).toEqual([
-      {source: 'Alpha', target: 'Beta', color: 'red', weight: 2},
-      {source: 'cluster_worker', target: 'Beta', color: 'blue', weight: 7}
+      {source: 'Alpha', target: 'Beta', color: 'red', weight: 2, sourceNode: alpha, targetNode: beta},
+      {source: 'cluster_worker', target: 'Beta', color: 'blue', weight: 7, sourceNode: worker, targetNode: beta}
     ]);
+  });
+});
+
+// The 3D force-graph popup carries the same directional hover model as the
+// vizdom SVGs (hovered node amber, incoming green, outgoing blue, hovered
+// link amber with both endpoints) — always on, its WebGL canvas always
+// dark, the accents always the dark palette values. When nothing is
+// highlighted, the DOT graph's own colors show: red removal links, white
+// plain links, and the nodes' DOT colors on the sprite labels. Per-hover
+// sprite recoloring touches only nodes whose state changed.
+describe('createForceGraph hover highlights', () => {
+  // Directed A->B, B->A (bidirectional pair), C->A: hovering A exercises
+  // every state, including the both-in-and-out partner. A->B carries the
+  // DOT color of a removal relationship (red); the others carry no DOT
+  // color and fall back to white, like the real report DOT.
+  function stubDirectedGraphlib() {
+    window.graphlibDot = {
+      read: () => ({
+        nodes: () => ['A', 'B', 'C'],
+        node: id => ({label: id}),
+        children: () => [],
+        edges: () => [{v: 'A', w: 'B'}, {v: 'B', w: 'A'}, {v: 'C', w: 'A'}],
+        edge: e => (e.v === 'A' && e.w === 'B' ? {color: 'red', weight: 1} : {weight: 1})
+      })
+    };
+  }
+
+  function stubForceGraph() {
+    const captured = { accessors: {}, chain: {} };
+    for (const method of [
+      'graphData', 'nodeLabel', 'width', 'height', 'nodeThreeObject', 'linkColor',
+      'linkWidth', 'linkDirectionalParticles', 'linkDirectionalParticleWidth',
+      'onNodeHover', 'onLinkHover'
+    ]) {
+      // force-graph accessors are dual getter/setters: calling with an
+      // argument sets it (returning the chain), calling without returns the
+      // current accessor — updateHighlight() relies on both forms.
+      captured.chain[method] = function (arg) {
+        if (arguments.length > 0) {
+          captured.accessors[method] = arg;
+          return this;
+        }
+        return captured.accessors[method];
+      };
+    }
+    return captured;
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="overlay" id="overlay" style="display:none"></div>
+      <div class="popup" id="popup-classGraph" style="display:none">
+        <div id="graph-container-classGraph"></div>
+      </div>`;
+    stubDirectedGraphlib();
+    window.SpriteText = function (label) {
+      this.label = label;
+      this.material = {};
+    };
+  });
+
+  afterEach(() => {
+    delete window.graphlibDot;
+    delete window.ForceGraph3D;
+    delete window.SpriteText;
+  });
+
+  async function buildGraph() {
+    const captured = stubForceGraph();
+    window.ForceGraph3D = function () {
+      return captured.chain;
+    };
+    await createForceGraph('popup-classGraph', 'graph-container-classGraph', 'ignored-by-stub');
+    return { captured, data: captured.accessors.graphData };
+  }
+
+  it('ships no palette toggle and rests on the DOT-specified colors', async () => {
+    const { captured, data } = await buildGraph();
+    // The toggle era is over: the enhanced palette is the only palette, so
+    // no checkbox ships.
+    expect(document.querySelector('#popup-classGraph .rf-enhanced-toggle')).toBeNull();
+    // Hover highlighting is armed at popup build…
+    expect(typeof captured.accessors.linkColor).toBe('function');
+    expect(typeof captured.accessors.linkWidth).toBe('function');
+    expect(typeof captured.accessors.linkDirectionalParticles).toBe('function');
+    expect(typeof captured.accessors.onNodeHover).toBe('function');
+    expect(typeof captured.accessors.onLinkHover).toBe('function');
+    // …and the resting colors are the ones the DOT graph specifies: red
+    // removal links, white uncolored links, thin, without particles.
+    const [ab, ba] = data.links;
+    expect(captured.accessors.linkColor(ab)).toBe('red');
+    expect(captured.accessors.linkColor(ba)).toBe('white');
+    expect(captured.accessors.linkWidth(ab)).toBe(1);
+    expect(captured.accessors.linkDirectionalParticles(ab)).toBe(0);
+    // The sprite labels render with their DOT colors.
+    const sprite = captured.accessors.nodeThreeObject({ label: 'A', color: 'white' });
+    expect(sprite.label).toBe('A');
+    expect(sprite.color).toBe('white');
+  });
+
+  it('caches each node\'s sprite so hover recoloring mutates the live object', async () => {
+    const { captured, data } = await buildGraph();
+    const [a] = data.nodes;
+    const spriteA = captured.accessors.nodeThreeObject(a);
+    expect(captured.accessors.nodeThreeObject(a)).toBe(spriteA);
+    expect(spriteA.label).toBe('A');
+    expect(spriteA.color).toBe('white'); // DOT resting color until a hover flags it
+  });
+
+  it('splits a hovered node\'s directions with the dark palette accents', async () => {
+    const { captured, data } = await buildGraph();
+    const [a, b, c] = data.nodes;
+    const [ab, ba, ca] = data.links;
+    const spriteOf = node => captured.accessors.nodeThreeObject(node);
+    const spriteA = spriteOf(a);
+    const spriteB = spriteOf(b);
+    const spriteC = spriteOf(c);
+
+    captured.accessors.onNodeHover(a);
+    // The hovered node takes the dark amber attention accent…
+    expect(spriteA.color).toBe('#f0b95a');
+    // …B is both an incoming source (of B->A) and an outgoing sink (of
+    // A->B): the bidirectional partner, amber over either direction…
+    expect(spriteB.color).toBe('#f0b95a');
+    // …and C, only an incoming source, goes dark green.
+    expect(spriteC.color).toBe('#7ee2a8');
+    // Links follow: incoming dark green, outgoing dark blue, both thickened
+    // with flowing particles — the accent overrides the DOT red while
+    // hovered.
+    expect(captured.accessors.linkColor(ba)).toBe('#7ee2a8');
+    expect(captured.accessors.linkColor(ca)).toBe('#7ee2a8');
+    expect(captured.accessors.linkColor(ab)).toBe('#8ed0fa');
+    expect(captured.accessors.linkWidth(ab)).toBe(4);
+    expect(captured.accessors.linkDirectionalParticles(ab)).toBe(4);
+  });
+
+  it('restores the DOT-specified link colors when the hover clears', async () => {
+    const { captured, data } = await buildGraph();
+    const [a] = data.nodes;
+    const [ab] = data.links;
+    // Resting: the DOT colors — the red removal link, over the DOT-white
+    // plain links pinned by the sibling test.
+    expect(captured.accessors.linkColor(ab)).toBe('red');
+
+    const spriteA = captured.accessors.nodeThreeObject(a);
+    captured.accessors.onNodeHover(a);
+    // Flagged: the accent overrides the DOT red while hovered…
+    expect(spriteA.color).toBe('#f0b95a');
+    expect(captured.accessors.linkColor(ab)).toBe('#8ed0fa');
+    // …and clearing the hover restores the DOT colors and the sprite's own.
+    captured.accessors.onNodeHover(null);
+    expect(spriteA.color).toBe('white');
+    expect(captured.accessors.linkColor(ab)).toBe('red');
+  });
+
+  it('flags a hovered link and both endpoints with the amber attention accent', async () => {
+    const { captured, data } = await buildGraph();
+    const [a, b] = data.nodes;
+    const link = data.links[0]; // A -> B
+    const spriteA = captured.accessors.nodeThreeObject(a);
+    const spriteB = captured.accessors.nodeThreeObject(b);
+
+    captured.accessors.onLinkHover(link);
+    expect(spriteA.color).toBe('#f0b95a');
+    expect(spriteB.color).toBe('#f0b95a');
+    expect(captured.accessors.linkColor(link)).toBe('#f0b95a');
+    expect(captured.accessors.linkWidth(link)).toBe(4);
+    expect(captured.accessors.linkDirectionalParticles(link)).toBe(4);
+  });
+
+  it('recolors only the sprites whose highlight state changed', async () => {
+    // A counting sprite + an unconnected node pin that a hover never touches
+    // sprites outside the (previous ∪ current) highlight set — the always-on
+    // hover stays O(changed) instead of O(all sprites) per pointer move.
+    window.SpriteText = function (label) {
+      this.label = label;
+      this.material = {};
+      this.setColorCount = 0;
+      this._color = null;
+    };
+    Object.defineProperty(window.SpriteText.prototype, 'color', {
+      get() { return this._color; },
+      set(value) {
+        this.setColorCount += 1;
+        this._color = value;
+      }
+    });
+    // One extra node no edge touches.
+    stubDirectedGraphlib();
+    const innerRead = window.graphlibDot.read;
+    window.graphlibDot.read = () => {
+      const parsed = innerRead();
+      return {
+        ...parsed,
+        nodes: () => [...parsed.nodes(), 'D'],
+        node: id => ({label: id})
+      };
+    };
+    const { captured, data } = await buildGraph();
+    const [a, , , d] = data.nodes;
+    const spriteA = captured.accessors.nodeThreeObject(a);
+    const spriteD = captured.accessors.nodeThreeObject(d);
+    expect(spriteA.setColorCount).toBe(1); // creation coloring only
+    expect(spriteD.setColorCount).toBe(1);
+
+    captured.accessors.onNodeHover(a);
+    captured.accessors.onNodeHover(null);
+    captured.accessors.onNodeHover(a);
+    // The flagged node's sprite recolors on every state change…
+    expect(spriteA.setColorCount).toBe(4);
+    expect(spriteA.color).toBe('#f0b95a');
+    // …while the unflagged node's sprite is never touched again.
+    expect(spriteD.setColorCount).toBe(1);
+    expect(spriteD.color).toBe('white');
+  });
+});
+
+// The popups are canvas/WebGL drawn, so CSS cannot reach them: the accents
+// live in JS (GRAPH_HOVER_ACCENTS) and must never drift from the
+// --graph-hover-* palette declarations in app/globals.css that style the
+// vizdom SVGs.
+describe('popup hover accents mirror the CSS palette', () => {
+  const css = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../../app/globals.css'),
+    'utf-8'
+  );
+
+  it('GRAPH_HOVER_ACCENTS match the --graph-hover-* declarations per palette', () => {
+    // File order: the light :root block, then the two byte-identical dark
+    // blocks — the theme-css guard pins the dark pair together, so each
+    // role must resolve to [light, dark, dark].
+    for (const [role, values] of [
+      ['edge', ['#b45309', '#f0b95a', '#f0b95a']],
+      ['in', ['#1e8449', '#7ee2a8', '#7ee2a8']],
+      ['out', ['#2a6f97', '#8ed0fa', '#8ed0fa']]
+    ]) {
+      expect([...css.matchAll(new RegExp(`--graph-hover-${role}:\\s*(#[0-9a-f]{6})`, 'g'))]
+        .map(match => match[1])).toEqual(values);
+    }
+    expect(GRAPH_HOVER_ACCENTS.light).toEqual({edge: '#b45309', in: '#1e8449', out: '#2a6f97'});
+    expect(GRAPH_HOVER_ACCENTS.dark).toEqual({edge: '#f0b95a', in: '#7ee2a8', out: '#8ed0fa'});
   });
 });
 
@@ -1629,7 +1877,7 @@ describe('showPopup sigma theme settings', () => {
     expect(constructed[0].settings).toBeUndefined();
   });
 
-  it('binds neighbor and edge hover highlighting onto the sigma instance', () => {
+  it('binds the directional hover highlighting onto the sigma instance', () => {
     installRadiosAndPopup('light');
     const constructed = stubSigmaStack();
     showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
@@ -1642,16 +1890,21 @@ describe('showPopup sigma theme settings', () => {
 });
 
 describe('bindSigmaHoverHighlight', () => {
-  // A stub graphology graph: edges eAB (A-B), eAC (A-C), eBD (B-D). D is a
-  // non-neighbor of A; eBD is not incident to A.
-  function stubHoverGraph() {
+  // A stub directed graphology graph: A->B, B->A (a bidirectional pair),
+  // A->C and B->D (unrelated to A). Hovering A flags eBA + node B green
+  // (incoming), eAB + node B / eAC + node C blue (outgoing); node B holds
+  // both states and takes the amber attention accent — mirroring the vizdom
+  // rf-hover-* model. The 2D popup is canvas-drawn, so the accents resolve
+  // from the active palette like CHART_LEGEND_TEXT.
+  function stubHoverGraph(overrides = {}) {
     return {
-      forEachNeighbor(node, callback) {
-        ({ A: ['B', 'C'], B: ['A', 'D'], C: ['A'], D: ['B'] })[node].forEach(callback);
-      },
       edges(node) {
-        return ({ A: ['eAB', 'eAC'], B: ['eAB', 'eBD'], C: ['eAC'], D: ['eBD'] })[node];
-      }
+        return ({A: ['eAB', 'eBA', 'eAC'], B: ['eAB', 'eBA', 'eBD'], C: ['eAC'], D: ['eBD']})[node] || [];
+      },
+      extremities(edge) {
+        return ({eAB: ['A', 'B'], eBA: ['B', 'A'], eAC: ['A', 'C'], eBD: ['B', 'D']})[edge];
+      },
+      ...overrides
     };
   }
 
@@ -1668,59 +1921,93 @@ describe('bindSigmaHoverHighlight', () => {
     return instance;
   }
 
-  it('flags neighbor nodes and thickens the incident edges of the hovered node', () => {
+  it('splits incoming and outgoing neighborhoods around the hovered node (light accents)', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('enterNode', { node: 'A' });
     expect(instance.scheduledRefreshes).toBe(1);
 
-    const neighbor = { label: 'B', size: 5 };
+    // The hovered node fills with the amber attention accent…
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }))
+      .toEqual({ label: 'A', size: 5, color: '#b45309', highlighted: true });
+    // …B is both an incoming source and an outgoing sink: amber…
+    expect(instance.installed.nodeReducer('B', { label: 'B', size: 5 }).color).toBe('#b45309');
+    // …C is only an outgoing sink: blue…
+    expect(instance.installed.nodeReducer('C', { label: 'C', size: 5 }).color).toBe('#2a6f97');
+    // …and untouched nodes keep their display data.
     const stranger = { label: 'D', size: 5 };
-    const hovered = { label: 'A', size: 5 };
-    // Nodes across the hovered node's edges are re-rendered above labels…
-    expect(instance.installed.nodeReducer('B', neighbor)).toEqual({ label: 'B', size: 5, highlighted: true });
-    // …while the hovered node itself (already emphasized by sigma's hover
-    // layer) and everything else keep their display data untouched.
     expect(instance.installed.nodeReducer('D', stranger)).toBe(stranger);
-    expect(instance.installed.nodeReducer('A', hovered)).toBe(hovered);
 
-    const incident = { size: 1, color: 'black' };
+    // Incoming edges fill green and thicken, outgoing edges fill blue…
+    expect(instance.installed.edgeReducer('eBA', { size: 1, color: 'black' }))
+      .toEqual({ size: 3, color: '#1e8449' });
+    expect(instance.installed.edgeReducer('eAB', { size: 1, color: 'black' }))
+      .toEqual({ size: 3, color: '#2a6f97' });
+    expect(instance.installed.edgeReducer('eAC', { size: 1, color: 'black' }))
+      .toEqual({ size: 3, color: '#2a6f97' });
+    // …while unrelated edges keep their display data.
     const unrelated = { size: 1, color: 'black' };
-    // Edges directly connected to the hovered node thicken…
-    expect(instance.installed.edgeReducer('eAB', incident)).toEqual({ size: 3, color: 'black' });
-    expect(instance.installed.edgeReducer('eAC', incident)).toEqual({ size: 3, color: 'black' });
-    // …while unrelated edges keep their display data untouched.
     expect(instance.installed.edgeReducer('eBD', unrelated)).toBe(unrelated);
   });
 
+  it('resolves the dark accents while the dark palette is active', () => {
+    installThemeRadios('dark');
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph());
+    instance.fire('enterNode', { node: 'A' });
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#f0b95a');
+    expect(instance.installed.nodeReducer('C', { label: 'C', size: 5 }).color).toBe('#8ed0fa');
+    expect(instance.installed.edgeReducer('eBA', { size: 1 }).color).toBe('#7ee2a8');
+    expect(instance.installed.edgeReducer('eAC', { size: 1 }).color).toBe('#8ed0fa');
+  });
+
+  it('counts a self-loop as incoming without derailing the focus state', () => {
+    installThemeRadios('light');
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph({
+      edges: node => (node === 'A' ? ['eAA'] : []),
+      extremities: () => ['A', 'A']
+    }));
+    instance.fire('enterNode', { node: 'A' });
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#b45309');
+    expect(instance.installed.edgeReducer('eAA', { size: 1 }).color).toBe('#1e8449');
+  });
+
   it('clears the highlighting when the node is left', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('enterNode', { node: 'A' });
     instance.fire('leaveNode', {});
     expect(instance.scheduledRefreshes).toBe(2);
 
-    const data = { label: 'B', size: 5 };
-    expect(instance.installed.nodeReducer('B', data)).toBe(data);
-    expect(instance.installed.edgeReducer('eAB', data)).toBe(data);
+    const nodeData = { label: 'B', size: 5 };
+    const edgeData = { size: 1, color: 'black' };
+    expect(instance.installed.nodeReducer('B', nodeData)).toBe(nodeData);
+    expect(instance.installed.edgeReducer('eAB', edgeData)).toBe(edgeData);
   });
 
   it('re-populates cleanly when hopping straight from one node to another', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('enterNode', { node: 'A' });
     instance.fire('enterNode', { node: 'B' });
 
-    // Highlighting follows B: neighbors A and D, incident edges eAB and eBD.
-    const gone = { label: 'C', size: 5 };
-    expect(instance.installed.nodeReducer('C', gone)).toBe(gone);
-    expect(instance.installed.nodeReducer('D', { size: 5 })).toEqual({ size: 5, highlighted: true });
+    // Highlighting follows B: eAB is incoming (A is its green source), eBA
+    // is outgoing (A is its blue sink — and holds both states again), and
+    // eBD is outgoing with its blue sink D. C drops out entirely.
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#b45309');
+    expect(instance.installed.nodeReducer('C', { label: 'C', size: 5 }).color).toBeUndefined();
+    expect(instance.installed.edgeReducer('eAB', { size: 1 }).color).toBe('#1e8449');
+    expect(instance.installed.edgeReducer('eBD', { size: 1 }).color).toBe('#2a6f97');
     const dropped = { size: 1, color: 'black' };
     expect(instance.installed.edgeReducer('eAC', dropped)).toBe(dropped);
-    expect(instance.installed.edgeReducer('eBD', { size: 1, color: 'black' })).toEqual({ size: 3, color: 'black' });
   });
 
   it('ignores leave events when nothing is highlighted', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('leaveNode', {});
@@ -1728,12 +2015,29 @@ describe('bindSigmaHoverHighlight', () => {
   });
 
   it('ignores enter payloads without a node', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('enterNode', {});
     expect(instance.scheduledRefreshes).toBe(0);
     const data = { label: 'B', size: 5 };
     expect(instance.installed.nodeReducer('B', data)).toBe(data);
+  });
+
+  it('tolerates graphs without the edges or extremities APIs', () => {
+    installThemeRadios('light');
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph({ edges: undefined }));
+    instance.fire('enterNode', { node: 'A' });
+    // The focus node still fills; nothing throws.
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#b45309');
+
+    const bare = stubSigmaInstance();
+    bindSigmaHoverHighlight(bare, stubHoverGraph({ extremities: undefined }));
+    bare.fire('enterNode', { node: 'A' });
+    expect(bare.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#b45309');
+    const edgeData = { size: 1, color: 'black' };
+    expect(bare.installed.edgeReducer('eAB', edgeData)).toBe(edgeData);
   });
 
   it('does not throw for a missing sigma, event-less sigma or missing graph', () => {

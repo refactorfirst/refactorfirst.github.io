@@ -50,7 +50,19 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
   `--graph-hover-*`); highlighted nodes fill with their accent and their
   label glyphs re-ink to `--graph-hover-on` (white on the dark light-mode
   accents, black on the bright dark-mode accents) to keep AA contrast; the
-  full hierarchy stays in refactor-first.json for LLM consumption
+  2D/3D popups carry the same directional model (`bindSigmaHoverHighlight`
+  for the sigma 2D popup — node hover only, sigma 2.4 has no edge events —
+  and the hover block in `createForceGraph` for the 3D force graph, which
+  also highlights hovered links), resolving accents from the JS mirror
+  `GRAPH_HOVER_ACCENTS` in `lib/report-view.js`: the canvas-drawn 2D popup
+  follows the active palette like the SVGs, while the 3D popup's WebGL
+  canvas is always dark and therefore always uses the dark values. The 3D
+  popup's hover highlighting is always on (per-hover sprite recoloring
+  touches only nodes whose state changed, keeping it O(changed)), and
+  while nothing is highlighted the DOT graph's own colors show — each
+  link's DOT color (red removals, white fallback) and each node's DOT
+  color on its sprite label; the full
+  hierarchy stays in refactor-first.json for LLM consumption
 - Enhanced report tables: sticky headers, pagination (>20 rows), sortable
   columns, in-table search, CSV export, click/keyboard cell copy with toasts
 - Repository submission via pre-filled platform issues — no login, apps or tokens
@@ -198,8 +210,12 @@ coverage there when introducing new markup patterns.
   edge at synthesis time via `graphDotOptions()` in `lib/report-view.js`
   (vizdom uppercases the hex in the SVG), and theme switches
   re-synthesize + re-render the graphs via `redrawGraphsForTheme` alongside
-  the chart legend redraw in `bindThemeChartRedraw`. Node/cluster labels
-  sit on vizdom's white shapes and stay default-colored in both palettes.
+  the chart legend redraw in `bindThemeChartRedraw`. Node labels sit on
+  vizdom's white shapes and keep the baked black ink in the non-hover
+  state (hovered or keyboard-focused node labels re-ink to
+  `--graph-hover-on`), while cluster labels are recolored by CSS along
+  with their rects (regular clusters' label glyphs follow `--graph-line`,
+  break-up clusters' labels take `--graph-breakup-line`).
 
 ## Report Tables (Enhanced)
 
@@ -256,7 +272,7 @@ coverage there when introducing new markup patterns.
 
 ## Current Test Count
 
-~736 unit/integration + ~229 E2E (~202 across three browsers + 4 basePath leg + 27 dark mode).
+~787 unit/integration + ~232 E2E (~202 across three browsers + 4 basePath leg + 30 dark mode).
 
 WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
 tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and
