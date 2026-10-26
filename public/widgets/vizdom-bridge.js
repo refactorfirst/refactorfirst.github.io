@@ -16,7 +16,8 @@ const WASM_URL = new URL('vizdom_ts_bg.wasm', import.meta.url);
 /**
  * Resolves the wasm binary from Cache Storage, fetching and caching it on
  * the first visit. Cache Storage being unavailable (private browsing,
- * quota) or a failed cache fill falls back to a plain network fetch.
+ * quota) falls back to a plain network fetch; cache fills run in the
+ * background and never delay initialization.
  *
  * @returns {Promise<Response>} Response whose body is the wasm binary.
  */
@@ -32,7 +33,9 @@ async function loadWasmResponse() {
   const response = await fetch(WASM_URL);
   if (cache && response.ok) {
     try {
-      await cache.put(WASM_URL, response.clone());
+      cache.put(WASM_URL, response.clone()).catch(() => {
+        // Cache fill is best-effort; this load proceeds regardless.
+      });
     } catch {
       // Cache fill is best-effort; this load proceeds regardless.
     }

@@ -256,6 +256,7 @@ export default function ReportView({
   useEffect(() => {
     if (!payload) return undefined;
     let cancelled = false;
+    const unsubscribers = [];
 
     /**
      * Runs the enhancement once the named widget reports ready.
@@ -266,14 +267,14 @@ export default function ReportView({
      */
     const whenReady = (name, enhance) => {
       if (isWidgetReady(name)) return;
-      onWidgetReady(name, () => {
+      unsubscribers.push(onWidgetReady(name, () => {
         if (cancelled) return;
         try {
           enhance();
         } catch (error) {
           console.warn(`report ${name} enhancement failed:`, error); // eslint-disable-line no-console
         }
-      });
+      }));
     };
 
     whenReady('chart', () => initDisharmonyCharts(
@@ -286,6 +287,7 @@ export default function ReportView({
 
     return () => {
       cancelled = true;
+      unsubscribers.forEach(unsubscribe => unsubscribe());
     };
   }, [payload, username, repository, branch]);
 

@@ -22,8 +22,32 @@ describe('widget-loader', () => {
   it('invokes callbacks registered after the mark immediately', () => {
     markWidgetReady('vizdom');
     const calls = [];
-    onWidgetReady('vizdom', () => calls.push('late'));
+    const unsubscribe = onWidgetReady('vizdom', () => calls.push('late'));
     expect(calls).toEqual(['late']);
+    expect(unsubscribe).toBeTypeOf('function');
+    unsubscribe();
+    expect(calls).toEqual(['late']);
+  });
+
+  it('unsubscribes only the cancelled callback and tolerates repeated cleanup', () => {
+    const calls = [];
+    const unsubscribe = onWidgetReady('chart', () => calls.push('cancelled'));
+    onWidgetReady('chart', () => calls.push('active'));
+    unsubscribe();
+    unsubscribe();
+    markWidgetReady('chart');
+    unsubscribe();
+    expect(calls).toEqual(['active']);
+  });
+
+  it('allows a fresh registration after the last pending callback is removed', () => {
+    const calls = [];
+    const unsubscribe = onWidgetReady('chart', () => calls.push('cancelled'));
+    unsubscribe();
+    onWidgetReady('chart', () => calls.push('fresh'));
+    unsubscribe();
+    markWidgetReady('chart');
+    expect(calls).toEqual(['fresh']);
   });
 
   it('tracks readiness state per widget', () => {

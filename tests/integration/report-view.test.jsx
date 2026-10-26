@@ -21,6 +21,7 @@ import { render, waitFor, cleanup, installRtlDom } from './rtl';
 import { jsx as _jsx } from 'react/jsx-runtime';
 import ReportView from '../../components/report-view';
 import { markWidgetReady, resetWidgetRegistry } from '../../lib/widget-loader';
+import * as widgetLoader from '../../lib/widget-loader';
 import { BRANCH_RESOLVED_EVENT } from '../../lib/breadcrumbs.js';
 
 installRtlDom();
@@ -357,6 +358,39 @@ describe('ReportView', () => {
 // reports ready. A widget that never loads leaves the static report fully
 // usable, and a payload change retires its still-pending widget callbacks.
 describe('progressive widget enhancement', () => {
+  test('unsubscribes pending widget callbacks on report replacement and unmount', async () => {
+    const subscribe = widgetLoader.onWidgetReady;
+    const cleanups = [];
+    const registration = spyOn(widgetLoader, 'onWidgetReady').mockImplementation((...args) => {
+      const unsubscribe = subscribe(...args);
+      const cleanup = mock(() => unsubscribe?.());
+      cleanups.push(cleanup);
+      return cleanup;
+    });
+    let utils;
+    try {
+      respondJsonFor(sampleJson);
+      utils = await renderReport();
+      expect(cleanups).toHaveLength(2);
+      const initialCleanups = [...cleanups];
+
+      utils.rerender(_jsx(ReportView, {
+        username: 'junit-team', repository: 'junit4', branch: 'develop'
+      }));
+      await waitFor(() => {
+        expect(utils.container.querySelector('[data-resolved-branch="develop"]')).not.toBeNull();
+      });
+      for (const cleanup of initialCleanups) expect(cleanup).toHaveBeenCalledTimes(1);
+      for (const cleanup of cleanups.slice(-2)) expect(cleanup).not.toHaveBeenCalled();
+
+      utils.unmount();
+      for (const cleanup of cleanups) expect(cleanup).toHaveBeenCalledTimes(1);
+    } finally {
+      utils?.unmount();
+      registration.mockRestore();
+    }
+  });
+
   test('renders the report without waiting for widgets to become ready', async () => {
     respondJsonFor(sampleJson); // widgets are never marked ready
     const utils = render(_jsx(ReportView, {
