@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { gzipSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 // Performance / bundle-size guardrails (Technical Appendix §10):
 // - landing page transfers <190KB of first-party code (js/css/html),
@@ -60,4 +63,177 @@ test('report page loads CDN widgets lazily (after window load)', async ({ page }
 
   expect(widgetRequests.length).toBeGreaterThan(0);
   expect(widgetRequests.every(r => r.afterLoad)).toBe(true);
+});
+
+// ---------------------------------------------------------------------------
+// Initial rendering performance: the report markup is the LCP content and
+// must render as soon as the data arrives — never held back by the ~4.8MB
+// vizdom wasm or the CDN widgets, which enhance the report progressively.
+// ---------------------------------------------------------------------------
+
+const SAMPLE_REPORT = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../fixtures/junit4-report.json'),
+  'utf-8'
+);
+
+function mockReportJson(page) {
+  return page.route('**/raw.githubusercontent.com/**', route => {
+    if (route.request().url().endsWith('refactor-first.json')) {
+      route.fulfill({ status: 200, contentType: 'application/json', body: SAMPLE_REPORT });
+    } else {
+      route.fulfill({ status: 404 });
+    }
+  });
+}
+
+test('report content renders without waiting for the vizdom wasm', async ({ page }) => {
+  await mockReportJson(page);
+  // Hold the wasm and Chart.js back forever: the report must still render.
+  await page.route('**/widgets/vizdom_ts_bg.wasm', () => {});
+  await page.route('**/npm/chart.js@4.4.7/**', () => {});
+
+  await page.goto('/refactorfirst/refactorfirst');
+  // Old behavior: the first render gated on chart+vizdom readiness (up to a
+  // 5s settle window). The markup must now appear as soon as the data does.
+  await page.waitForSelector('.rf-report h1', { timeout: 3000 });
+  await page.locator('table[data-rf-table="class-relationships"]').first().waitFor({
+    timeout: 3000
+  });
+});
+
+test('vizdom wasm is fetched once and served from Cache Storage on repeat loads', async ({ page }) => {
+  await mockReportJson(page);
+  let wasmRequests = 0;
+  page.on('request', request => {
+    if (request.url().endsWith('/widgets/vizdom_ts_bg.wasm')) wasmRequests++;
+  });
+
+  await page.goto('/refactorfirst/refactorfirst');
+  await page.locator('#classGraph svg').waitFor({ timeout: 30000 });
+  expect(wasmRequests).toBe(1);
+
+  // Canary entry: probe whether this browser persists Cache Storage across
+  // loads in this environment. (Playwright's WebKit build keeps it
+  // in-memory only on the http test server; HTTPS production deployments
+  // persist it in every engine.)
+  await page.evaluate(async () => {
+    const cache = await caches.open('vizdom-cache-canary');
+    await cache.put('/canary', new Response('ok'));
+  });
+
+  // A repeat visit must not re-download the multi-megabyte binary when the
+  // cache persists: the bridge resolves it from Cache Storage (HTTP cache
+  // headers on static hosts are short, and DevTools' disabled cache
+  // bypasses them entirely).
+  wasmRequests = 0;
+  await page.reload();
+  const cachePersists = await page.evaluate(async () => {
+    try {
+      const cache = await caches.open('vizdom-cache-canary');
+      return (await cache.match('/canary')) !== undefined;
+    } catch {
+      return false;
+    }
+  });
+  await page.locator('#classGraph svg').waitFor({ timeout: 30000 });
+  expect(wasmRequests).toBe(cachePersists ? 0 : 1);
+});
+
+test('report loading state reserves the viewport so the report does not shift the footer', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'layout-shift entries are chromium-only');
+  await mockReportJson(page);
+  // The GitHub buttons iframe injects third-party content mid-report;
+  // it is not part of the layout-reservation contract under test.
+  await page.route('**/buttons.github.io/**', route => route.abort());
+
+  await page.goto('/refactorfirst/refactorfirst');
+  await page.locator('.rf-report h1').waitFor({ timeout: 30000 });
+  await page.locator('#classGraph svg').waitFor({ timeout: 30000 });
+  await page.waitForTimeout(500); // let late layout settle
+
+  const cls = await page.evaluate(() => new Promise(resolve => {
+    let total = 0;
+    const footerShifts = [];
+    try {
+      const observer = new PerformanceObserver(list => {
+        for (const entry of list.getEntries()) {
+          total += entry.value;
+          for (const source of entry.sources || []) {
+            const el = source.node;
+            if (el && el.closest && el.closest('.site-footer')) footerShifts.push(entry.value);
+          }
+        }
+      });
+      observer.observe({ type: 'layout-shift', buffered: true });
+    } catch {
+      resolve({ supported: false });
+      return;
+    }
+    setTimeout(() => resolve({ supported: true, total, footerShifts }), 200);
+  }));
+
+  if (!cls.supported) return;
+  expect(cls.footerShifts).toEqual([]); // the footer never moves on screen
+  expect(cls.total).toBeLessThan(0.1);
+});
+
+// ---------------------------------------------------------------------------
+// 3D popup widgets: the force graph and its sprite-label helper must share
+// ONE Three.js instance. Both load lazily (never blocking first paint), and
+// importing three twice downloads it twice and trips three's own
+// "Multiple instances of Three.js being imported." warning — so the bridge
+// pins both packages to the same three build through esm.sh ?deps=, whose
+// rewritten module graph resolves every import to the same three.mjs URL
+// (deduped by the browser's module map).
+// ---------------------------------------------------------------------------
+
+/** Waits until every named window global has loaded. */
+async function waitForGlobals(page, names, timeout = 30000) {
+  await page.waitForFunction(
+    namesArg => namesArg.every(name => Boolean(window[name])),
+    names,
+    { timeout }
+  );
+}
+
+test('3D popup widgets load exactly one Three.js instance', async ({ page }) => {
+  await mockReportJson(page);
+  const warnings = [];
+  const threeEntryFetches = [];
+  page.on('console', message => {
+    if (message.type() === 'warning') warnings.push(message.text());
+  });
+  page.on('request', request => {
+    if (/three@[\d.]+\/es2022\/three\.mjs/.test(request.url())) threeEntryFetches.push(request.url());
+  });
+
+  await page.goto('/refactorfirst/refactorfirst');
+  // The widgets load after window load; their globals appearing proves the
+  // module graph (including three) finished evaluating.
+  await waitForGlobals(page, ['ForceGraph3D', 'SpriteText', 'graphlibDot']);
+
+  expect(threeEntryFetches).toHaveLength(1); // one shared instance, not one per package
+  expect(warnings.some(text => /Multiple instances of Three\.js being imported/.test(text)))
+    .toBe(false);
+});
+
+test('3D popup renders the force graph through the shared widget modules', async ({ page }) => {
+  await mockReportJson(page);
+  await page.goto('/refactorfirst/refactorfirst');
+  await page.locator('.rf-report h1').waitFor({ timeout: 30000 });
+  await waitForGlobals(page, ['ForceGraph3D', 'SpriteText', 'graphlibDot']);
+
+  // three requires WebGL2; skip where the engine cannot provide it (e.g. a
+  // headless GPU-less runner) rather than fail the wiring under test.
+  const webgl2 = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    return !!(canvas.getContext && canvas.getContext('webgl2'));
+  });
+  test.skip(!webgl2, 'WebGL2 unavailable');
+
+  await page.locator('[data-popup-3d][data-popup="popup-classGraph"]').click();
+  const popup = page.locator('#popup-classGraph');
+  await expect(popup).toBeVisible();
+  // The force graph mounts its WebGL canvas inside the popup container.
+  await page.locator('#graph-container-classGraph canvas').waitFor({ timeout: 30000 });
 });

@@ -301,6 +301,21 @@ main section {
   padding: 3rem 0;
 }
 
+/* Report pages fetch and render their report client-side; both the
+   prerendered loading fallback and the hydrated container carry
+   #report-container, so reserving a full viewport here keeps the footer
+   below the fold from the very first paint — whatever the header's
+   height. The report's late arrival then grows the page instead of
+   shoving the visible footer down the screen (layout shift / CLS).
+   Rendered reports are always far taller than this, so the reservation
+   adds no space once content lands. svh is the guaranteed-visible
+   viewport height on mobile (dynamic browser chrome); vh is the
+   fallback for engines without viewport units. */
+#report-container {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
 .site-footer {
   text-align: center;
   padding: 1.5rem 1rem;
