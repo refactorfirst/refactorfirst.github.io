@@ -21,7 +21,7 @@ function buildReport() {
       relationshipCount: CLASS_ROW_COUNT,
       dotThreshold: 4000,
       dotThresholdExceeded: true,
-      dot: '',
+      hierarchy: { packages: [], edges: [] },
       hasEdges: true
     },
     packageMap: {
@@ -30,7 +30,7 @@ function buildReport() {
       relationshipCount: 0,
       dotThreshold: 4000,
       dotThresholdExceeded: true,
-      dot: '',
+      hierarchy: { packages: [], edges: [] },
       hasEdges: false
     },
     classRelationshipsToRemove: {
@@ -421,7 +421,22 @@ test.describe('stateful widgets survive table interactions', () => {
       relationshipCount: 2,
       dotThreshold: 4000,
       dotThresholdExceeded: false,
-      dot: 'strict digraph G {\nSource0 -> Target0 [ label = "2" weight = "2" ];\nSource1 -> Target1 [ label = "1" weight = "1" ];\n}',
+      hierarchy: {
+        packages: [{
+          name: '(default package)', id: 'cluster_default', nodeId: null,
+          renderAsNode: false, needsBreakUp: false, children: [],
+          classes: [
+            { fqn: 'Source0', id: 'Source0', label: 'Source0', path: '', markedForRemoval: false },
+            { fqn: 'Target0', id: 'Target0', label: 'Target0', path: '', markedForRemoval: false },
+            { fqn: 'Source1', id: 'Source1', label: 'Source1', path: '', markedForRemoval: false },
+            { fqn: 'Target1', id: 'Target1', label: 'Target1', path: '', markedForRemoval: false }
+          ]
+        }],
+        edges: [
+          { source: 'Source0', target: 'Target0', weight: 2, markedForRemoval: false },
+          { source: 'Source1', target: 'Target1', weight: 1, markedForRemoval: false }
+        ]
+      },
       hasEdges: true
     };
     report.hasDisharmonies = true;

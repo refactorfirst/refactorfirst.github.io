@@ -33,6 +33,36 @@ in `out/` is served by any static host (GitHub Pages, GitLab Pages, Bitbucket).
   branch (`rf:branch-resolved` event) so the label matches the loaded report
   (`main` 404 → `master` fallback)
 - Reports rendered with Mustache.js (bundled template is authoritative)
+- Graphs synthesized client-side from the nested hierarchy in
+  refactor-first.json (`lib/hierarchy-dot.js`, byte-identical to the report
+  module's Java `NestedDotBuilder`; packages nest as clusters, classes as
+  ellipses, break-up packages fill pink). The package map renders the flat
+  relationship graph — one ellipse per package with only the weighted
+  edges, break-up packages in red — through vizdom like the class and
+  cycle graphs; every graph's nodes are hyperlinked to their source
+  files/directories via `project.repoUrl` (http(s)-gated, new tab
+  restored post-render since vizdom drops the target); hovering a vizdom
+  edge highlights it plus both endpoints, hovering (or keyboard-focusing)
+  a node highlights its incoming edges + source nodes and outgoing edges +
+  sink nodes in two directional colors (`bindGraphHoverHighlights` in
+  `lib/report-view.js` derives the neighbor model from the vizdom
+  `<title>` texts and toggles `rf-hover-*` classes, styled per palette via
+  `--graph-hover-*`); highlighted nodes fill with their accent and their
+  label glyphs re-ink to `--graph-hover-on` (white on the dark light-mode
+  accents, black on the bright dark-mode accents) to keep AA contrast; the
+  2D/3D popups carry the same directional model (`bindSigmaHoverHighlight`
+  for the sigma 2D popup — node hover only, sigma 2.4 has no edge events —
+  and the hover block in `createForceGraph` for the 3D force graph, which
+  also highlights hovered links), resolving accents from the JS mirror
+  `GRAPH_HOVER_ACCENTS` in `lib/report-view.js`: the canvas-drawn 2D popup
+  follows the active palette like the SVGs, while the 3D popup's WebGL
+  canvas is always dark and therefore always uses the dark values. The 3D
+  popup's hover highlighting is always on (per-hover sprite recoloring
+  touches only nodes whose state changed, keeping it O(changed)), and
+  while nothing is highlighted the DOT graph's own colors show — each
+  link's DOT color (red removals, white fallback) and each node's DOT
+  color on its sprite label; the full
+  hierarchy stays in refactor-first.json for LLM consumption
 - Enhanced report tables: sticky headers, pagination (>20 rows), sortable
   columns, in-table search, CSV export, click/keyboard cell copy with toasts
 - Repository submission via pre-filled platform issues — no login, apps or tokens
@@ -91,7 +121,10 @@ lib/                        # shared logic (client + RSC): routes, fetcher,
                             # renderer, search, utils, host, rate-limiter,
                             # cache-manager, error-handler, repo-submission,
                             # report-view, static-params, widget-loader,
-                            # breadcrumbs,
+                            # breadcrumbs, hierarchy-dot (hierarchy-to-DOT
+                            # synthesis mirroring the Java NestedDotBuilder in
+                            # the report module; byte-identical goldens in
+                            # tests/unit/hierarchy-dot.test.js),
                             # table-operations (filter/sort/paginate/CSV/copy +
                             # TABLE_CONFIG + REPORT_TABLES descriptors),
                             # table-enhancer (binds toolbar/sort/pagination/
@@ -158,12 +191,31 @@ coverage there when introducing new markup patterns.
   SVGs' embedded black strokes/fills are likewise re-themed to
   `--graph-line` (`#9fb0c0` dark = `CHART_LEGEND_TEXT.dark`) via
   `path[stroke]`/`polygon` selectors on `.fullscreen-svg` — red cycle
-  edges stay red. Edge labels are glyph paths baked by vizdom, so CSS
-  can't reach them: `withEdgeFontColor` in `lib/report-view.js` rewrites
-  the DOT with `fontcolor = "#9fb0c0"` per edge when the dark palette
-  is active (vizdom uppercases the hex in the SVG), and theme switches
-  re-parse the graphs via `redrawGraphsForTheme` alongside the chart
-  legend redraw in `bindThemeChartRedraw`.
+  edges stay red — and the package clusters (`g.cluster rect[fill="white"]`,
+  the packages that do not need to be broken up) re-drive their fill to
+  `--bg-color` with their label glyph paths via a rect-sibling selector, so
+  the boxes match the page in dark mode. Break-up clusters
+  (`g.cluster rect[fill="pink"]`) re-drive through their own
+  `--graph-breakup-fill` (light: vizdom's baked `#ffc0cb`; dark: a deep rose
+  `#7f3350` that keeps the `--graph-line` edges crossing the box visible)
+  and `--graph-breakup-line` ink (light: baked black; dark: light pink
+  `#f2b8cd` for the boundary + label) — no fill can pass 3:1 against both
+  the near-black page and the light edges, so the fill prioritizes edge
+  visibility and the pink ink carries the perceivable boundary. Graph DOT
+  is synthesized
+  from the `.hierarchy` payloads
+  (`classMap`/`packageMap`/`largestCycle`, see `lib/hierarchy-dot.js`);
+  edge labels are fill-only glyph paths baked by vizdom, so CSS can't
+  reach them: the dark palette bakes `fontcolor = "#9fb0c0"` into every
+  edge at synthesis time via `graphDotOptions()` in `lib/report-view.js`
+  (vizdom uppercases the hex in the SVG), and theme switches
+  re-synthesize + re-render the graphs via `redrawGraphsForTheme` alongside
+  the chart legend redraw in `bindThemeChartRedraw`. Node labels sit on
+  vizdom's white shapes and keep the baked black ink in the non-hover
+  state (hovered or keyboard-focused node labels re-ink to
+  `--graph-hover-on`), while cluster labels are recolored by CSS along
+  with their rects (regular clusters' label glyphs follow `--graph-line`,
+  break-up clusters' labels take `--graph-breakup-line`).
 
 ## Report Tables (Enhanced)
 
@@ -220,7 +272,7 @@ coverage there when introducing new markup patterns.
 
 ## Current Test Count
 
-~584 unit/integration + ~229 E2E (~202 across three browsers + 4 basePath leg + 27 dark mode).
+~787 unit/integration + ~232 E2E (~202 across three browsers + 4 basePath leg + 30 dark mode).
 
 WCAG 2.2 AA / HTML5 guards live in tests/unit/html5-attributes.test.js,
 tests/unit/report-template-wcag.test.js, tests/unit/css-a11y.test.js and

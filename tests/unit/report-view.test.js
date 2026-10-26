@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { JSDOM } from 'jsdom';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import {
   exposeGraphDots,
-  withEdgeFontColor,
   initBubbleChart,
   initDisharmonyCharts,
   initWasmGraphs,
   showPopup,
+  createForceGraph,
   hidePopup,
   bindPopupHandlers,
   bindSectionNavLinks,
@@ -15,11 +18,13 @@ import {
   resolveLegendTextColor,
   bindThemeChartRedraw,
   bindSigmaHoverHighlight,
+  GRAPH_HOVER_ACCENTS,
   destroyBubbleCharts,
   statefulElementIds,
   stashStatefulDom,
   graftStatefulDom
 } from '../../lib/report-view.js';
+import { hierarchyToDot, packageHierarchyToDot } from '../../lib/hierarchy-dot.js';
 
 // Theme radios as rendered by components/theme-toggle.jsx in app/layout.jsx.
 // The palette switch itself is pure CSS; these tests only pin what the
@@ -63,22 +68,117 @@ const DARK_BG = [0x10, 0x16, 0x1d];
 // U+27F6 LONG RIGHTWARDS ARROW: suffix for every chart axis title.
 const LONG_ARROW = '\u27F6';
 
+// Minimal hierarchy payloads mirroring the refactor-first.json graph contract
+// (classMap/packageMap/largestCycle `.hierarchy`). The exact synthesized DOT
+// is pinned byte-for-byte in hierarchy-dot.test.js; these fixtures only need
+// realistic shapes, so expectations here derive from hierarchyToDot.
+const classHierarchy = {
+  packages: [{
+    name: 'c', id: 'cluster_c', nodeId: null, renderAsNode: false, needsBreakUp: false,
+    children: [], classes: [
+      { fqn: 'c.A', id: 'A', label: 'A', path: '', markedForRemoval: false },
+      { fqn: 'c.B', id: 'B', label: 'B', path: '', markedForRemoval: false }
+    ]
+  }],
+  edges: [{ source: 'A', target: 'B', weight: 1, markedForRemoval: false }]
+};
+
+const packageHierarchy = {
+  packages: [{
+    name: 'p', id: 'cluster_p', nodeId: null, renderAsNode: false, needsBreakUp: false,
+    children: [
+      { name: 'p.p1', id: 'cluster_p1', nodeId: 'package_p1', renderAsNode: true, needsBreakUp: false, children: [], classes: [] },
+      { name: 'p.p2', id: 'cluster_p2', nodeId: 'package_p2', renderAsNode: true, needsBreakUp: false, children: [], classes: [] }
+    ], classes: []
+  }],
+  edges: [{ source: 'package_p1', target: 'package_p2', weight: 2, markedForRemoval: false }]
+};
+
+const cycleHierarchy = {
+  packages: [{
+    name: 'z', id: 'cluster_z', nodeId: null, renderAsNode: false, needsBreakUp: false,
+    children: [], classes: [
+      { fqn: 'z.X', id: 'X', label: 'X', path: '', markedForRemoval: false },
+      { fqn: 'z.Y', id: 'Y', label: 'Y', path: '', markedForRemoval: false }
+    ]
+  }],
+  edges: [{ source: 'X', target: 'Y', weight: 3, markedForRemoval: true }]
+};
+
+const replacementHierarchy = {
+  packages: [{
+    name: 'n', id: 'cluster_n', nodeId: null, renderAsNode: false, needsBreakUp: false,
+    children: [], classes: [
+      { fqn: 'n.C', id: 'C', label: 'C', path: '', markedForRemoval: false },
+      { fqn: 'n.D', id: 'D', label: 'D', path: '', markedForRemoval: false }
+    ]
+  }],
+  edges: [{ source: 'C', target: 'D', weight: 9, markedForRemoval: false }]
+};
+
+// The DOT each hierarchy renders per palette: light keeps vizdom's default
+// black edge labels; dark bakes the muted label color in at synthesis time.
+const lightDot = hierarchy => hierarchyToDot(hierarchy);
+const darkDot = hierarchy => hierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' });
+// The package graph renders the flat ellipse DOT through vizdom, like the
+// class and cycle maps.
+const lightPackageDot = hierarchy => packageHierarchyToDot(hierarchy);
+const darkPackageDot = hierarchy => packageHierarchyToDot(hierarchy, { edgeFontColor: '#9fb0c0' });
+
 describe('exposeGraphDots', () => {
-  it('exposes class, package and cycle DOT strings as window globals', () => {
+  it('exposes synthesized class, package and cycle DOT as window globals', () => {
+    // Pin the light palette so the expectation is deterministic even when a
+    // previous test left a matchMedia stub behind.
+    installThemeRadios('light');
     exposeGraphDots({
-      classMap: { dot: 'strict digraph C {}' },
-      packageMap: { dot: 'strict digraph P {}' },
-      classCycles: { largestCycle: { cycleIdentifier: 'cycle0', dot: 'strict digraph Z {}' } }
+      classMap: { hierarchy: classHierarchy },
+      packageMap: { hierarchy: packageHierarchy, hasEdges: true },
+      classCycles: { largestCycle: { cycleIdentifier: 'cycle0', hierarchy: cycleHierarchy } }
     });
-    expect(window.classGraph_dot).toBe('strict digraph C {}');
-    expect(window.packageGraph_dot).toBe('strict digraph P {}');
-    expect(window.cycle0_dot).toBe('strict digraph Z {}');
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
+    expect(window.packageGraph_dot).toBe(lightPackageDot(packageHierarchy));
+    expect(window.cycle0_dot).toBe(lightDot(cycleHierarchy));
   });
 
   it('tolerates missing graph sections', () => {
     delete window.classGraph_dot;
     expect(() => exposeGraphDots({})).not.toThrow();
     expect(window.classGraph_dot).toBeUndefined();
+  });
+
+  it('falls back to the report-provided classMap.dot when no hierarchy exists', () => {
+    installThemeRadios('light');
+    delete window.classGraph_dot;
+    // Older RefactorFirst reports carry only the raw classMap.dot string
+    // (no hierarchy to synthesize from); the popups parse it directly.
+    const legacyDot = 'strict digraph legacy { A; B; A -> B; }';
+    exposeGraphDots({ classMap: { dot: legacyDot } });
+    expect(window.classGraph_dot).toBe(legacyDot);
+  });
+
+  it('prefers the synthesized hierarchy DOT over a legacy classMap.dot', () => {
+    installThemeRadios('light');
+    delete window.classGraph_dot;
+    exposeGraphDots({ classMap: { hierarchy: classHierarchy, dot: 'strict digraph legacy { L; }' } });
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
+  });
+
+  it('clears a previous report’s class graph DOT when the current report has none', () => {
+    installThemeRadios('light');
+    // A report with a class map leaves its synthesized DOT on window...
+    exposeGraphDots({ classMap: { hierarchy: classHierarchy } });
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
+    // ...so the next report without class graph data must drop it, or its
+    // popup would silently render the previous report's graph.
+    exposeGraphDots({});
+    expect(window.classGraph_dot).toBeUndefined();
+  });
+
+  it('skips the package map popup DOT when the report has no package edges', () => {
+    installThemeRadios('light');
+    delete window.packageGraph_dot;
+    exposeGraphDots({ packageMap: { hierarchy: packageHierarchy, hasEdges: false } });
+    expect(window.packageGraph_dot).toBeUndefined();
   });
 });
 
@@ -621,77 +721,6 @@ describe('initDisharmonyCharts', () => {
   });
 });
 
-describe('withEdgeFontColor (vizdom bakes label color at parse time)', () => {
-  it('appends fontcolor to edge statements with an attribute list', () => {
-    const dot = 'strict digraph G {\nActiveTestSuite -> TestSuite [ label = "6" weight = "6" ];\n}';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
-      'strict digraph G {\nActiveTestSuite -> TestSuite [ label = "6" weight = "6" fontcolor = "#9fb0c0" ];\n}');
-  });
-
-  it('appends fontcolor to every edge in the graph', () => {
-    const dot = 'strict digraph G {\nA -> B [ label = "1" ];\nB -> C [ label = "2" ];\n}';
-    const themed = withEdgeFontColor(dot, '#9fb0c0');
-    expect(themed).toContain('B [ label = "1" fontcolor = "#9fb0c0" ];');
-    expect(themed).toContain('C [ label = "2" fontcolor = "#9fb0c0" ];');
-  });
-
-  it('keeps red cycle edges red while recoloring their labels', () => {
-    const dot = 'A -> B [ label = "2" weight = "2" color = "red" ];';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
-      'A -> B [ label = "2" weight = "2" color = "red" fontcolor = "#9fb0c0" ];');
-  });
-
-  it('respects an edge-level fontcolor already set in the dot', () => {
-    const dot = 'A -> B [ label = "1" fontcolor = "blue" ];';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
-  });
-
-  it('does not touch node statements or graph headers', () => {
-    const dot = 'strict digraph G {\nTestSuite [ label = "TestSuite" ];\n}';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
-  });
-
-  it('returns non-string input unchanged', () => {
-    expect(withEdgeFontColor(undefined, '#9fb0c0')).toBeUndefined();
-    expect(withEdgeFontColor('', '#9fb0c0')).toBe('');
-  });
-
-  it('handles compact attribute spacing', () => {
-    expect(withEdgeFontColor('A -> B [label = "6"];', '#abc')).toBe('A -> B [label = "6" fontcolor = "#abc"];');
-  });
-});
-
-describe('edge font color boundaries', () => {
-  it.each([undefined, null, ''])('leaves DOT unchanged when color is %p', color => {
-    const dot = 'digraph G { A -> B [label="1"]; }';
-    expect(withEdgeFontColor(dot, color)).toBe(dot);
-  });
-
-  it.each([null, 0, false, {}])('preserves non-string input %p by identity', dot => {
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(dot);
-  });
-
-  it('does not recolor a node following an edge without attributes', () => {
-    const dot = 'digraph G { A -> B; C [label="Node"]; D -> E [label="2"]; }';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
-      'digraph G { A -> B; C [label="Node"]; D -> E [label="2" fontcolor = "#9fb0c0"]; }');
-  });
-
-  it('preserves explicit colors while theming other edges and is idempotent', () => {
-    const dot = 'A -> B [fontcolor="blue" label="1"]; B -> C [label="2"];';
-    const expected = 'A -> B [fontcolor="blue" label="1"]; B -> C [label="2" fontcolor = "#9fb0c0"];';
-    const themed = withEdgeFontColor(dot, '#9fb0c0');
-    expect(themed).toBe(expected);
-    expect(withEdgeFontColor(themed, '#9fb0c0')).toBe(expected);
-  });
-
-  it('handles quoted node IDs, ports, and multiline edge attributes', () => {
-    const dot = '"org.example.A":out -> "org.example.B":in [\n label="3"\n color="red"\n];';
-    expect(withEdgeFontColor(dot, '#9fb0c0')).toBe(
-      '"org.example.A":out -> "org.example.B":in [\n label="3"\n color="red" fontcolor = "#9fb0c0"\n];');
-  });
-});
-
 // Each case owns its document so event subscriptions do not accumulate and
 // exact redraw counts can catch accidental duplicate binding.
 describe('theme redraw regressions', () => {
@@ -703,13 +732,10 @@ describe('theme redraw regressions', () => {
   let parsed;
   let zoomed;
   let rejectDot;
-  const classDot = 'digraph C { A -> B [label="1"]; }';
-  const packageDot = 'digraph P { P -> Q [label="2"]; }';
-  const cycleDot = 'digraph Z { X -> Y [label="3" color="red"]; }';
   const data = {
-    classMap: { dot: classDot },
-    packageMap: { dot: packageDot, hasEdges: true },
-    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dot: cycleDot } }
+    classMap: { hierarchy: classHierarchy },
+    packageMap: { hierarchy: packageHierarchy, hasEdges: true },
+    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', hierarchy: cycleHierarchy } }
   };
 
   beforeEach(() => {
@@ -772,17 +798,14 @@ describe('theme redraw regressions', () => {
 
   it('recolors every graph on OS changes and reattaches pan/zoom to fresh SVGs', async () => {
     await initWasmGraphs(data);
-    expect(parsed).toEqual([classDot, packageDot, cycleDot]);
+    expect(parsed).toEqual([lightDot(classHierarchy), lightPackageDot(packageHierarchy), lightDot(cycleHierarchy)]);
     const originalSvgs = zoomed.map(entry => entry.svg);
     parsed.length = 0;
     zoomed.length = 0;
     media.matches = true;
     mediaListener();
-    expect(parsed).toEqual([
-      'digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }',
-      'digraph P { P -> Q [label="2" fontcolor = "#9fb0c0"]; }',
-      'digraph Z { X -> Y [label="3" color="red" fontcolor = "#9fb0c0"]; }'
-    ]);
+    expect(parsed).toEqual([darkDot(classHierarchy), darkPackageDot(packageHierarchy), darkDot(cycleHierarchy)]);
+    expect(parsed[1]).toContain('fontcolor = "#9fb0c0"');
     expect(zoomed).toHaveLength(3);
     zoomed.forEach(({ svg, options }, i) => {
       expect(svg).not.toBeNull();
@@ -793,14 +816,13 @@ describe('theme redraw regressions', () => {
     parsed.length = 0;
     media.matches = false;
     mediaListener();
-    expect(parsed).toEqual([classDot, packageDot, cycleDot]);
+    expect(parsed).toEqual([lightDot(classHierarchy), lightPackageDot(packageHierarchy), lightDot(cycleHierarchy)]);
   });
 
   it.each(['light', 'dark'])('honors explicit %s mode when the OS preference changes', async mode => {
     selectTheme(mode);
     await initWasmGraphs({ classMap: data.classMap });
-    const expected = mode === 'light' ? classDot
-      : 'digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }';
+    const expected = mode === 'light' ? lightDot(classHierarchy) : darkDot(classHierarchy);
     expect(parsed).toEqual([expected]);
     parsed.length = 0;
     media.matches = true;
@@ -820,19 +842,16 @@ describe('theme redraw regressions', () => {
     unrelated.dispatchEvent(new window.Event('change', { bubbles: true }));
     expect(parsed).toEqual([]);
     selectTheme('dark');
-    expect(parsed).toEqual(['digraph C { A -> B [label="1" fontcolor = "#9fb0c0"]; }']);
+    expect(parsed).toEqual([darkDot(classHierarchy)]);
   });
 
-  it('uses the latest report DOT when a container is reused', async () => {
+  it('uses the latest report hierarchy when a container is reused', async () => {
     await initWasmGraphs({ classMap: data.classMap });
-    const replacement = 'digraph New { C -> D [label="9"]; }';
-    await initWasmGraphs({ classMap: { dot: replacement } });
+    await initWasmGraphs({ classMap: { hierarchy: replacementHierarchy } });
     parsed.length = 0;
     selectTheme('dark');
     selectTheme('light');
-    expect(parsed).toEqual([
-      'digraph New { C -> D [label="9" fontcolor = "#9fb0c0"]; }', replacement
-    ]);
+    expect(parsed).toEqual([darkDot(replacementHierarchy), lightDot(replacementHierarchy)]);
   });
 
   it('continues redrawing healthy graphs when another graph cannot be parsed', async () => {
@@ -840,7 +859,9 @@ describe('theme redraw regressions', () => {
     const previousClassSvg = document.querySelector('#classGraph svg');
     const previousPackageSvg = document.querySelector('#packageGraph svg');
     parsed.length = 0;
-    rejectDot = dot => dot.startsWith('digraph C');
+    // All synthesized DOT shares the `strict digraph G` header, so reject on
+    // the class graph's own cluster label instead.
+    rejectDot = dot => dot.includes('label="c"');
     const warning = spyOn(console, 'warn').mockImplementation(() => {});
     try {
       selectTheme('dark');
@@ -849,7 +870,6 @@ describe('theme redraw regressions', () => {
       expect(parsed).toHaveLength(3);
       expect(document.querySelector('#classGraph svg')).toBe(previousClassSvg);
       expect(document.querySelector('#packageGraph svg')).not.toBe(previousPackageSvg);
-      expect(parsed[2]).toContain('fontcolor = "#9fb0c0"');
     } finally {
       warning.mockRestore();
     }
@@ -862,7 +882,7 @@ describe('theme redraw regressions', () => {
     document.body.insertAdjacentHTML('beforeend', '<div id="classGraph"></div>');
     parsed.length = 0;
     mediaListener();
-    expect(parsed).toEqual([packageDot, cycleDot]);
+    expect(parsed).toEqual([lightPackageDot(packageHierarchy), lightDot(cycleHierarchy)]);
     expect(document.getElementById('classGraph').innerHTML).toBe('');
   });
 
@@ -916,53 +936,110 @@ describe('initWasmGraphs', () => {
           return {
             to_directed() { return this; },
             layout() { return this; },
-            to_svg() { return { to_string: () => '<svg width="1"></svg>' }; }
+            to_svg() {
+              return {
+                // mirrors real vizdom: every hyperlinked node wraps in
+                // <a href=...> without a target — graphs carry several
+                to_string: () =>
+                  '<svg width="1"><a href="https://github.com/x/y/blob/main/src/A.java"><ellipse/></a>' +
+                  '<a href="https://github.com/x/y/blob/main/src/B.java"><ellipse/></a></svg>'
+              };
+            }
           };
         }
       }
     };
     return captured;
   }
+
   afterEach(() => { delete window.Vizdom; delete window.matchMedia; });
 
   it('resolves gracefully when the WASM loader is unavailable', async () => {
     document.body.innerHTML = '<div id="classGraph"></div>';
     // No network/WASM in tests: must resolve, not reject
-    await initWasmGraphs({ classMap: { dot: 'strict digraph G {}', dotThresholdExceeded: false } });
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+  });
+
+  it('renders the package graph through vizdom with its flat ellipse DOT', async () => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'packageGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    await initWasmGraphs({ packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true } });
+    expect(captured).toEqual([lightPackageDot(packageHierarchy)]);
+    expect(captured[0]).toContain('shape=ellipse');
+    expect(document.querySelector('#packageGraph svg').classList.contains('fullscreen-svg')).toBe(true);
+  });
+
+  it('hyperlinks rendered class and package nodes when the report carries a repository URL', async () => {
+    installThemeRadios('light', false);
+    const classGraph = document.createElement('div');
+    classGraph.id = 'classGraph';
+    const packageGraph = document.createElement('div');
+    packageGraph.id = 'packageGraph';
+    document.body.append(classGraph, packageGraph);
+    const captured = stubVizdom();
+    const withPaths = JSON.parse(JSON.stringify(classHierarchy));
+    withPaths.packages[0].classes[0].path = 'src/main/java/c/A.java';
+    const packageWithPaths = JSON.parse(JSON.stringify(packageHierarchy));
+    packageWithPaths.packages[0].children[0].path = 'src/main/java/p/p1/';
+    await initWasmGraphs({
+      project: { repoUrl: 'https://github.com/x/y/blob/main/' },
+      classMap: { hierarchy: withPaths, dotThresholdExceeded: false },
+      packageMap: { hierarchy: packageWithPaths, dotThresholdExceeded: false, hasEdges: true }
+    });
+    const classDot = captured[0];
+    expect(classDot).toContain(
+      'A [ shape=ellipse URL="https://github.com/x/y/blob/main/src/main/java/c/A.java" target="_blank"]');
+    const packageDot = captured[1];
+    expect(packageDot).toContain(
+      'package_p1 [label="p.p1" shape=ellipse URL="https://github.com/x/y/blob/main/src/main/java/p/p1/" target="_blank"]');
+    // and the inline render restores the anchor target vizdom drops
+    expect(classGraph.innerHTML).toContain('<a target="_blank" href=');
+  });
+
+  it('renders the package graph with dark edge labels while the dark palette is active', async () => {
+    installThemeRadios('dark', false);
+    const graph = document.createElement('div');
+    graph.id = 'packageGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    await initWasmGraphs({ packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true } });
+    expect(captured).toEqual([darkPackageDot(packageHierarchy)]);
+    expect(captured[0]).toContain('fontcolor = "#9fb0c0"');
   });
 
   it('skips graphs whose dot threshold was exceeded', async () => {
     document.body.innerHTML = '<div id="classGraph"></div>';
-    await initWasmGraphs({ classMap: { dot: 'x', dotThresholdExceeded: true } });
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: true } });
     expect(document.getElementById('classGraph').innerHTML).toBe('');
   });
 
-  it('parses the dot unchanged while the light palette is active', async () => {
+  it('synthesizes the hierarchy DOT while the light palette is active', async () => {
     installThemeRadios('light', false);
     const graph = document.createElement('div');
     graph.id = 'classGraph';
     document.body.appendChild(graph);
     const captured = stubVizdom();
-    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
-    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
-    expect(captured).toEqual([dot]);
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    expect(captured).toEqual([lightDot(classHierarchy)]);
   });
 
-  it('appends fontcolor = #9fb0c0 to edge labels while the dark palette is active', async () => {
+  it('synthesizes edge fontcolor = #9fb0c0 while the dark palette is active', async () => {
     installThemeRadios('dark', false);
     const graph = document.createElement('div');
     graph.id = 'classGraph';
     document.body.appendChild(graph);
     const captured = stubVizdom();
-    const dot = 'strict digraph G {\nA -> B [ label = "6" weight = "6" ];\n}';
-    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
-    expect(captured).toEqual([
-      'strict digraph G {\nA -> B [ label = "6" weight = "6" fontcolor = "#9fb0c0" ];\n}'
-    ]);
-    expect(graph.innerHTML).toBe('<svg class="fullscreen-svg" width="1"></svg>');
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    expect(captured).toEqual([darkDot(classHierarchy)]);
+    expect(captured[0]).toContain('fontcolor = "#9fb0c0"');
+    expect(graph.innerHTML).toContain('<a target="_blank" href=');
+    expect(graph.innerHTML).toContain('<svg class="fullscreen-svg" width="1">');
   });
 
-  it('re-parses graphs with fresh label colors when a theme radio changes', async () => {
+  it('re-synthesizes graphs with fresh label colors when a theme radio changes', async () => {
     installThemeRadios('light', false);
     document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
     bindThemeChartRedraw();
@@ -970,8 +1047,7 @@ describe('initWasmGraphs', () => {
     graph.id = 'classGraph';
     document.body.appendChild(graph);
     const captured = stubVizdom();
-    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
-    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
     const lightParses = captured.length;
     expect(captured.every(d => !d.includes('fontcolor'))).toBe(true);
 
@@ -982,12 +1058,45 @@ describe('initWasmGraphs', () => {
     expect(captured.length).toBeGreaterThan(lightParses);
     expect(captured[captured.length - 1]).toContain('fontcolor = "#9fb0c0"');
 
-    // Switching back re-renders with the plain dot again.
+    // Switching back re-renders the plain light-palette DOT again.
     const lightBack = document.getElementById('rf-theme-light');
     lightBack.checked = true;
     lightBack.dispatchEvent(new window.Event('change', { bubbles: true }));
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(captured[captured.length - 1]).toBe(dot);
+    expect(captured[captured.length - 1]).toBe(lightDot(classHierarchy));
+  });
+
+  it('restores target="_blank" on every encoded anchor, including after a theme redraw', async () => {
+    installThemeRadios('light', false);
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    stubVizdom();
+    const withPaths = JSON.parse(JSON.stringify(classHierarchy));
+    withPaths.packages[0].classes[0].path = 'src/main/java/c/A.java';
+    withPaths.packages[0].classes[1].path = 'src/main/java/c/B.java';
+    await initWasmGraphs({
+      project: { repoUrl: 'https://github.com/x/y/blob/main/' },
+      classMap: { hierarchy: withPaths, dotThresholdExceeded: false }
+    });
+    const assertAllAnchorsTargetBlank = () => {
+      const anchors = graph.querySelectorAll('a');
+      expect(anchors.length).toBe(2);
+      for (const anchor of anchors) {
+        expect(anchor.getAttribute('target')).toBe('_blank');
+      }
+    };
+    // initial render: both encoded anchors get the target vizdom drops
+    assertAllAnchorsTargetBlank();
+
+    // theme redraw re-renders through the same path: both must keep it
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assertAllAnchorsTargetBlank();
   });
 
   it('prunes graphs whose container left the DOM on theme change', async () => {
@@ -998,8 +1107,7 @@ describe('initWasmGraphs', () => {
     graph.id = 'classGraph';
     document.body.appendChild(graph);
     const captured = stubVizdom();
-    const dot = 'strict digraph G {\nA -> B [ label = "6" ];\n}';
-    await initWasmGraphs({ classMap: { dot, dotThresholdExceeded: false } });
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
     const initial = captured.length;
 
     // The re-render threw the graph container away: next theme change must
@@ -1010,6 +1118,83 @@ describe('initWasmGraphs', () => {
     dark.dispatchEvent(new window.Event('change', { bubbles: true }));
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(captured.length).toBe(initial);
+  });
+
+  it('renders the legacy classMap.dot through vizdom when no hierarchy exists', async () => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    // Older RefactorFirst reports ship only the raw classMap.dot string with
+    // no hierarchy to synthesize from: the inline graph renders it verbatim,
+    // like the popup path does.
+    const legacyDot = 'strict digraph legacy { A; B; A -> B [ label = "1" weight = "1" ]; }';
+    await initWasmGraphs({ classMap: { dot: legacyDot, dotThresholdExceeded: false } });
+    expect(captured).toEqual([legacyDot]);
+    expect(graph.innerHTML).toContain('<svg class="fullscreen-svg" width="1">');
+  });
+
+  it('retains the legacy dot so theme redraws re-render it verbatim', async () => {
+    installThemeRadios('light', false);
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    const legacyDot = 'strict digraph legacy { A; B; A -> B [ label = "1" weight = "1" ]; }';
+    await initWasmGraphs({ classMap: { dot: legacyDot, dotThresholdExceeded: false } });
+    expect(captured).toEqual([legacyDot]);
+
+    // The retained entry re-parses the raw DOT on every theme change: there
+    // is no hierarchy to re-synthesize and no palette fontcolor to bake in,
+    // so the legacy report renders consistently on both palettes.
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured[captured.length - 1]).toBe(legacyDot);
+
+    const lightBack = document.getElementById('rf-theme-light');
+    lightBack.checked = true;
+    lightBack.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured[captured.length - 1]).toBe(legacyDot);
+    expect(captured.every(dot => dot === legacyDot)).toBe(true);
+  });
+
+  it('renders nothing when the classMap carries neither hierarchy nor dot', async () => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    await initWasmGraphs({ classMap: { dotThresholdExceeded: false } });
+    expect(captured).toEqual([]);
+    expect(graph.innerHTML).toBe('');
+  });
+
+  it('keeps synthesizing from the hierarchy when the report also ships a raw dot', async () => {
+    installThemeRadios('light', false);
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    const captured = stubVizdom();
+    // Modern reports may still carry the raw dot next to the hierarchy: the
+    // synthesis wins, and the retained entry carries no dot to fall back to.
+    await initWasmGraphs({
+      classMap: { hierarchy: classHierarchy, dot: 'strict digraph legacy { L; }', dotThresholdExceeded: false }
+    });
+    expect(captured).toEqual([lightDot(classHierarchy)]);
+
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(captured[captured.length - 1]).toBe(darkDot(classHierarchy));
   });
 });
 
@@ -1036,6 +1221,516 @@ describe('popup helpers', () => {
     expect(document.getElementById('overlay').style.display).toBe('none');
     expect(document.getElementById('popup-classGraph').style.display).toBe('none');
     expect(document.getElementById('graph-container-classGraph').innerHTML).toBe('');
+  });
+});
+
+// DOT-graph hover highlights (vizdom SVGs): mousing over an edge emphasizes
+// the edge and both endpoint nodes; mousing over a node colors the incoming
+// edges + source nodes and the outgoing edges + sink nodes differently. The
+// neighbor model derives from the vizdom <title> texts (node ids and
+// "Source -> Target" edge titles); lib/report-view.js toggles rf-hover-*
+// state classes, and the palette rules in globals.css do the restyling.
+describe('graph hover highlights', () => {
+  // Mirrors the vizdom 0.1.19 SVG structure: g.edge/g.node groups carrying
+  // <title> with the DOT node ids, curves as stroke paths, arrowheads as
+  // polygons, node shapes as ellipses inside <a> wrappers.
+  const HOVER_SVG = ''
+    + '<svg width="1">'
+    + '<g class="graph" id="graph-0"><title>G</title><g id="a-graph-0">'
+    + '<a title="G"><rect id="graph-bg" fill="transparent" stroke="transparent"/></a></g></g>'
+    + '<g class="cluster" id="cluster-0"><title>c</title><g id="a-cluster-0">'
+    + '<a title="c"><rect fill="white" stroke="black"/></a></g></g>'
+    + '<g class="edge" id="edge-0"><title>A -> B</title><g id="a-edge-0">'
+    + '<a title="A -> B"><path id="curve-0" d="M0 0" fill="none" stroke="black"/>'
+    + '<polygon id="arrow-0" fill="black"/></a></g></g>'
+    + '<g class="edge" id="edge-1"><title>C -> A</title><g id="a-edge-1">'
+    + '<a title="C -> A"><path id="curve-1" d="M0 0" fill="none" stroke="black"/>'
+    + '<polygon id="arrow-1" fill="black"/></a></g></g>'
+    + '<g class="edge" id="edge-2"><title>B -> A</title><g id="a-edge-2">'
+    + '<a title="B -> A"><path id="curve-2" d="M0 0" fill="none" stroke="black"/>'
+    + '<polygon id="arrow-2" fill="black"/></a></g></g>'
+    + '<g class="edge" id="edge-bad"><title>unparsable</title><g id="a-edge-bad">'
+    + '<a><path id="curve-bad" d="M0 0" fill="none" stroke="black"/></a></g></g>'
+    + '<g class="node" id="node-A"><title>A</title><g id="a-node-A">'
+    + '<a id="anchor-A" title="A" href="https://example/A">'
+    + '<ellipse id="shape-A" fill="white" stroke="black"/></a></g></g>'
+    + '<g class="node" id="node-B"><title>B</title><g id="a-node-B">'
+    + '<a id="anchor-B" title="B" href="https://example/B">'
+    + '<ellipse id="shape-B" fill="white" stroke="black"/></a></g></g>'
+    + '<g class="node" id="node-C"><title>C</title><g id="a-node-C">'
+    + '<a id="anchor-C" title="C"><ellipse id="shape-C" fill="white" stroke="black"/></a></g></g>'
+    + '</svg>';
+
+  function stubHoverVizdom() {
+    window.Vizdom = {
+      DotParser: class {
+        parse() {
+          return {
+            to_directed() { return this; },
+            layout() { return this; },
+            to_svg() { return { to_string: () => HOVER_SVG }; }
+          };
+        }
+      }
+    };
+  }
+
+  function hoverOver(element) {
+    element.dispatchEvent(new window.MouseEvent('mouseover', {bubbles: true}));
+  }
+
+  function flagged(selector, state) {
+    return [...document.querySelectorAll(selector)]
+      .filter(el => el.classList.contains(state)).map(el => el.id);
+  }
+
+  beforeEach(() => {
+    installThemeRadios('light', false);
+    const graph = document.createElement('div');
+    graph.id = 'classGraph';
+    document.body.appendChild(graph);
+    stubHoverVizdom();
+  });
+
+  afterEach(() => { delete window.Vizdom; delete window.matchMedia; });
+
+  it('highlights the hovered edge and both endpoint nodes', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('curve-0'));
+    expect(flagged('g.edge', 'rf-hover-edge')).toEqual(['edge-0']);
+    expect(flagged('g.node', 'rf-hover-edge')).toEqual(['node-A', 'node-B']);
+    // Nothing else is flagged, and no directional state leaks in.
+    expect(flagged('g.edge', 'rf-hover-in')).toEqual([]);
+    expect(flagged('g.edge', 'rf-hover-out')).toEqual([]);
+    expect(document.getElementById('node-C').getAttribute('class')).toBe('node');
+  });
+
+  it('keeps the edge highlighted while the pointer moves within its shapes', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('curve-0'));
+    hoverOver(document.getElementById('arrow-0'));
+    expect(flagged('g.edge', 'rf-hover-edge')).toEqual(['edge-0']);
+    expect(flagged('g.node', 'rf-hover-edge')).toEqual(['node-A', 'node-B']);
+  });
+
+  it('colors a hovered node\'s incoming and outgoing neighborhoods differently', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('shape-A'));
+    // The hovered node carries the focus ring.
+    expect(flagged('g.node', 'rf-hover-focus')).toEqual(['node-A']);
+    // Incoming: C -> A and B -> A, with their source nodes, in green state.
+    expect(flagged('g.edge', 'rf-hover-in')).toEqual(['edge-1', 'edge-2']);
+    expect(flagged('g.node', 'rf-hover-in')).toEqual(['node-B', 'node-C']);
+    // Outgoing: A -> B with its sink node, in blue state.
+    expect(flagged('g.edge', 'rf-hover-out')).toEqual(['edge-0']);
+    expect(flagged('g.node', 'rf-hover-out')).toEqual(['node-B']);
+    // B is both a source (of B -> A) and a sink (of A -> B): a bidirectional
+    // partner flagged with both states.
+    expect(document.getElementById('node-B').classList.contains('rf-hover-in')).toBe(true);
+    expect(document.getElementById('node-B').classList.contains('rf-hover-out')).toBe(true);
+    // The edge whose title carries no " -> " never binds a highlight.
+    expect(document.getElementById('edge-bad').getAttribute('class')).toBe('edge');
+  });
+
+  it('clears every state when the pointer moves onto the graph background', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('shape-A'));
+    hoverOver(document.getElementById('graph-bg'));
+    expect(flagged('g.edge', 'rf-hover-edge').length
+      + flagged('g.edge', 'rf-hover-in').length
+      + flagged('g.edge', 'rf-hover-out').length).toBe(0);
+    expect(flagged('g.node', 'rf-hover-edge').length
+      + flagged('g.node', 'rf-hover-in').length
+      + flagged('g.node', 'rf-hover-out').length
+      + flagged('g.node', 'rf-hover-focus').length).toBe(0);
+  });
+
+  it('clears every state when the pointer leaves the svg', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    hoverOver(document.getElementById('curve-0'));
+    document.querySelector('#classGraph svg')
+      .dispatchEvent(new window.MouseEvent('mouseleave'));
+    expect(flagged('g.edge', 'rf-hover-edge')).toEqual([]);
+    expect(flagged('g.node', 'rf-hover-edge')).toEqual([]);
+  });
+
+  it('re-uses the node hover state on keyboard focus and clears on blur', async () => {
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    // Node anchors are real tab stops; focusing one flags the same state as
+    // hovering (SC 2.1.1 parity for pointer-only affordances).
+    document.getElementById('anchor-A')
+      .dispatchEvent(new window.FocusEvent('focusin', {bubbles: true}));
+    expect(flagged('g.node', 'rf-hover-focus')).toEqual(['node-A']);
+    expect(flagged('g.edge', 'rf-hover-in')).toEqual(['edge-1', 'edge-2']);
+    expect(flagged('g.edge', 'rf-hover-out')).toEqual(['edge-0']);
+
+    document.getElementById('anchor-A')
+      .dispatchEvent(new window.FocusEvent('focusout', {bubbles: true}));
+    expect(flagged('g.node', 'rf-hover-focus')).toEqual([]);
+    expect(flagged('g.edge', 'rf-hover-in')).toEqual([]);
+    expect(flagged('g.edge', 'rf-hover-out')).toEqual([]);
+  });
+
+  it('re-binds the highlights after a theme redraw re-injects the svg', async () => {
+    document.documentElement.removeAttribute('data-rf-theme-redraw-bound');
+    bindThemeChartRedraw();
+    await initWasmGraphs({ classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false } });
+    const dark = document.getElementById('rf-theme-dark');
+    dark.checked = true;
+    dark.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // The freshly injected svg carries fresh listeners.
+    hoverOver(document.querySelector('#classGraph svg #curve-1'));
+    expect(flagged('g.edge', 'rf-hover-edge')).toEqual(['edge-1']);
+    expect(flagged('g.node', 'rf-hover-edge')).toEqual(['node-A', 'node-C']);
+  });
+});
+
+describe('popup cluster filtering (packages are noise)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="overlay" id="overlay" style="display:none"></div>
+      <div class="popup" id="popup-classGraph" style="display:none">
+        <div id="graph-container-classGraph"></div>
+      </div>`;
+  });
+
+  afterEach(() => {
+    delete window.graphlibDot;
+    delete window.graphology;
+    delete window.Sigma;
+    delete window.ForceGraph3D;
+    delete window.SpriteText;
+  });
+
+  // graphlib-dot parses subgraphs as compound parents: every named subgraph
+  // becomes a node with the contained nodes parented to it (and empty
+  // subgraphs are pruned at parse time), so only actual subgraph ids ever
+  // have children. The popups must drop those subgraph nodes while keeping
+  // every node they contained and the edges between them — including
+  // ordinary nodes whose ID merely starts with cluster_ (cluster_worker).
+  function stubGraphlibWithCluster() {
+    window.graphlibDot = {
+      read: () => ({
+        nodes: () => ['cluster_abc123', 'Alpha', 'Beta', 'cluster_worker'],
+        node(id) {
+            return id === 'cluster_abc123' ? {label: 'org.hjug.cbc'} : {label: id};
+        },
+        children: id => (id === 'cluster_abc123' ? ['Alpha', 'Beta'] : []),
+        edges: () => [{v: 'Alpha', w: 'Beta'}, {v: 'cluster_worker', w: 'Beta'}],
+        edge: e => (e.v === 'cluster_worker' ? {color: 'blue', weight: 7} : {color: 'red', weight: 2})
+      })
+    };
+  }
+
+  it('drops parsed subgraphs from the 2D sugiyama popup while keeping ordinary nodes', () => {
+    stubGraphlibWithCluster();
+    const addedNodes = [];
+    const addedEdges = [];
+    window.graphology = {
+      Graph: class {
+        addNode(id, attrs) { addedNodes.push({id, attrs}); }
+        addEdge(v, w, attrs) { addedEdges.push({v, w, attrs}); }
+        nodes() { return []; }
+        forEachNeighbor() {}
+        setNodeAttribute() {}
+      }
+    };
+    const sigmaGraphs = [];
+    window.Sigma = function (graph) {
+      sigmaGraphs.push(graph);
+      return {on() {}, setSetting() {}, scheduleRefresh() {}};
+    };
+
+    showPopup('popup-classGraph', 'graph-container-classGraph', 'ignored-by-stub');
+
+    // the actual subgraph is dropped; the cluster_-prefixed ordinary node
+    // and its edge are kept
+    expect(addedNodes.map(n => n.id)).toEqual(['Alpha', 'Beta', 'cluster_worker']);
+    expect(addedEdges).toEqual([
+      {v: 'Alpha', w: 'Beta', attrs: {color: 'red', size: 1, type: 'arrow'}},
+      {v: 'cluster_worker', w: 'Beta', attrs: {color: 'blue', size: 1, type: 'arrow'}}
+    ]);
+    expect(sigmaGraphs).toHaveLength(1);
+  });
+
+  it('drops parsed subgraphs from the 3D force-graph popup while keeping ordinary nodes', async () => {
+    stubGraphlibWithCluster();
+    window.SpriteText = function () {
+      return {};
+    };
+    const capturedData = [];
+    const chain = {};
+    for (const method of [
+      'graphData', 'nodeLabel', 'width', 'height', 'nodeThreeObject', 'linkColor',
+      'linkWidth', 'linkDirectionalParticles', 'linkDirectionalParticleWidth',
+      'onNodeHover', 'onLinkHover'
+    ]) {
+      chain[method] = function (arg) {
+        if (method === 'graphData') capturedData.push(arg);
+        return this;
+      };
+    }
+    window.ForceGraph3D = function () {
+      return chain;
+    };
+
+    await createForceGraph('popup-classGraph', 'graph-container-classGraph', 'ignored-by-stub');
+
+    // the actual subgraph is dropped; the cluster_-prefixed ordinary node
+    // and its edge are kept
+    expect(capturedData).toHaveLength(1);
+    expect(capturedData[0].nodes.map(n => n.id)).toEqual(['Alpha', 'Beta', 'cluster_worker']);
+    expect(capturedData[0].nodes.map(n => n.label)).toEqual(['Alpha', 'Beta', 'cluster_worker']);
+    const [alpha, beta, worker] = capturedData[0].nodes;
+    // Each link carries its resolved endpoint objects so the hover handlers
+    // never depend on force-graph's ingestion-time source/target rewiring.
+    expect(capturedData[0].links).toEqual([
+      {source: 'Alpha', target: 'Beta', color: 'red', weight: 2, sourceNode: alpha, targetNode: beta},
+      {source: 'cluster_worker', target: 'Beta', color: 'blue', weight: 7, sourceNode: worker, targetNode: beta}
+    ]);
+  });
+});
+
+// The 3D force-graph popup carries the same directional hover model as the
+// vizdom SVGs (hovered node amber, incoming green, outgoing blue, hovered
+// link amber with both endpoints) — always on, its WebGL canvas always
+// dark, the accents always the dark palette values. When nothing is
+// highlighted, the DOT graph's own colors show: red removal links, white
+// plain links, and the nodes' DOT colors on the sprite labels. Per-hover
+// sprite recoloring touches only nodes whose state changed.
+describe('createForceGraph hover highlights', () => {
+  // Directed A->B, B->A (bidirectional pair), C->A: hovering A exercises
+  // every state, including the both-in-and-out partner. A->B carries the
+  // DOT color of a removal relationship (red); the others carry no DOT
+  // color and fall back to white, like the real report DOT.
+  function stubDirectedGraphlib() {
+    window.graphlibDot = {
+      read: () => ({
+        nodes: () => ['A', 'B', 'C'],
+        node: id => ({label: id}),
+        children: () => [],
+        edges: () => [{v: 'A', w: 'B'}, {v: 'B', w: 'A'}, {v: 'C', w: 'A'}],
+        edge: e => (e.v === 'A' && e.w === 'B' ? {color: 'red', weight: 1} : {weight: 1})
+      })
+    };
+  }
+
+  function stubForceGraph() {
+    const captured = { accessors: {}, chain: {} };
+    for (const method of [
+      'graphData', 'nodeLabel', 'width', 'height', 'nodeThreeObject', 'linkColor',
+      'linkWidth', 'linkDirectionalParticles', 'linkDirectionalParticleWidth',
+      'onNodeHover', 'onLinkHover'
+    ]) {
+      // force-graph accessors are dual getter/setters: calling with an
+      // argument sets it (returning the chain), calling without returns the
+      // current accessor — updateHighlight() relies on both forms.
+      captured.chain[method] = function (arg) {
+        if (arguments.length > 0) {
+          captured.accessors[method] = arg;
+          return this;
+        }
+        return captured.accessors[method];
+      };
+    }
+    return captured;
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="overlay" id="overlay" style="display:none"></div>
+      <div class="popup" id="popup-classGraph" style="display:none">
+        <div id="graph-container-classGraph"></div>
+      </div>`;
+    stubDirectedGraphlib();
+    window.SpriteText = function (label) {
+      this.label = label;
+      this.material = {};
+    };
+  });
+
+  afterEach(() => {
+    delete window.graphlibDot;
+    delete window.ForceGraph3D;
+    delete window.SpriteText;
+  });
+
+  async function buildGraph() {
+    const captured = stubForceGraph();
+    window.ForceGraph3D = function () {
+      return captured.chain;
+    };
+    await createForceGraph('popup-classGraph', 'graph-container-classGraph', 'ignored-by-stub');
+    return { captured, data: captured.accessors.graphData };
+  }
+
+  it('ships no palette toggle and rests on the DOT-specified colors', async () => {
+    const { captured, data } = await buildGraph();
+    // The toggle era is over: the enhanced palette is the only palette, so
+    // no checkbox ships.
+    expect(document.querySelector('#popup-classGraph .rf-enhanced-toggle')).toBeNull();
+    // Hover highlighting is armed at popup build…
+    expect(typeof captured.accessors.linkColor).toBe('function');
+    expect(typeof captured.accessors.linkWidth).toBe('function');
+    expect(typeof captured.accessors.linkDirectionalParticles).toBe('function');
+    expect(typeof captured.accessors.onNodeHover).toBe('function');
+    expect(typeof captured.accessors.onLinkHover).toBe('function');
+    // …and the resting colors are the ones the DOT graph specifies: red
+    // removal links, white uncolored links, thin, without particles.
+    const [ab, ba] = data.links;
+    expect(captured.accessors.linkColor(ab)).toBe('red');
+    expect(captured.accessors.linkColor(ba)).toBe('white');
+    expect(captured.accessors.linkWidth(ab)).toBe(1);
+    expect(captured.accessors.linkDirectionalParticles(ab)).toBe(0);
+    // The sprite labels render with their DOT colors.
+    const sprite = captured.accessors.nodeThreeObject({ label: 'A', color: 'white' });
+    expect(sprite.label).toBe('A');
+    expect(sprite.color).toBe('white');
+  });
+
+  it('caches each node\'s sprite so hover recoloring mutates the live object', async () => {
+    const { captured, data } = await buildGraph();
+    const [a] = data.nodes;
+    const spriteA = captured.accessors.nodeThreeObject(a);
+    expect(captured.accessors.nodeThreeObject(a)).toBe(spriteA);
+    expect(spriteA.label).toBe('A');
+    expect(spriteA.color).toBe('white'); // DOT resting color until a hover flags it
+  });
+
+  it('splits a hovered node\'s directions with the dark palette accents', async () => {
+    const { captured, data } = await buildGraph();
+    const [a, b, c] = data.nodes;
+    const [ab, ba, ca] = data.links;
+    const spriteOf = node => captured.accessors.nodeThreeObject(node);
+    const spriteA = spriteOf(a);
+    const spriteB = spriteOf(b);
+    const spriteC = spriteOf(c);
+
+    captured.accessors.onNodeHover(a);
+    // The hovered node takes the dark amber attention accent…
+    expect(spriteA.color).toBe('#f0b95a');
+    // …B is both an incoming source (of B->A) and an outgoing sink (of
+    // A->B): the bidirectional partner, amber over either direction…
+    expect(spriteB.color).toBe('#f0b95a');
+    // …and C, only an incoming source, goes dark green.
+    expect(spriteC.color).toBe('#7ee2a8');
+    // Links follow: incoming dark green, outgoing dark blue, both thickened
+    // with flowing particles — the accent overrides the DOT red while
+    // hovered.
+    expect(captured.accessors.linkColor(ba)).toBe('#7ee2a8');
+    expect(captured.accessors.linkColor(ca)).toBe('#7ee2a8');
+    expect(captured.accessors.linkColor(ab)).toBe('#8ed0fa');
+    expect(captured.accessors.linkWidth(ab)).toBe(4);
+    expect(captured.accessors.linkDirectionalParticles(ab)).toBe(4);
+  });
+
+  it('restores the DOT-specified link colors when the hover clears', async () => {
+    const { captured, data } = await buildGraph();
+    const [a] = data.nodes;
+    const [ab] = data.links;
+    // Resting: the DOT colors — the red removal link, over the DOT-white
+    // plain links pinned by the sibling test.
+    expect(captured.accessors.linkColor(ab)).toBe('red');
+
+    const spriteA = captured.accessors.nodeThreeObject(a);
+    captured.accessors.onNodeHover(a);
+    // Flagged: the accent overrides the DOT red while hovered…
+    expect(spriteA.color).toBe('#f0b95a');
+    expect(captured.accessors.linkColor(ab)).toBe('#8ed0fa');
+    // …and clearing the hover restores the DOT colors and the sprite's own.
+    captured.accessors.onNodeHover(null);
+    expect(spriteA.color).toBe('white');
+    expect(captured.accessors.linkColor(ab)).toBe('red');
+  });
+
+  it('flags a hovered link and both endpoints with the amber attention accent', async () => {
+    const { captured, data } = await buildGraph();
+    const [a, b] = data.nodes;
+    const link = data.links[0]; // A -> B
+    const spriteA = captured.accessors.nodeThreeObject(a);
+    const spriteB = captured.accessors.nodeThreeObject(b);
+
+    captured.accessors.onLinkHover(link);
+    expect(spriteA.color).toBe('#f0b95a');
+    expect(spriteB.color).toBe('#f0b95a');
+    expect(captured.accessors.linkColor(link)).toBe('#f0b95a');
+    expect(captured.accessors.linkWidth(link)).toBe(4);
+    expect(captured.accessors.linkDirectionalParticles(link)).toBe(4);
+  });
+
+  it('recolors only the sprites whose highlight state changed', async () => {
+    // A counting sprite + an unconnected node pin that a hover never touches
+    // sprites outside the (previous ∪ current) highlight set — the always-on
+    // hover stays O(changed) instead of O(all sprites) per pointer move.
+    window.SpriteText = function (label) {
+      this.label = label;
+      this.material = {};
+      this.setColorCount = 0;
+      this._color = null;
+    };
+    Object.defineProperty(window.SpriteText.prototype, 'color', {
+      get() { return this._color; },
+      set(value) {
+        this.setColorCount += 1;
+        this._color = value;
+      }
+    });
+    // One extra node no edge touches.
+    stubDirectedGraphlib();
+    const innerRead = window.graphlibDot.read;
+    window.graphlibDot.read = () => {
+      const parsed = innerRead();
+      return {
+        ...parsed,
+        nodes: () => [...parsed.nodes(), 'D'],
+        node: id => ({label: id})
+      };
+    };
+    const { captured, data } = await buildGraph();
+    const [a, , , d] = data.nodes;
+    const spriteA = captured.accessors.nodeThreeObject(a);
+    const spriteD = captured.accessors.nodeThreeObject(d);
+    expect(spriteA.setColorCount).toBe(1); // creation coloring only
+    expect(spriteD.setColorCount).toBe(1);
+
+    captured.accessors.onNodeHover(a);
+    captured.accessors.onNodeHover(null);
+    captured.accessors.onNodeHover(a);
+    // The flagged node's sprite recolors on every state change…
+    expect(spriteA.setColorCount).toBe(4);
+    expect(spriteA.color).toBe('#f0b95a');
+    // …while the unflagged node's sprite is never touched again.
+    expect(spriteD.setColorCount).toBe(1);
+    expect(spriteD.color).toBe('white');
+  });
+});
+
+// The popups are canvas/WebGL drawn, so CSS cannot reach them: the accents
+// live in JS (GRAPH_HOVER_ACCENTS) and must never drift from the
+// --graph-hover-* palette declarations in app/globals.css that style the
+// vizdom SVGs.
+describe('popup hover accents mirror the CSS palette', () => {
+  const css = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../../app/globals.css'),
+    'utf-8'
+  );
+
+  it('GRAPH_HOVER_ACCENTS match the --graph-hover-* declarations per palette', () => {
+    // File order: the light :root block, then the two byte-identical dark
+    // blocks — the theme-css guard pins the dark pair together, so each
+    // role must resolve to [light, dark, dark].
+    for (const [role, values] of [
+      ['edge', ['#b45309', '#f0b95a', '#f0b95a']],
+      ['in', ['#1e8449', '#7ee2a8', '#7ee2a8']],
+      ['out', ['#2a6f97', '#8ed0fa', '#8ed0fa']]
+    ]) {
+      expect([...css.matchAll(new RegExp(`--graph-hover-${role}:\\s*(#[0-9a-f]{6})`, 'g'))]
+        .map(match => match[1])).toEqual(values);
+    }
+    expect(GRAPH_HOVER_ACCENTS.light).toEqual({edge: '#b45309', in: '#1e8449', out: '#2a6f97'});
+    expect(GRAPH_HOVER_ACCENTS.dark).toEqual({edge: '#f0b95a', in: '#7ee2a8', out: '#8ed0fa'});
   });
 });
 
@@ -1182,7 +1877,7 @@ describe('showPopup sigma theme settings', () => {
     expect(constructed[0].settings).toBeUndefined();
   });
 
-  it('binds neighbor and edge hover highlighting onto the sigma instance', () => {
+  it('binds the directional hover highlighting onto the sigma instance', () => {
     installRadiosAndPopup('light');
     const constructed = stubSigmaStack();
     showPopup('popup-classGraph', 'graph-container-classGraph', 'strict digraph G {}');
@@ -1195,16 +1890,21 @@ describe('showPopup sigma theme settings', () => {
 });
 
 describe('bindSigmaHoverHighlight', () => {
-  // A stub graphology graph: edges eAB (A-B), eAC (A-C), eBD (B-D). D is a
-  // non-neighbor of A; eBD is not incident to A.
-  function stubHoverGraph() {
+  // A stub directed graphology graph: A->B, B->A (a bidirectional pair),
+  // A->C and B->D (unrelated to A). Hovering A flags eBA + node B green
+  // (incoming), eAB + node B / eAC + node C blue (outgoing); node B holds
+  // both states and takes the amber attention accent — mirroring the vizdom
+  // rf-hover-* model. The 2D popup is canvas-drawn, so the accents resolve
+  // from the active palette like CHART_LEGEND_TEXT.
+  function stubHoverGraph(overrides = {}) {
     return {
-      forEachNeighbor(node, callback) {
-        ({ A: ['B', 'C'], B: ['A', 'D'], C: ['A'], D: ['B'] })[node].forEach(callback);
-      },
       edges(node) {
-        return ({ A: ['eAB', 'eAC'], B: ['eAB', 'eBD'], C: ['eAC'], D: ['eBD'] })[node];
-      }
+        return ({A: ['eAB', 'eBA', 'eAC'], B: ['eAB', 'eBA', 'eBD'], C: ['eAC'], D: ['eBD']})[node] || [];
+      },
+      extremities(edge) {
+        return ({eAB: ['A', 'B'], eBA: ['B', 'A'], eAC: ['A', 'C'], eBD: ['B', 'D']})[edge];
+      },
+      ...overrides
     };
   }
 
@@ -1221,59 +1921,93 @@ describe('bindSigmaHoverHighlight', () => {
     return instance;
   }
 
-  it('flags neighbor nodes and thickens the incident edges of the hovered node', () => {
+  it('splits incoming and outgoing neighborhoods around the hovered node (light accents)', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('enterNode', { node: 'A' });
     expect(instance.scheduledRefreshes).toBe(1);
 
-    const neighbor = { label: 'B', size: 5 };
+    // The hovered node fills with the amber attention accent…
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }))
+      .toEqual({ label: 'A', size: 5, color: '#b45309', highlighted: true });
+    // …B is both an incoming source and an outgoing sink: amber…
+    expect(instance.installed.nodeReducer('B', { label: 'B', size: 5 }).color).toBe('#b45309');
+    // …C is only an outgoing sink: blue…
+    expect(instance.installed.nodeReducer('C', { label: 'C', size: 5 }).color).toBe('#2a6f97');
+    // …and untouched nodes keep their display data.
     const stranger = { label: 'D', size: 5 };
-    const hovered = { label: 'A', size: 5 };
-    // Nodes across the hovered node's edges are re-rendered above labels…
-    expect(instance.installed.nodeReducer('B', neighbor)).toEqual({ label: 'B', size: 5, highlighted: true });
-    // …while the hovered node itself (already emphasized by sigma's hover
-    // layer) and everything else keep their display data untouched.
     expect(instance.installed.nodeReducer('D', stranger)).toBe(stranger);
-    expect(instance.installed.nodeReducer('A', hovered)).toBe(hovered);
 
-    const incident = { size: 1, color: 'black' };
+    // Incoming edges fill green and thicken, outgoing edges fill blue…
+    expect(instance.installed.edgeReducer('eBA', { size: 1, color: 'black' }))
+      .toEqual({ size: 3, color: '#1e8449' });
+    expect(instance.installed.edgeReducer('eAB', { size: 1, color: 'black' }))
+      .toEqual({ size: 3, color: '#2a6f97' });
+    expect(instance.installed.edgeReducer('eAC', { size: 1, color: 'black' }))
+      .toEqual({ size: 3, color: '#2a6f97' });
+    // …while unrelated edges keep their display data.
     const unrelated = { size: 1, color: 'black' };
-    // Edges directly connected to the hovered node thicken…
-    expect(instance.installed.edgeReducer('eAB', incident)).toEqual({ size: 3, color: 'black' });
-    expect(instance.installed.edgeReducer('eAC', incident)).toEqual({ size: 3, color: 'black' });
-    // …while unrelated edges keep their display data untouched.
     expect(instance.installed.edgeReducer('eBD', unrelated)).toBe(unrelated);
   });
 
+  it('resolves the dark accents while the dark palette is active', () => {
+    installThemeRadios('dark');
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph());
+    instance.fire('enterNode', { node: 'A' });
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#f0b95a');
+    expect(instance.installed.nodeReducer('C', { label: 'C', size: 5 }).color).toBe('#8ed0fa');
+    expect(instance.installed.edgeReducer('eBA', { size: 1 }).color).toBe('#7ee2a8');
+    expect(instance.installed.edgeReducer('eAC', { size: 1 }).color).toBe('#8ed0fa');
+  });
+
+  it('counts a self-loop as incoming without derailing the focus state', () => {
+    installThemeRadios('light');
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph({
+      edges: node => (node === 'A' ? ['eAA'] : []),
+      extremities: () => ['A', 'A']
+    }));
+    instance.fire('enterNode', { node: 'A' });
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#b45309');
+    expect(instance.installed.edgeReducer('eAA', { size: 1 }).color).toBe('#1e8449');
+  });
+
   it('clears the highlighting when the node is left', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('enterNode', { node: 'A' });
     instance.fire('leaveNode', {});
     expect(instance.scheduledRefreshes).toBe(2);
 
-    const data = { label: 'B', size: 5 };
-    expect(instance.installed.nodeReducer('B', data)).toBe(data);
-    expect(instance.installed.edgeReducer('eAB', data)).toBe(data);
+    const nodeData = { label: 'B', size: 5 };
+    const edgeData = { size: 1, color: 'black' };
+    expect(instance.installed.nodeReducer('B', nodeData)).toBe(nodeData);
+    expect(instance.installed.edgeReducer('eAB', edgeData)).toBe(edgeData);
   });
 
   it('re-populates cleanly when hopping straight from one node to another', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('enterNode', { node: 'A' });
     instance.fire('enterNode', { node: 'B' });
 
-    // Highlighting follows B: neighbors A and D, incident edges eAB and eBD.
-    const gone = { label: 'C', size: 5 };
-    expect(instance.installed.nodeReducer('C', gone)).toBe(gone);
-    expect(instance.installed.nodeReducer('D', { size: 5 })).toEqual({ size: 5, highlighted: true });
+    // Highlighting follows B: eAB is incoming (A is its green source), eBA
+    // is outgoing (A is its blue sink — and holds both states again), and
+    // eBD is outgoing with its blue sink D. C drops out entirely.
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#b45309');
+    expect(instance.installed.nodeReducer('C', { label: 'C', size: 5 }).color).toBeUndefined();
+    expect(instance.installed.edgeReducer('eAB', { size: 1 }).color).toBe('#1e8449');
+    expect(instance.installed.edgeReducer('eBD', { size: 1 }).color).toBe('#2a6f97');
     const dropped = { size: 1, color: 'black' };
     expect(instance.installed.edgeReducer('eAC', dropped)).toBe(dropped);
-    expect(instance.installed.edgeReducer('eBD', { size: 1, color: 'black' })).toEqual({ size: 3, color: 'black' });
   });
 
   it('ignores leave events when nothing is highlighted', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('leaveNode', {});
@@ -1281,12 +2015,29 @@ describe('bindSigmaHoverHighlight', () => {
   });
 
   it('ignores enter payloads without a node', () => {
+    installThemeRadios('light');
     const instance = stubSigmaInstance();
     bindSigmaHoverHighlight(instance, stubHoverGraph());
     instance.fire('enterNode', {});
     expect(instance.scheduledRefreshes).toBe(0);
     const data = { label: 'B', size: 5 };
     expect(instance.installed.nodeReducer('B', data)).toBe(data);
+  });
+
+  it('tolerates graphs without the edges or extremities APIs', () => {
+    installThemeRadios('light');
+    const instance = stubSigmaInstance();
+    bindSigmaHoverHighlight(instance, stubHoverGraph({ edges: undefined }));
+    instance.fire('enterNode', { node: 'A' });
+    // The focus node still fills; nothing throws.
+    expect(instance.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#b45309');
+
+    const bare = stubSigmaInstance();
+    bindSigmaHoverHighlight(bare, stubHoverGraph({ extremities: undefined }));
+    bare.fire('enterNode', { node: 'A' });
+    expect(bare.installed.nodeReducer('A', { label: 'A', size: 5 }).color).toBe('#b45309');
+    const edgeData = { size: 1, color: 'black' };
+    expect(bare.installed.edgeReducer('eAB', edgeData)).toBe(edgeData);
   });
 
   it('does not throw for a missing sigma, event-less sigma or missing graph', () => {
@@ -1343,9 +2094,9 @@ describe('stateful DOM preservation across table-state re-renders', () => {
       { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 3 }] } },
       { anchorId: 'BRAIN', title: 'Brain Methods' } // no chart: not stateful
     ],
-    classMap: { dot: 'strict digraph C {}', dotThresholdExceeded: false },
-    packageMap: { dot: 'strict digraph P {}', dotThresholdExceeded: false, hasEdges: true },
-    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dot: 'x', dotThresholdExceeded: false } }
+    classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false },
+    packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: true },
+    classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', hierarchy: cycleHierarchy, dotThresholdExceeded: false } }
   };
 
   describe('statefulElementIds', () => {
@@ -1357,8 +2108,8 @@ describe('stateful DOM preservation across table-state re-renders', () => {
 
     it('skips graphs whose dot threshold was exceeded or which lack edges', () => {
       expect(statefulElementIds({
-        classMap: { dot: 'x', dotThresholdExceeded: true },
-        packageMap: { dot: 'x', dotThresholdExceeded: false, hasEdges: false },
+        classMap: { hierarchy: classHierarchy, dotThresholdExceeded: true },
+        packageMap: { hierarchy: packageHierarchy, dotThresholdExceeded: false, hasEdges: false },
         classCycles: { largestCycle: { cycleIdentifier: 'cycle_0', dotThresholdExceeded: true } }
       })).toEqual([]);
     });
@@ -1605,18 +2356,21 @@ describe('enhanceReport', () => {
         </div>
         <canvas id="chart_GOD"></canvas>
       </main>`;
+    // exposeGraphDots synthesizes per active palette; pin light (no radios
+    // in this DOM, no matchMedia stub) so the expectation is deterministic.
+    delete window.matchMedia;
     const created = [];
     window.Chart = function (ctx, config) { created.push(config); };
     const data = {
       project: { name: 'Demo' },
-      classMap: { dot: 'strict digraph C {}', dotThresholdExceeded: true },
+      classMap: { hierarchy: classHierarchy, dotThresholdExceeded: true },
       disharmonies: [
         { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 3 }] } }
       ]
     };
     await enhanceReport(document.getElementById('app'), data);
 
-    expect(window.classGraph_dot).toBe('strict digraph C {}');
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
     expect(typeof window.showPopup).toBe('function');
     expect(typeof window.hidePopup).toBe('function');
     expect(typeof window.createForceGraph).toBe('function');

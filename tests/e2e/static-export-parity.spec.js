@@ -39,8 +39,8 @@ const SAMPLE_REPORT = {
     repoUrl: 'https://github.com/refactorfirst/refactorfirst',
     scanTimestamp: '9/9/26, 8:06 PM', hasAnyDisharmony: false
   },
-  classMap: { graphId: 'classGraph', classCount: 0, relationshipCount: 0, dotThreshold: 4000, dotThresholdExceeded: false, dot: '', hasEdges: false },
-  packageMap: { graphId: 'packageGraph', classCount: 0, relationshipCount: 0, dotThreshold: 4000, dotThresholdExceeded: false, dot: '', hasEdges: false },
+  classMap: { graphId: 'classGraph', classCount: 0, relationshipCount: 0, dotThreshold: 4000, dotThresholdExceeded: false, hierarchy: { packages: [], edges: [] }, hasEdges: false },
+  packageMap: { graphId: 'packageGraph', classCount: 0, relationshipCount: 0, dotThreshold: 4000, dotThresholdExceeded: false, hierarchy: { packages: [], edges: [] }, hasEdges: false },
   classRelationshipsToRemove: { cycleCount: 0, relationshipsToRemoveCount: 0, hasRelationships: false, relationships: [] },
   packageRelationshipsToRemove: { cycleCount: 0, relationshipsToRemoveCount: 0, hasRelationships: false, relationships: [] },
   hasDisharmonies: false,

@@ -35,6 +35,22 @@
   /* vizdom WASM graph edges bake black stroke/fill attributes into the SVG;
      palette-driven so the dark theme can swap them to a readable tint. */
   --graph-line: #000000;
+  /* Break-up package clusters: vizdom bakes fillcolor=pink onto the cluster
+     rect with the default black stroke/label glyphs. The light values equal
+     those baked colors, so the re-driving rules below never change the
+     light theme by a pixel; the dark block swaps them for a tuned surface. */
+  --graph-breakup-fill: #ffc0cb;
+  --graph-breakup-line: #000000;
+  /* DOT-graph hover highlights (vizdom SVGs): the hovered edge/node and its
+     partners take the amber attention accent; a hovered node colors its
+     incoming (source) and outgoing (sink) neighborhoods green/blue. All
+     three pass >= 3:1 on the white page and on the pink breakup clusters;
+     highlighted nodes fill with their accent, and the label ink flips to
+     --graph-hover-on to stay readable on it (white on these dark accents). */
+  --graph-hover-edge: #b45309;
+  --graph-hover-in: #1e8449;
+  --graph-hover-out: #2a6f97;
+  --graph-hover-on: #ffffff;
   --error-color: #c0392b;
   --success-color: #1e8449;
   --error-bg: #fdf6f5;
@@ -102,6 +118,23 @@ html:root {
   /* Hamburger glyph + 1px border on the dark menu surface (6.8:1). */
   --menu-toggle-color: #6fb1d9;
   --graph-line: #9fb0c0;
+  /* Break-up package clusters: the baked pink is a glaring pastel slab on
+     the dark page (11.8:1) and swallows the #9fb0c0 edges crossing it
+     (1.45:1), so the box drops to a deep rose — flagged against the
+     near-black regular clusters (2.2:1 plus a warm hue shift) while the
+     edges stay visible on it (3.8:1) — and a light pink ink carries the
+     boundary and label (5.0:1 on the fill, 10.8:1 on the page). */
+  --graph-breakup-fill: #7f3350;
+  --graph-breakup-line: #f2b8cd;
+  /* DOT-graph hover highlights: bright accents that stay distinct from the
+     slate #9fb0c0 edges (hue + width) and pass >= 3:1 on both cluster
+     fills (#10161d regular, #7f3350 rose). */
+  --graph-hover-edge: #f0b95a;
+  --graph-hover-in: #7ee2a8;
+  --graph-hover-out: #8ed0fa;
+  /* Label ink on the accent-filled highlighted nodes: the bright fills take
+     black glyphs (the labels bake a black fill in both palettes). */
+  --graph-hover-on: #000000;
   --error-color: #f0928c;
   --success-color: #5bbd8b;
   --error-bg: #2b1d1f;
@@ -146,6 +179,23 @@ html:root {
     /* Hamburger glyph + 1px border on the dark menu surface (6.8:1). */
     --menu-toggle-color: #6fb1d9;
     --graph-line: #9fb0c0;
+    /* Break-up package clusters: the baked pink is a glaring pastel slab on
+       the dark page (11.8:1) and swallows the #9fb0c0 edges crossing it
+       (1.45:1), so the box drops to a deep rose — flagged against the
+       near-black regular clusters (2.2:1 plus a warm hue shift) while the
+       edges stay visible on it (3.8:1) — and a light pink ink carries the
+       boundary and label (5.0:1 on the fill, 10.8:1 on the page). */
+    --graph-breakup-fill: #7f3350;
+    --graph-breakup-line: #f2b8cd;
+    /* DOT-graph hover highlights: bright accents that stay distinct from the
+       slate #9fb0c0 edges (hue + width) and pass >= 3:1 on both cluster
+       fills (#10161d regular, #7f3350 rose). */
+    --graph-hover-edge: #f0b95a;
+    --graph-hover-in: #7ee2a8;
+    --graph-hover-out: #8ed0fa;
+    /* Label ink on the accent-filled highlighted nodes: the bright fills take
+       black glyphs (the labels bake a black fill in both palettes). */
+    --graph-hover-on: #000000;
     --error-color: #f0928c;
     --success-color: #5bbd8b;
     --error-bg: #2b1d1f;
@@ -963,4 +1013,121 @@ main#app .fullscreen-svg path[stroke]:not([stroke="red"]) {
 main#app .fullscreen-svg polygon:not([fill="red"]) {
   stroke: var(--graph-line);
   fill: var(--graph-line);
+}
+
+/* Package clusters: vizdom bakes the DOT's fillcolor onto each cluster rect
+   (probe against the vendored 0.1.19: g.cluster > a > rect fill="white"
+   stroke="black", with the cluster label as a black glyph path following the
+   rect as a sibling). appendPackage only ever emits fillcolor=white (regular
+   packages) or fillcolor=pink (break-up candidates), so the white boxes are
+   the packages that do not need to be broken up: their fill re-drives from
+   the palette so it matches the page — vizdom's default white on the light
+   page, the dark --bg-color in dark mode — and the baked black stroke follows
+   --graph-line like the rest of the graph. The cluster label glyphs ride on
+   the re-driven fill, so they follow --graph-line too; anchored to the white
+   rect sibling so the rule never touches the break-up clusters, which the
+   rules below theme through their own palette. Pure CSS: the DOT (and its
+   byte-identical lockstep with the Java NestedDotBuilder) keeps
+   fillcolor=white/fillcolor=pink. */
+main#app .fullscreen-svg g.cluster rect[fill="white"] {
+  fill: var(--bg-color);
+  stroke: var(--graph-line);
+}
+
+main#app .fullscreen-svg g.cluster rect[fill="white"] ~ path[fill="black"] {
+  fill: var(--graph-line);
+}
+
+/* Break-up packages (the pink rects) invert that treatment: their problem
+   signal survives the dark page best as a deep rose box with a light pink
+   boundary and label, because no single fill can pass 3:1 against both the
+   near-black page and the light --graph-line edges crossing the box — the
+   rose fill keeps the edges visible (SC 1.4.11) and the pink ink keeps the
+   box boundary and its label readable (SC 1.4.3). The light palette values
+   equal vizdom's baked pink/black, so this never changes light mode. */
+main#app .fullscreen-svg g.cluster rect[fill="pink"] {
+  fill: var(--graph-breakup-fill);
+  stroke: var(--graph-breakup-line);
+}
+
+main#app .fullscreen-svg g.cluster rect[fill="pink"] ~ path[fill="black"] {
+  fill: var(--graph-breakup-line);
+}
+
+/* Hover highlights on the DOT graphs: lib/report-view.js derives the
+   node/edge neighborhood from the vizdom titles and toggles rf-hover-*
+   state classes. Hovering an edge flags the edge plus both endpoint nodes
+   with the amber attention accent; hovering a node flags it with the same
+   accent while its incoming edges + source nodes go green and its outgoing
+   edges + sink nodes go blue, so dependency direction reads at a glance.
+   Highlighted nodes FILL with their accent (their baked white/red/pink fill
+   yields to the highlight like red removal edges do), and the node labels —
+   glyph paths with a baked black fill riding on the shape — re-ink to
+   --graph-hover-on to keep AA contrast on the fill. A node flagged both in
+   and out is a bidirectional partner of the hovered node and takes the
+   attention accent over either directional state. */
+main#app .fullscreen-svg g.edge.rf-hover-edge path[stroke] {
+  stroke: var(--graph-hover-edge);
+  stroke-width: 2.5px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-edge polygon {
+  stroke: var(--graph-hover-edge);
+  fill: var(--graph-hover-edge);
+}
+
+main#app .fullscreen-svg g.node.rf-hover-edge ellipse,
+main#app .fullscreen-svg g.node.rf-hover-edge rect,
+main#app .fullscreen-svg g.node.rf-hover-focus ellipse,
+main#app .fullscreen-svg g.node.rf-hover-focus rect {
+  stroke: var(--graph-hover-edge);
+  fill: var(--graph-hover-edge);
+  stroke-width: 2px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-in path[stroke] {
+  stroke: var(--graph-hover-in);
+  stroke-width: 2.5px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-in polygon {
+  stroke: var(--graph-hover-in);
+  fill: var(--graph-hover-in);
+}
+
+main#app .fullscreen-svg g.node.rf-hover-in ellipse,
+main#app .fullscreen-svg g.node.rf-hover-in rect {
+  stroke: var(--graph-hover-in);
+  fill: var(--graph-hover-in);
+  stroke-width: 2px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-out path[stroke] {
+  stroke: var(--graph-hover-out);
+  stroke-width: 2.5px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-out polygon {
+  stroke: var(--graph-hover-out);
+  fill: var(--graph-hover-out);
+}
+
+main#app .fullscreen-svg g.node.rf-hover-out ellipse,
+main#app .fullscreen-svg g.node.rf-hover-out rect {
+  stroke: var(--graph-hover-out);
+  fill: var(--graph-hover-out);
+  stroke-width: 2px;
+}
+
+main#app .fullscreen-svg g.node.rf-hover-in.rf-hover-out ellipse,
+main#app .fullscreen-svg g.node.rf-hover-in.rf-hover-out rect {
+  stroke: var(--graph-hover-edge);
+  fill: var(--graph-hover-edge);
+}
+
+main#app .fullscreen-svg g.node.rf-hover-edge path[fill="black"],
+main#app .fullscreen-svg g.node.rf-hover-focus path[fill="black"],
+main#app .fullscreen-svg g.node.rf-hover-in path[fill="black"],
+main#app .fullscreen-svg g.node.rf-hover-out path[fill="black"] {
+  fill: var(--graph-hover-on);
 }

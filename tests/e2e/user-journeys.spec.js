@@ -16,7 +16,21 @@ const SAMPLE_REPORT = {
     relationshipCount: 2,
     dotThreshold: 4000,
     dotThresholdExceeded: false,
-    dot: 'strict digraph G {\nGitLogReader -> CostBenefitCalculator [ label = "2" weight = "2" ];\nGitLogReader -> GitLogEntry [ label = "1" weight = "1" ];\n}',
+    hierarchy: {
+      packages: [{
+        name: '(default package)', id: 'cluster_default', nodeId: null,
+        renderAsNode: false, needsBreakUp: false, children: [],
+        classes: [
+          { fqn: 'GitLogReader', id: 'GitLogReader', label: 'GitLogReader', path: '', markedForRemoval: false },
+          { fqn: 'CostBenefitCalculator', id: 'CostBenefitCalculator', label: 'CostBenefitCalculator', path: '', markedForRemoval: false },
+          { fqn: 'GitLogEntry', id: 'GitLogEntry', label: 'GitLogEntry', path: '', markedForRemoval: false }
+        ]
+      }],
+      edges: [
+        { source: 'GitLogReader', target: 'CostBenefitCalculator', weight: 2, markedForRemoval: false },
+        { source: 'GitLogReader', target: 'GitLogEntry', weight: 1, markedForRemoval: false }
+      ]
+    },
     hasEdges: true
   },
   packageMap: {
@@ -25,7 +39,21 @@ const SAMPLE_REPORT = {
     relationshipCount: 1,
     dotThreshold: 4000,
     dotThresholdExceeded: false,
-    dot: 'strict digraph G {\ngit -> cbc [ label = "1" weight = "1" ];\n}',
+    hierarchy: {
+      packages: [
+        {
+          name: 'git', id: 'cluster_git', nodeId: 'package_git',
+          renderAsNode: true, needsBreakUp: false, children: [], classes: []
+        },
+        {
+          name: 'cbc', id: 'cluster_cbc', nodeId: 'package_cbc',
+          renderAsNode: true, needsBreakUp: false, children: [], classes: []
+        }
+      ],
+      edges: [
+        { source: 'package_git', target: 'package_cbc', weight: 1, markedForRemoval: false }
+      ]
+    },
     hasEdges: true
   },
   classRelationshipsToRemove: {

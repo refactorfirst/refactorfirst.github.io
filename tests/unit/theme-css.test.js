@@ -233,6 +233,182 @@ describe('vizdom graph edges in dark mode', () => {
   });
 });
 
+// vizdom renders every package cluster as a g.cluster rect carrying the DOT's
+// baked fillcolor (appendPackage emits fillcolor=white for regular packages,
+// fillcolor=pink for break-up candidates) with the cluster label drawn as a
+// black-filled glyph path following the rect as a sibling (probe against the
+// vendored vizdom 0.1.19). The white boxes glare on the dark page, so the
+// regular clusters re-drive fill, stroke and label from the palette like the
+// edges. The pink break-up boxes need the opposite treatment: baked pink is
+// 11.8:1 against the dark page (a glaring pastel slab) but only 1.45:1 against
+// the #9fb0c0 edges crossing it, so the dark fill drops to a deep rose that
+// keeps the edges visible while a light pink boundary/label ink carries the
+// signal. No fill can pass 3:1 against both the near-black page and the light
+// edges at once (the optimum balances at ~2.86:1), so the fill prioritizes
+// edge visibility and the pink ink provides the perceivable boundary (SC
+// 1.4.11). Light values equal vizdom's baked colors, so light mode does not
+// change by a pixel.
+describe('vizdom package clusters in dark mode', () => {
+  it('re-drives regular cluster boxes from the palette', () => {
+    const boxes = rules.get('main#app .fullscreen-svg g.cluster rect[fill="white"]');
+    expect(boxes).toBeTruthy();
+    // The dark fill mirrors the page background, exactly like vizdom's
+    // default white on the light page; the baked black stroke follows
+    // --graph-line so the boxes stay delineated.
+    expect(boxes).toMatch(/fill:\s*var\(--bg-color\)/);
+    expect(boxes).toMatch(/stroke:\s*var\(--graph-line\)/);
+  });
+
+  it('re-drives cluster labels on the re-themed boxes', () => {
+    const labels = rules.get(
+      'main#app .fullscreen-svg g.cluster rect[fill="white"] ~ path[fill="black"]');
+    expect(labels).toBeTruthy();
+    expect(labels).toMatch(/fill:\s*var\(--graph-line\)/);
+    // The sibling anchor is the white rect: break-up labels are themed by
+    // their own rule below, never by this one.
+  });
+
+  it('keeps cluster labels readable on the re-themed boxes (SC 1.4.3, both palettes)', () => {
+    for (const palette of [lightPalette, darkPalette]) {
+      expect(contrastOf(palette, '--bg-color', '--graph-line')).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('re-drives break-up cluster boxes and their labels from the palette', () => {
+    const boxes = rules.get('main#app .fullscreen-svg g.cluster rect[fill="pink"]');
+    expect(boxes).toBeTruthy();
+    expect(boxes).toMatch(/fill:\s*var\(--graph-breakup-fill\)/);
+    expect(boxes).toMatch(/stroke:\s*var\(--graph-breakup-line\)/);
+    const labels = rules.get(
+      'main#app .fullscreen-svg g.cluster rect[fill="pink"] ~ path[fill="black"]');
+    expect(labels).toBeTruthy();
+    expect(labels).toMatch(/fill:\s*var\(--graph-breakup-line\)/);
+  });
+
+  it('keeps the light breakup values equal to vizdom\'s baked pink and black', () => {
+    // The light rules must be a visual no-op: the palette values equal the
+    // DOT's baked fillcolor=pink and the default black stroke/label glyphs.
+    expect(lightPalette.get('--graph-breakup-fill')).toBe('#ffc0cb');
+    expect(lightPalette.get('--graph-breakup-line')).toBe('#000000');
+  });
+
+  it('tunes the dark breakup surface for the dark page', () => {
+    expect(darkPalette.get('--graph-breakup-fill')).toBe('#7f3350');
+    expect(darkPalette.get('--graph-breakup-line')).toBe('#f2b8cd');
+  });
+
+  it('dark breakup boxes keep the edges visible and read as flagged', () => {
+    // Edges (--graph-line) cross the breakup boxes and must stay visible
+    // against the fill (SC 1.4.11, >= 3:1) — baked pink only reached 1.45:1.
+    expect(contrastOf(darkPalette, '--graph-line', '--graph-breakup-fill'))
+      .toBeGreaterThanOrEqual(3);
+    // The pink label ink keeps AA text contrast on the rose fill (SC 1.4.3)
+    // and the boundary stays perceivable against the page behind the box.
+    expect(contrastOf(darkPalette, '--graph-breakup-fill', '--graph-breakup-line'))
+      .toBeGreaterThanOrEqual(4.5);
+    expect(contrastOf(darkPalette, '--bg-color', '--graph-breakup-line'))
+      .toBeGreaterThanOrEqual(3);
+    // The rose fill reads clearly against the near-black regular clusters
+    // (large-area presence plus a warm hue shift; the site's own dark
+    // surfaces sit at 1.29:1). The perceivable boundary is the pink ink.
+    expect(contrastOf(darkPalette, '--bg-color', '--graph-breakup-fill'))
+      .toBeGreaterThanOrEqual(2);
+  });
+});
+
+// DOT-graph hover highlights (vizdom SVGs): lib/report-view.js toggles the
+// rf-hover-* state classes on mouseover/focus — the hovered edge plus both
+// endpoint nodes take the amber attention accent, a hovered node takes the
+// focus ring while its incoming edges + source nodes go green and its
+// outgoing edges + sink nodes go blue. The accents re-stroke the baked
+// shapes, so they must stay perceivable on every graph surface of their
+// palette (SC 1.4.11) and stand apart from the slate --graph-line edges.
+describe('graph hover highlight accents', () => {
+  it('declares per-palette amber/green/blue highlight accents', () => {
+    expect(lightPalette.get('--graph-hover-edge')).toBe('#b45309');
+    expect(lightPalette.get('--graph-hover-in')).toBe('#1e8449');
+    expect(lightPalette.get('--graph-hover-out')).toBe('#2a6f97');
+    expect(darkPalette.get('--graph-hover-edge')).toBe('#f0b95a');
+    expect(darkPalette.get('--graph-hover-in')).toBe('#7ee2a8');
+    expect(darkPalette.get('--graph-hover-out')).toBe('#8ed0fa');
+    // The on-accent label ink for highlighted nodes: white on the dark
+    // light-mode accent fills, black on the bright dark-mode accent fills.
+    expect(lightPalette.get('--graph-hover-on')).toBe('#ffffff');
+    expect(darkPalette.get('--graph-hover-on')).toBe('#000000');
+  });
+
+  it('fills and re-strokes hovered edges and their endpoint nodes with the amber accent', () => {
+    const curve = rules.get('main#app .fullscreen-svg g.edge.rf-hover-edge path[stroke]');
+    expect(curve).toBeTruthy();
+    expect(curve).toMatch(/stroke:\s*var\(--graph-hover-edge\)/);
+    expect(curve).toMatch(/stroke-width:\s*2\.5px/);
+    const arrow = rules.get('main#app .fullscreen-svg g.edge.rf-hover-edge polygon');
+    expect(arrow).toMatch(/stroke:\s*var\(--graph-hover-edge\)/);
+    expect(arrow).toMatch(/fill:\s*var\(--graph-hover-edge\)/);
+    // Highlighted nodes fill with the accent, not just ring it.
+    const ring = rules.get('main#app .fullscreen-svg g.node.rf-hover-edge ellipse');
+    expect(ring).toMatch(/stroke:\s*var\(--graph-hover-edge\)/);
+    expect(ring).toMatch(/fill:\s*var\(--graph-hover-edge\)/);
+    expect(rules.get('main#app .fullscreen-svg g.node.rf-hover-edge rect'))
+      .toMatch(/fill:\s*var\(--graph-hover-edge\)/);
+  });
+
+  it('fills and rings the hovered node and colors incoming vs outgoing differently', () => {
+    const focus = rules.get('main#app .fullscreen-svg g.node.rf-hover-focus ellipse');
+    expect(focus).toMatch(/stroke:\s*var\(--graph-hover-edge\)/);
+    expect(focus).toMatch(/fill:\s*var\(--graph-hover-edge\)/);
+    for (const state of ['in', 'out']) {
+      const accent = `--graph-hover-${state}`;
+      const curve = rules.get(`main#app .fullscreen-svg g.edge.rf-hover-${state} path[stroke]`);
+      expect(curve).toMatch(new RegExp(`stroke:\\s*var\\(${accent}\\)`));
+      const arrow = rules.get(`main#app .fullscreen-svg g.edge.rf-hover-${state} polygon`);
+      expect(arrow).toMatch(new RegExp(`stroke:\\s*var\\(${accent}\\)`));
+      expect(arrow).toMatch(new RegExp(`fill:\\s*var\\(${accent}\\)`));
+      const fill = rules.get(`main#app .fullscreen-svg g.node.rf-hover-${state} ellipse`);
+      expect(fill).toMatch(new RegExp(`stroke:\\s*var\\(${accent}\\)`));
+      expect(fill).toMatch(new RegExp(`fill:\\s*var\\(${accent}\\)`));
+      expect(rules.get(`main#app .fullscreen-svg g.node.rf-hover-${state} rect`))
+        .toMatch(new RegExp(`fill:\\s*var\\(${accent}\\)`));
+    }
+    // A node that is both a source and a sink of the hovered node is a
+    // bidirectional partner: it fills with the attention accent over the
+    // two directional states.
+    const both = rules.get('main#app .fullscreen-svg g.node.rf-hover-in.rf-hover-out ellipse');
+    expect(both).toMatch(/fill:\s*var\(--graph-hover-edge\)/);
+    expect(both).toMatch(/stroke:\s*var\(--graph-hover-edge\)/);
+  });
+
+  it('re-inks the labels of highlighted nodes to stay readable on the fill', () => {
+    // Node labels are glyph paths with a baked black fill sitting on the
+    // shape; once the shape fills with an accent the ink must flip to the
+    // palette's on-accent color (SC 1.4.3).
+    for (const state of ['edge', 'focus', 'in', 'out']) {
+      const label = rules.get(
+        `main#app .fullscreen-svg g.node.rf-hover-${state} path[fill="black"]`);
+      expect(label).toBeTruthy();
+      expect(label).toMatch(/fill:\s*var\(--graph-hover-on\)/);
+    }
+  });
+
+  it('keeps every accent perceivable on every graph surface of its palette (SC 1.4.11)', () => {
+    for (const palette of [lightPalette, darkPalette]) {
+      for (const accent of ['--graph-hover-edge', '--graph-hover-in', '--graph-hover-out']) {
+        for (const surface of ['--bg-color', '--graph-breakup-fill']) {
+          expect(contrastOf(palette, surface, accent)).toBeGreaterThanOrEqual(3);
+        }
+      }
+    }
+  });
+
+  it('keeps node labels readable on every accent fill (SC 1.4.3, both palettes)', () => {
+    for (const palette of [lightPalette, darkPalette]) {
+      for (const accent of ['--graph-hover-edge', '--graph-hover-in', '--graph-hover-out']) {
+        expect(contrastOf(palette, accent, '--graph-hover-on')).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+});
+
 describe('popup close button', () => {
   it('is a red square re-driven from palette variables', () => {
     // The template ships a bare × button; the red-square chrome must come
@@ -457,7 +633,11 @@ describe('menu toggle contrast', () => {
 });
 
 describe('report CSS selector boundaries', () => {
-  it('themes only graph edges and arrowheads, preserving red cycles and node glyphs', () => {
+  // Mirrors the vizdom SVG structure (probe against the vendored 0.1.19):
+  // edge curves (stroke paths), arrowhead polygons, node ellipses with
+  // label glyph paths, and package clusters as g.cluster rects whose label
+  // glyph path follows the rect as a sibling.
+  const graphSvgFixture = () => {
     const fixture = document.createElement('div');
     fixture.innerHTML = `
       <main id="app"><svg class="fullscreen-svg">
@@ -467,13 +647,73 @@ describe('report CSS selector boundaries', () => {
         <polygon id="arrow" fill="black"/>
         <polygon id="cycle-arrow" fill="red"/>
         <ellipse id="node" fill="white"/>
+        <g class="cluster"><a>
+          <rect id="cluster-box" fill="white" stroke="black"/>
+          <path id="cluster-label" fill="black"/>
+        </a></g>
+        <g class="cluster"><a>
+          <rect id="breakup-box" fill="pink" stroke="black"/>
+          <path id="breakup-label" fill="black"/>
+        </a></g>
+        <g class="node"><a><rect id="rect-node" fill="white" stroke="black"/></a></g>
       </svg><svg><path id="other-icon" stroke="black"/></svg></main>
       <svg class="fullscreen-svg"><path id="outside-report" stroke="black"/></svg>`;
+    return fixture;
+  };
+
+  it('themes graph edges, arrowheads and regular clusters; red cycles and node glyphs stay untouched', () => {
+    const fixture = graphSvgFixture();
     const selectors = [...rules].filter(([, body]) => /var\(--graph-line\)/.test(body))
       .map(([selector]) => selector);
     expect(selectors.length).toBeGreaterThan(0);
     expect([...fixture.querySelectorAll(selectors.join(','))].map(el => el.id))
-      .toEqual(['edge', 'arrow']);
+      .toEqual(['edge', 'arrow', 'cluster-box', 'cluster-label']);
+  });
+
+  it('themes break-up clusters only through the breakup rules', () => {
+    const fixture = graphSvgFixture();
+    const selectors = [...rules]
+      .filter(([, body]) => /var\(--graph-breakup-(?:fill|line)\)/.test(body))
+      .map(([selector]) => selector);
+    expect(selectors.length).toBeGreaterThan(0);
+    expect([...fixture.querySelectorAll(selectors.join(','))].map(el => el.id))
+      .toEqual(['breakup-box', 'breakup-label']);
+  });
+
+  it('hover highlight rules stay inert until an element carries a hover state', () => {
+    const fixture = document.createElement('div');
+    fixture.innerHTML = `
+      <main id="app"><svg class="fullscreen-svg">
+        <g class="edge" id="ge-hover"><path id="p-hover" stroke="black"/><polygon id="a-hover" fill="black"/></g>
+        <g class="edge" id="ge-in"><path id="p-in" stroke="red"/><polygon id="a-in" fill="red"/></g>
+        <g class="edge" id="ge-out"><path id="p-out" stroke="black"/><polygon id="a-out" fill="black"/></g>
+        <g class="node" id="gn-hover"><ellipse id="e-hover"/><path id="l-hover" fill="black"/></g>
+        <g class="node" id="gn-focus"><ellipse id="e-focus"/><rect id="r-focus"/><path id="l-focus" fill="black"/></g>
+        <g class="node" id="gn-in"><ellipse id="e-in"/><path id="l-in" fill="black"/></g>
+        <g class="node" id="gn-out"><ellipse id="e-out"/><path id="l-out" fill="black"/></g>
+        <g class="node" id="gn-both"><ellipse id="e-both"/><path id="l-both" fill="black"/></g>
+        <g class="edge" id="ge-cold"><path id="p-cold" stroke="black"/></g>
+        <g class="node" id="gn-cold"><ellipse id="e-cold"/><path id="l-cold" fill="black"/></g>
+      </svg></main>`;
+    const selectors = [...rules]
+      .filter(([, body]) => /var\(--graph-hover-(?:edge|in|out|on)\)/.test(body))
+      .map(([selector]) => selector);
+    expect(selectors.length).toBeGreaterThan(0);
+    // Nothing matches while no element is flagged…
+    expect([...fixture.querySelectorAll(selectors.join(','))]).toEqual([]);
+    // …including red removal edges and plain shapes once the states are set.
+    fixture.querySelector('#ge-hover').classList.add('rf-hover-edge');
+    fixture.querySelector('#ge-in').classList.add('rf-hover-in');
+    fixture.querySelector('#ge-out').classList.add('rf-hover-out');
+    fixture.querySelector('#gn-hover').classList.add('rf-hover-edge');
+    fixture.querySelector('#gn-focus').classList.add('rf-hover-focus');
+    fixture.querySelector('#gn-in').classList.add('rf-hover-in');
+    fixture.querySelector('#gn-out').classList.add('rf-hover-out');
+    fixture.querySelector('#gn-both').classList.add('rf-hover-in', 'rf-hover-out');
+    expect([...fixture.querySelectorAll(selectors.join(','))].map(el => el.id))
+      .toEqual(['p-hover', 'a-hover', 'p-in', 'a-in', 'p-out', 'a-out',
+        'e-hover', 'l-hover', 'e-focus', 'r-focus', 'l-focus',
+        'e-in', 'l-in', 'e-out', 'l-out', 'e-both', 'l-both']);
   });
 
   it('applies the unwrapped-table scrolling rule only to report data tables without enhancement', () => {

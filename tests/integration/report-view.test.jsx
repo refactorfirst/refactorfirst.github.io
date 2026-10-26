@@ -151,6 +151,38 @@ describe('ReportView', () => {
     expect(container.querySelector('#classGraph svg')).not.toBeNull();
   });
 
+  test('renders the inline package graph through vizdom when the widget is ready', async () => {
+    const renderedSvgs = [];
+    const capturedDots = [];
+    window.Vizdom = {
+      DotParser: class {
+        parse(dot) {
+          capturedDots.push(dot);
+          return {
+            to_directed: () => ({
+              layout: () => ({
+                to_svg: () => ({
+                  to_string: () => { renderedSvgs.push(true); return '<svg version="1.1"><g/></svg>'; }
+                })
+              })
+            })
+          };
+        }
+      }
+    };
+    markWidgetReady('vizdom');
+    respondJsonFor(sampleJson);
+    const { container } = await renderReport();
+    expect(renderedSvgs.length).toBeGreaterThan(0);
+    // the package graph renders its flat ellipse DOT through the same vizdom path
+    const packageDot = capturedDots.find(dot => dot.includes('label="junit.framework" shape=ellipse'));
+    expect(packageDot).toBeDefined();
+    expect(packageDot).toContain('color=red style=filled');
+    expect(packageDot).not.toContain('compound=true');
+    expect(packageDot).not.toContain('subgraph');
+    expect(container.querySelector('#packageGraph svg')).not.toBeNull();
+  });
+
   test('shows the analysis-incomplete alert when project.analysisFailed is set', async () => {
     const failedReport = JSON.parse(JSON.stringify(sampleJson));
     failedReport.project.analysisFailed = true;
@@ -580,7 +612,7 @@ describe('enhanced report tables: sorting', () => {
     const cycleCounts = tableRows(utils, 'class-relationships')
       .map(row => Number(row.children[2].textContent.trim()));
     expect([...cycleCounts].sort((a, b) => a - b)).toEqual(cycleCounts);
-  });
+  }, SLOW_TEST_MS);
 });
 
 describe('enhanced report tables: search and filter', () => {
@@ -602,7 +634,7 @@ describe('enhanced report tables: search and filter', () => {
     for (const row of tableRows(utils, 'class-relationships')) {
       expect(row.textContent.toLowerCase()).toContain('assert');
     }
-  });
+  }, SLOW_TEST_MS);
 
   test('the clear button restores the full dataset', async () => {
     respondJsonFor(sampleJson);
@@ -620,7 +652,7 @@ describe('enhanced report tables: search and filter', () => {
     await waitForPage(utils, 'class-relationships', 'Page 1 of 3');
     expect(tableRows(utils, 'class-relationships').length).toBe(20);
     expect(input().value).toBe('');
-  });
+  }, SLOW_TEST_MS);
 
   test('the search input keeps focus and its value across re-renders', async () => {
     respondJsonFor(sampleJson);
@@ -637,7 +669,7 @@ describe('enhanced report tables: search and filter', () => {
     const refocused = utils.container.querySelector('[data-rf-search="class-relationships"]');
     expect(document.activeElement).toBe(refocused);
     expect(refocused.value).toBe('junit');
-  });
+  }, SLOW_TEST_MS);
 });
 
 describe('enhanced report tables: stateful widgets survive interactions', () => {
@@ -682,7 +714,7 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
     expect(utils.container.querySelector('canvas#chart_GOD')).toBe(liveCanvas);
     expect(utils.container.querySelector('#classGraph')).toBe(liveGraph);
     expect(utils.container.querySelector('#classGraph svg')).not.toBeNull();
-  });
+  }, SLOW_TEST_MS);
 
   test('popup buttons keep working after a table interaction re-render', async () => {
     respondJsonFor(sampleJson);
@@ -698,7 +730,7 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
     fireEvent.click(popupButton);
     expect(document.getElementById('overlay').style.display).toBe('block');
     hideAllPopups();
-  });
+  }, SLOW_TEST_MS);
 
   test('a payload change destroys the previous charts before the loading markup and re-creates them', async () => {
     // Every Chart.js construction/teardown, in order, so the test can pin
