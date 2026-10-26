@@ -1,0 +1,1122 @@
+/* Main stylesheet: CSS custom properties, base layout, footer. */
+
+/* ---- Color palettes (dark mode: plans/css-only-dark-mode.md) ---- */
+/* The theme is selected purely in CSS: the three radios in
+ * components/theme-toggle.jsx are the single source of truth.
+ *  - explicit "dark" radio  -> :root:has(#rf-theme-dark:checked) below;
+ *  - "system" radio + dark OS -> the prefers-color-scheme block below;
+ *  - anything else           -> this light :root palette.
+ * :has() blocks (1,2,0) beat mvp.css's later :root (0,1,0); the light mvp
+ * overrides therefore need html:root (0,1,1) to survive the load order. */
+
+:root {
+  color-scheme: light;
+  --brand-color: #2a6f97;
+  /* Darker accent: white text on it passes WCAG 2.2 AA contrast (1.4.3) and
+     it serves as the visible focus indicator (2.4.11, >= 3:1 against the
+     white page background). */
+  --brand-accent: #1f5273;
+  /* --brand-color is an accent *background* (white text sits on it, in both
+     palettes). Accent *text* (links, wordmark) needs its own role: #2a6f97
+     as text fails AA on the dark page background. */
+  --link-color: #2a6f97;
+  --on-accent-color: #ffffff;
+  --text-color: #1f2d3d;
+  --muted-color: #5c6b7a;
+  --bg-color: #ffffff;
+  --surface-color: #f5f8fa;
+  --card-bg: #ffffff;
+  --border-color: #dde4ea;
+  --input-border: #c6d2dc;
+  /* Hamburger glyph + 1px border on the menu surface: mvp.css paints every
+     button in --color-bg (the page background), which is invisible here, so
+     the toggle re-drives from this accent (7.8:1 on --surface-color). */
+  --menu-toggle-color: #1f5273;
+  /* vizdom WASM graph edges bake black stroke/fill attributes into the SVG;
+     palette-driven so the dark theme can swap them to a readable tint. */
+  --graph-line: #000000;
+  /* Break-up package clusters: vizdom bakes fillcolor=pink onto the cluster
+     rect with the default black stroke/label glyphs. The light values equal
+     those baked colors, so the re-driving rules below never change the
+     light theme by a pixel; the dark block swaps them for a tuned surface. */
+  --graph-breakup-fill: #ffc0cb;
+  --graph-breakup-line: #000000;
+  /* DOT-graph hover highlights (vizdom SVGs): the hovered edge/node and its
+     partners take the amber attention accent; a hovered node colors its
+     incoming (source) and outgoing (sink) neighborhoods green/blue. All
+     three pass >= 3:1 on the white page and on the pink breakup clusters;
+     highlighted nodes fill with their accent, and the label ink flips to
+     --graph-hover-on to stay readable on it (white on these dark accents). */
+  --graph-hover-edge: #b45309;
+  --graph-hover-in: #1e8449;
+  --graph-hover-out: #2a6f97;
+  --graph-hover-on: #ffffff;
+  --error-color: #c0392b;
+  --success-color: #1e8449;
+  --error-bg: #fdf6f5;
+  --error-border: #f0c6c0;
+  --btn-hover-bg: #e8f0f6;
+  --btn-disabled-bg: #f3f4f6;
+  --btn-disabled-text: #6b7280;
+  --popup-border: #cccccc;
+   /* Close-button red: white × on it passes AA (>= 4.5:1) and the square
+     clears 3:1 against the white popup surface (SC 1.4.11). */
+  --popup-close-bg: #c0392b;
+  --popup-close-fg: #ffffff;
+  --toast-bg: #1f2933;
+  --toast-text: #ffffff;
+  --menu-max-height: 140px;
+  --menu-height: 48px;
+  --radius: 6px;
+  --shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  /* mvp.css caps header/footer/main at --width-content (1080px by default).
+     Report pages and listings should fill the view: content uses 95% of the
+     viewport width instead. */
+  --width-content: min(3840px, 95vw);
+}
+
+/* mvp.css re-declares its variables on :root AFTER this bundle loads, so
+   same-specificity overrides lose the cascade. html:root (0,1,1) wins over
+   mvp's :root (0,1,0) and themes every mvp-styled element (inputs, quotes,
+   table headers, zebra rows, scrollbars) via mvp's own variable plumbing. */
+html:root {
+  --color-bg: var(--bg-color);
+  --color-text: var(--text-color);
+  --color-bg-secondary: var(--surface-color);
+  --color-text-secondary: var(--muted-color);
+  --color-link: var(--link-color);
+  --color-secondary: var(--brand-accent);
+  --color-secondary-accent: rgba(42, 111, 151, 0.08);
+  --color-accent: rgba(42, 111, 151, 0.08);
+  --color-shadow: rgba(0, 0, 0, 0.12);
+  --color-table: var(--brand-color);
+  --color-scrollbar: var(--input-border);
+}
+
+/* Dark palette. The two blocks below MUST stay identical: one applies the
+   explicit dark radio at any OS setting, the other applies the system radio
+   only when the OS prefers dark. tests/unit/theme-css.test.js guards the
+   duplication byte-for-byte. */
+:root:has(#rf-theme-dark:checked) {
+  color-scheme: dark;
+  --brand-color: #2a6f97;
+  /* Focus indicator / hover accent on the dark page: >= 3:1 against both
+     --bg-color (3.8:1) and --surface-color (3.3:1), and 4.8:1 against white,
+     so the light-mode guards keep passing under their last-occurrence
+     variable resolution (tests/unit/css-a11y.test.js). */
+  --brand-accent: #3178a6;
+  --link-color: #6fb1d9;
+  --on-accent-color: #ffffff;
+  --text-color: #e6edf3;
+  --muted-color: #9fb0c0;
+  --bg-color: #10161d;
+  --surface-color: #1a2330;
+  --card-bg: #1a2330;
+  --border-color: #2c3a4d;
+  --input-border: #5b7396;
+  /* Hamburger glyph + 1px border on the dark menu surface (6.8:1). */
+  --menu-toggle-color: #6fb1d9;
+  --graph-line: #9fb0c0;
+  /* Break-up package clusters: the baked pink is a glaring pastel slab on
+     the dark page (11.8:1) and swallows the #9fb0c0 edges crossing it
+     (1.45:1), so the box drops to a deep rose — flagged against the
+     near-black regular clusters (2.2:1 plus a warm hue shift) while the
+     edges stay visible on it (3.8:1) — and a light pink ink carries the
+     boundary and label (5.0:1 on the fill, 10.8:1 on the page). */
+  --graph-breakup-fill: #7f3350;
+  --graph-breakup-line: #f2b8cd;
+  /* DOT-graph hover highlights: bright accents that stay distinct from the
+     slate #9fb0c0 edges (hue + width) and pass >= 3:1 on both cluster
+     fills (#10161d regular, #7f3350 rose). */
+  --graph-hover-edge: #f0b95a;
+  --graph-hover-in: #7ee2a8;
+  --graph-hover-out: #8ed0fa;
+  /* Label ink on the accent-filled highlighted nodes: the bright fills take
+     black glyphs (the labels bake a black fill in both palettes). */
+  --graph-hover-on: #000000;
+  --error-color: #f0928c;
+  --success-color: #5bbd8b;
+  --error-bg: #2b1d1f;
+  --error-border: #7a4a48;
+  --btn-hover-bg: #243244;
+  --btn-disabled-bg: #232a35;
+  --btn-disabled-text: #8a97a8;
+  --popup-border: #3a4b61;
+  /* Brighter red for the dark surface: keeps the white × at AA (4.6:1)
+     and the square at 3.4:1 against --card-bg (SC 1.4.11). */
+  --popup-close-bg: #cf4436;
+  --popup-close-fg: #ffffff;
+  --toast-bg: #1f2933;
+  --toast-text: #ffffff;
+  --color-bg: var(--bg-color);
+  --color-text: var(--text-color);
+  --color-bg-secondary: var(--surface-color);
+  --color-text-secondary: var(--muted-color);
+  --color-link: var(--link-color);
+  --color-secondary: var(--link-color);
+  --color-secondary-accent: rgba(111, 177, 217, 0.12);
+  --color-accent: rgba(111, 177, 217, 0.1);
+  --color-shadow: rgba(0, 0, 0, 0.33);
+  --color-table: var(--link-color);
+  --color-scrollbar: #566d8f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:has(#rf-theme-system:checked) {
+    color-scheme: dark;
+    --brand-color: #2a6f97;
+    --brand-accent: #3178a6;
+    --link-color: #6fb1d9;
+    --on-accent-color: #ffffff;
+    --text-color: #e6edf3;
+    --muted-color: #9fb0c0;
+    --bg-color: #10161d;
+    --surface-color: #1a2330;
+    --card-bg: #1a2330;
+    --border-color: #2c3a4d;
+    --input-border: #5b7396;
+    /* Hamburger glyph + 1px border on the dark menu surface (6.8:1). */
+    --menu-toggle-color: #6fb1d9;
+    --graph-line: #9fb0c0;
+    /* Break-up package clusters: the baked pink is a glaring pastel slab on
+       the dark page (11.8:1) and swallows the #9fb0c0 edges crossing it
+       (1.45:1), so the box drops to a deep rose — flagged against the
+       near-black regular clusters (2.2:1 plus a warm hue shift) while the
+       edges stay visible on it (3.8:1) — and a light pink ink carries the
+       boundary and label (5.0:1 on the fill, 10.8:1 on the page). */
+    --graph-breakup-fill: #7f3350;
+    --graph-breakup-line: #f2b8cd;
+    /* DOT-graph hover highlights: bright accents that stay distinct from the
+       slate #9fb0c0 edges (hue + width) and pass >= 3:1 on both cluster
+       fills (#10161d regular, #7f3350 rose). */
+    --graph-hover-edge: #f0b95a;
+    --graph-hover-in: #7ee2a8;
+    --graph-hover-out: #8ed0fa;
+    /* Label ink on the accent-filled highlighted nodes: the bright fills take
+       black glyphs (the labels bake a black fill in both palettes). */
+    --graph-hover-on: #000000;
+    --error-color: #f0928c;
+    --success-color: #5bbd8b;
+    --error-bg: #2b1d1f;
+    --error-border: #7a4a48;
+    --btn-hover-bg: #243244;
+    --btn-disabled-bg: #232a35;
+    --btn-disabled-text: #8a97a8;
+    --popup-border: #3a4b61;
+    /* Brighter red for the dark surface: keeps the white × at AA (4.6:1)
+       and the square at 3.4:1 against --card-bg (SC 1.4.11). */
+    --popup-close-bg: #cf4436;
+    --popup-close-fg: #ffffff;
+    --toast-bg: #1f2933;
+    --toast-text: #ffffff;
+    --color-bg: var(--bg-color);
+    --color-text: var(--text-color);
+    --color-bg-secondary: var(--surface-color);
+    --color-text-secondary: var(--muted-color);
+    --color-link: var(--link-color);
+    --color-secondary: var(--link-color);
+    --color-secondary-accent: rgba(111, 177, 217, 0.12);
+    --color-accent: rgba(111, 177, 217, 0.1);
+    --color-shadow: rgba(0, 0, 0, 0.33);
+    --color-table: var(--link-color);
+    --color-scrollbar: #566d8f;
+  }
+}
+
+body {
+  margin: 0;
+  color: var(--text-color);
+  background: var(--bg-color);
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--brand-color);
+  color: var(--on-accent-color);
+  padding: 0.5rem 1rem;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+/* mvp.css targets `footer, header, main` with the same specificity and is
+   loaded after the bundle CSS, so the id-qualified selector is the stable
+   way to win the cascade. Report pages should fill 95% of the view. */
+main#app {
+  max-width: min(3840px, 95vw);
+  margin: 0 auto;
+  padding: 1rem 1.5rem 3rem;
+  min-height: 60vh;
+}
+
+/* Skip-link target: suppress the outline only for programmatic (script/
+   click) focus; keyboard-focusable users keep the visible indicator (WCAG
+   2.4.7 / 2.4.11). */
+main:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* mvp.css makes every `section` a wrapping flex row with no gap and center
+   justification (`section { display: flex; flex-wrap: wrap; justify-content:
+   var(--justify-important) }`). It targets the mvp `section > aside` card
+   pattern, but our pages use sections as plain prose containers — so headings,
+   paragraphs, lists and code blocks were laid out side by side as flex items
+   and smashed together. mvp.css is loaded after this bundle, so the reset must
+   win on specificity: `main section` (0-0-2) beats the bare `section`
+   selector (0-0-1) regardless of cascade order. */
+main section {
+  display: block;
+}
+
+/* Prose pages: roughly 75ch measure, centered in the wide main column. */
+.content-page {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+/* Landing sections (CTA, featured repos) that keep centered text now that
+   sections no longer flex-center their children. */
+.section-center {
+  text-align: center;
+}
+
+.hero {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.hero h1 {
+  color: var(--link-color);
+  margin-bottom: 0.25rem;
+}
+
+.loading {
+  text-align: center;
+  color: var(--muted-color);
+  padding: 3rem 0;
+}
+
+.site-footer {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: var(--muted-color);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--surface-color);
+}
+
+a {
+  color: var(--link-color);
+}
+
+code {
+  background: var(--surface-color);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--surface-color);
+  padding: 1rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+/* Component styles: top menu, search, repo grid, pagination, forms, errors. */
+
+/* ---- Top navigation (max 140px, mobile hamburger) ---- */
+#top-menu {
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+  /* mvp.css adds generous header padding; reset it so max-height bounds the
+     whole rendered box (padding contributes outside max-height). */
+  padding: 0;
+  max-height: var(--menu-max-height);
+}
+
+.menu-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.3rem 0.8rem;
+  min-height: 48px;
+  overflow: visible;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: bold;
+  color: var(--link-color);
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.menu-search {
+  position: relative;
+  /* Grow into the space freed by the tighter link spacing. */
+  flex: 1 0 240px;
+  /* Space between the last menu link and the search bar matches the
+     left-to-right spacing measured between menu links: the .menu-bar flex
+     gap plus this small margin reproduce it (verified at 1280px via E2E). */
+  margin-left: 0.1rem;
+}
+
+.menu-search input {
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+}
+
+.menu-toggle {
+  display: none;
+  background: none;
+  /* mvp.css paints every button in var(--color-bg) — the page background —
+     which is invisible on the menu surface; re-drive glyph and border from
+     the palette so the control stays perceivable in both themes. */
+  color: var(--menu-toggle-color);
+  border: 1px solid var(--menu-toggle-color);
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+}
+
+.menu-links {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex-wrap: nowrap;
+  flex-shrink: 0; /* never squeeze the links — the bar scrolls/wraps instead */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* mvp.css gives every li a horizontal margin — zero it so the menu items
+   sit at the same tight rhythm as the search bar to their right. */
+.menu-links li {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.menu-links a {
+  display: inline-block;
+  padding: 0.15rem 0.2rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text-color);
+  font-size: 0.8rem;
+}
+
+.menu-links a:hover,
+.menu-links a:focus-visible {
+  background: var(--brand-color);
+  color: var(--on-accent-color);
+}
+
+/* ---- Breadcrumbs (user/report trail under the top menu) ---- */
+.breadcrumbs {
+  /* Lives on the .theme-bar row (rendered by app/layout.jsx), sharing the
+     line with the color theme toggle: the row owns the menu-column
+     alignment formula (max-width: var(--width-content) + 0.8rem horizontal
+     padding, see .theme-bar above), so the trail must add no box-model
+     offsets of its own — flex-grow fills the row's left side, keeping the
+     first crumb's glyph at the menu bar's left content edge while the
+     toggle pins to the right edge, both vertically centered. */
+  flex: 1 1 auto;
+  min-width: 0;
+  /* mvp.css gives bare nav a 7rem bottom margin, bold text and a spaced flex
+     row — reset all three so the trail sits inline like a sub-bar. */
+  margin: 0;
+  font-weight: normal;
+  display: block;
+  font-size: 0.85rem;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.1rem 0;
+}
+
+/* Path-style separator, pure CSS so it stays decorative for screen readers
+   (the ordered list already conveys the hierarchy). */
+.breadcrumbs li + li::before {
+  content: "/";
+  margin-right: 0.35rem;
+  color: var(--muted-color);
+}
+
+.breadcrumbs a,
+.breadcrumbs [aria-current] {
+  display: inline-block;
+  /* No left padding: the first crumb's glyph edge must sit at the menu
+     column left edge (the flex-gap + separator space the rest). */
+  padding: 0.2rem 0;
+}
+
+.breadcrumbs [aria-current] {
+  color: var(--muted-color);
+}
+
+/* ---- Search results ---- */
+.search-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 50;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--card-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.search-results li {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.search-results li.active,
+.search-results li:hover {
+  background: var(--brand-color);
+  color: var(--on-accent-color);
+}
+
+.hero-search {
+  position: relative;
+  /* Exactly half the rendered width of the top menu (#top-menu is capped by
+     mvp.css at --width-content = 1080px, full width below that) and centered
+     under it. */
+  width: min(540px, 50vw);
+  margin: 1rem auto;
+  text-align: left;
+}
+
+.hero-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+}
+
+/* ---- Repository grid ---- */
+.repo-grid,
+.featured-repos ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.repo-card {
+  display: block;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text-color);
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+
+.repo-card:hover,
+.repo-card:focus-visible {
+  border-color: var(--brand-color);
+  color: var(--link-color);
+}
+
+/* ---- Pagination ---- */
+.pagination {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.pagination .page {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+.pagination .page.current {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--on-accent-color);
+}
+
+/* ---- User listing (/user) ---- */
+.repo-listing h1,
+.repo-listing .listing-subtitle {
+  text-align: center;
+}
+
+.listing-subtitle {
+  margin-top: 0.25rem;
+  color: var(--muted-color);
+}
+
+/* ---- Forms / add-repo ---- */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.user-avatar {
+  border-radius: 50%;
+}
+
+#repo-form {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.form-status.error {
+  color: var(--error-color);
+}
+
+.form-status.success {
+  color: var(--success-color);
+}
+
+.cta {
+  display: inline-block;
+  background: var(--brand-color);
+  color: var(--on-accent-color);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+  border: none;
+  font-size: 1rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cta:hover {
+  background: var(--brand-accent);
+  color: var(--on-accent-color);
+}
+
+/* ---- Error pages ---- */
+.error-page {
+  max-width: 640px;
+  margin: 3rem auto;
+  text-align: center;
+  padding: 2rem;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius);
+  background: var(--error-bg);
+}
+
+.error-page h1 {
+  color: var(--error-color);
+}
+
+.error-code {
+  color: var(--muted-color);
+  font-size: 0.85rem;
+}
+
+.error-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.error-actions .retry {
+  background: var(--brand-color);
+  color: var(--on-accent-color);
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+/* ---- Responsive ---- */
+/* The header (brand + search + 9 menu links at 0.8rem) needs roughly 900px.
+ * Below that widths links would clip because .menu-links uses nowrap +
+ * overflow:hidden without a visible toggle, so switch to the collapsible
+ * menu early — before any navigation item becomes unreachable. */
+@media (max-width: 900px) {
+  #top-menu {
+    max-height: none;
+  }
+
+  .menu-bar {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .menu-toggle {
+    display: block;
+    margin-left: auto;
+    order: 2;
+  }
+
+  .menu-search {
+    /* On mobile the search sits on its own row between toggle and links. */
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-top: 0.5rem;
+  }
+
+  .menu-links {
+    display: none;
+    flex-basis: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    padding-bottom: 0.5rem;
+    order: 4;
+  }
+
+  .menu-links.open {
+    display: flex;
+  }
+
+  .repo-grid,
+  .featured-repos ul {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Toast notifications (copy feedback on report tables). Rendered by
+   components/toast-notification.jsx as a persistent aria-live region. */
+.rf-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  pointer-events: none;
+  max-width: min(90vw, 40rem);
+}
+
+.rf-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
+.rf-toast-message {
+  overflow-wrap: anywhere;
+}
+
+.rf-toast-dismiss {
+  background: none;
+  border: none;
+  color: var(--toast-text);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem 0.45rem;
+}
+
+.rf-toast-dismiss:focus-visible {
+  outline: 2px solid var(--brand-color);
+  outline-offset: 2px;
+}
+
+/* ---- Color theme toggle (three radio modes, pure-CSS switching) ---- */
+/* Row below the site header (rendered by app/layout.jsx): the breadcrumb
+   trail (when the route has one) on the left and the toggle on the right,
+   vertically centered on one line. The alignment formula .breadcrumbs used
+   to carry lives here now: --width-content column, 0.8rem horizontal
+   padding, border-box — keeping the first crumb's glyph at the menu bar's
+   left content edge and the toggle at its right content edge at every
+   viewport, the two edges mirroring each other. #top-menu is capped by
+   mvp.css at --width-content, so the row and the menu bar can never drift
+   apart. Crumb routes grow the trail (flex: 1 1 auto); crumb-less routes
+   leave only the toggle, pinned right by flex-end. */
+.theme-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: var(--width-content);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 0.4rem 0.8rem 0.45rem;
+}
+
+/* The radios in components/theme-toggle.jsx are the theme's single source of
+   truth (see the palette blocks at the top of this file). Each input is
+   visually replaced by its icon pill (appearance: none, absolute, fills the
+   28px label) but stays keyboard-focusable — the global :focus-visible rule
+   draws the indicator — and the checked pill doubles as the selected state,
+   so no JS is involved in switching. The control renders as a surface chip
+   so it stands out from the page background. */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+  padding: 0.15rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  background: var(--surface-color);
+}
+
+.theme-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem; /* 28px >= 24px minimum target size (SC 2.5.8) */
+  height: 1.75rem;
+  border-radius: 5px;
+}
+
+.theme-option:hover {
+  background: var(--btn-hover-bg);
+}
+
+.theme-option-input {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.theme-option-input:checked {
+  background: var(--brand-color);
+}
+
+.theme-option-icon {
+  /* Relative so the glyph paints above the checked input's pill. */
+  position: relative;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--text-color);
+  pointer-events: none;
+}
+
+.theme-option-input:checked + .theme-option-icon {
+  color: var(--on-accent-color);
+}
+
+/* ---- Report template theme overrides ---- */
+/* The bundled mustache template (public/assets/refactor-first-report.mustache)
+   hardcodes light values for a few report widgets; it stays byte-identical,
+   so these main#app rules (1,1,1) beat its injected <style> (0,1,0). They are
+   palette-driven with light values equal to the template's current colors,
+   so the same rule serves both palettes with no duplication. */
+main#app .popup {
+  background-color: var(--card-bg);
+  border-color: var(--popup-border);
+}
+
+main#app .close-btn {
+  /* Red square around the template's bare × button; 2rem clears the 24px
+     pointer-target minimum (SC 2.5.8). */
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: var(--popup-close-bg);
+  color: var(--popup-close-fg);
+  line-height: 1;
+}
+
+main#app .close-btn:focus-visible {
+  /* The ring floats off the red fill (blue on red is ~1:1) so it
+     contrasts with the popup surface behind it instead. */
+  outline-color: var(--brand-accent);
+  outline-offset: 2px;
+}
+
+main#app .rf-page-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--brand-color);
+  color: var(--text-color);
+}
+
+main#app .rf-page-btn:hover:not([disabled]) {
+  background: var(--btn-hover-bg);
+}
+
+main#app .rf-page-btn[disabled] {
+  background: var(--btn-disabled-bg);
+  border-color: var(--input-border);
+  color: var(--btn-disabled-text);
+}
+
+main#app .rf-export-btn:focus-visible,
+main#app .rf-page-btn:focus-visible {
+  outline-color: var(--brand-accent);
+}
+
+main#app .rf-data-table td[data-rf-copy]:focus-visible {
+  /* --brand-accent (the focus-indicator role), not --brand-color (the
+     accent-background role): #2a6f97 is only 2.9:1 against the dark
+     --surface-color, below the 3:1 of SC 2.4.11. */
+  outline-color: var(--brand-accent);
+}
+
+main#app .rf-table-search {
+  /* Anchors the overlaid clear control inside the input's right edge. */
+  position: relative;
+}
+
+main#app .rf-table-search .rf-search-label {
+  /* Screen-reader-only: the visible prompt is the input's placeholder. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+main#app .rf-table-search input[type="search"] {
+  /* mvp.css gives inputs a pale border that reads near-invisible on the
+     white page (under 3:1, SC 1.4.11). --muted-color is a full palette
+     role, so the border stays dark in light mode and bright on the dark
+     background. Room for the overlaid ×. */
+  border: 1px solid var(--muted-color);
+  padding-right: 1.9rem;
+  /* mvp.css also endows inputs with margin-bottom: 1rem; the flex slot
+     would grow by that margin, so the overlaid ×'s "50%" anchor point
+     would drop below the input and strand the button at its bottom edge.
+     The slot must hug the input exactly. */
+  margin: 0;
+}
+
+/* We inject our own themed × (palette colours, reveal/clear logic);
+   WebKit's native search-cancel button would otherwise sit beside it. */
+main#app .rf-table-search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+main#app .rf-table-search .rf-search-clear {
+  /* Overlaid on the input's right edge (the enhancer reveals it via the
+     `hidden` attribute only while the box holds a term). 1.6rem clears the
+     24px pointer-target minimum (SC 2.5.8) and fits the input's height. */
+  position: absolute;
+  top: 50%;
+  right: 0.1rem;
+  transform: translateY(-50%);
+  /* mvp.css gives buttons a ~0.5rem top margin, which for an absolutely
+     positioned element shifts the box down off the input's centre line. */
+  margin: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-color);
+}
+
+/* The flex centering must ride on :not([hidden]) — a plain `display` here
+   would override the UA's [hidden] { display: none } and keep the empty
+   state's × on screen. */
+main#app .rf-table-search .rf-search-clear:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+main#app .rf-table-search .rf-search-clear:focus-visible {
+  outline-color: var(--brand-accent);
+  outline-offset: -2px;
+}
+
+main#app table.rf-data-table:not([data-rf-table]) {
+  /* Unwrapped problem/solution tables have no .rf-table-scroll wrapper, and
+     mvp.css clamps them to max-width: 100% while rendering td/th with
+     white-space: nowrap; the template's overflow: visible then lets the
+     rows spill past the 5px border on narrow screens. Re-enable horizontal
+     scrolling here so the bordered box hugs the column and the wider rows
+     scroll inside it. The enhanced tables (data-rf-table) are excluded on
+     purpose: any overflow container would capture their viewport-sticky
+     table headers. */
+  overflow-x: auto;
+}
+
+/* vizdom WASM graphs (Class/Package/cycle maps): the layout bakes black
+   stroke/fill presentation attributes onto the edge curves and arrowhead
+   polygons, which vanish on the dark page. Only non-red elements re-drive
+   from the palette --graph-line — red stays red (cycle edges) and the
+   fill-only paths (text glyphs) are left alone: node labels stay black on
+   their white ellipses. */
+main#app .fullscreen-svg path[stroke]:not([stroke="red"]) {
+  stroke: var(--graph-line);
+}
+
+main#app .fullscreen-svg polygon:not([fill="red"]) {
+  stroke: var(--graph-line);
+  fill: var(--graph-line);
+}
+
+/* Package clusters: vizdom bakes the DOT's fillcolor onto each cluster rect
+   (probe against the vendored 0.1.19: g.cluster > a > rect fill="white"
+   stroke="black", with the cluster label as a black glyph path following the
+   rect as a sibling). appendPackage only ever emits fillcolor=white (regular
+   packages) or fillcolor=pink (break-up candidates), so the white boxes are
+   the packages that do not need to be broken up: their fill re-drives from
+   the palette so it matches the page — vizdom's default white on the light
+   page, the dark --bg-color in dark mode — and the baked black stroke follows
+   --graph-line like the rest of the graph. The cluster label glyphs ride on
+   the re-driven fill, so they follow --graph-line too; anchored to the white
+   rect sibling so the rule never touches the break-up clusters, which the
+   rules below theme through their own palette. Pure CSS: the DOT (and its
+   byte-identical lockstep with the Java NestedDotBuilder) keeps
+   fillcolor=white/fillcolor=pink. */
+main#app .fullscreen-svg g.cluster rect[fill="white"] {
+  fill: var(--bg-color);
+  stroke: var(--graph-line);
+}
+
+main#app .fullscreen-svg g.cluster rect[fill="white"] ~ path[fill="black"] {
+  fill: var(--graph-line);
+}
+
+/* Break-up packages (the pink rects) invert that treatment: their problem
+   signal survives the dark page best as a deep rose box with a light pink
+   boundary and label, because no single fill can pass 3:1 against both the
+   near-black page and the light --graph-line edges crossing the box — the
+   rose fill keeps the edges visible (SC 1.4.11) and the pink ink keeps the
+   box boundary and its label readable (SC 1.4.3). The light palette values
+   equal vizdom's baked pink/black, so this never changes light mode. */
+main#app .fullscreen-svg g.cluster rect[fill="pink"] {
+  fill: var(--graph-breakup-fill);
+  stroke: var(--graph-breakup-line);
+}
+
+main#app .fullscreen-svg g.cluster rect[fill="pink"] ~ path[fill="black"] {
+  fill: var(--graph-breakup-line);
+}
+
+/* Hover highlights on the DOT graphs: lib/report-view.js derives the
+   node/edge neighborhood from the vizdom titles and toggles rf-hover-*
+   state classes. Hovering an edge flags the edge plus both endpoint nodes
+   with the amber attention accent; hovering a node flags it with the same
+   accent while its incoming edges + source nodes go green and its outgoing
+   edges + sink nodes go blue, so dependency direction reads at a glance.
+   Highlighted nodes FILL with their accent (their baked white/red/pink fill
+   yields to the highlight like red removal edges do), and the node labels —
+   glyph paths with a baked black fill riding on the shape — re-ink to
+   --graph-hover-on to keep AA contrast on the fill. A node flagged both in
+   and out is a bidirectional partner of the hovered node and takes the
+   attention accent over either directional state. */
+main#app .fullscreen-svg g.edge.rf-hover-edge path[stroke] {
+  stroke: var(--graph-hover-edge);
+  stroke-width: 2.5px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-edge polygon {
+  stroke: var(--graph-hover-edge);
+  fill: var(--graph-hover-edge);
+}
+
+main#app .fullscreen-svg g.node.rf-hover-edge ellipse,
+main#app .fullscreen-svg g.node.rf-hover-edge rect,
+main#app .fullscreen-svg g.node.rf-hover-focus ellipse,
+main#app .fullscreen-svg g.node.rf-hover-focus rect {
+  stroke: var(--graph-hover-edge);
+  fill: var(--graph-hover-edge);
+  stroke-width: 2px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-in path[stroke] {
+  stroke: var(--graph-hover-in);
+  stroke-width: 2.5px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-in polygon {
+  stroke: var(--graph-hover-in);
+  fill: var(--graph-hover-in);
+}
+
+main#app .fullscreen-svg g.node.rf-hover-in ellipse,
+main#app .fullscreen-svg g.node.rf-hover-in rect {
+  stroke: var(--graph-hover-in);
+  fill: var(--graph-hover-in);
+  stroke-width: 2px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-out path[stroke] {
+  stroke: var(--graph-hover-out);
+  stroke-width: 2.5px;
+}
+
+main#app .fullscreen-svg g.edge.rf-hover-out polygon {
+  stroke: var(--graph-hover-out);
+  fill: var(--graph-hover-out);
+}
+
+main#app .fullscreen-svg g.node.rf-hover-out ellipse,
+main#app .fullscreen-svg g.node.rf-hover-out rect {
+  stroke: var(--graph-hover-out);
+  fill: var(--graph-hover-out);
+  stroke-width: 2px;
+}
+
+main#app .fullscreen-svg g.node.rf-hover-in.rf-hover-out ellipse,
+main#app .fullscreen-svg g.node.rf-hover-in.rf-hover-out rect {
+  stroke: var(--graph-hover-edge);
+  fill: var(--graph-hover-edge);
+}
+
+main#app .fullscreen-svg g.node.rf-hover-edge path[fill="black"],
+main#app .fullscreen-svg g.node.rf-hover-focus path[fill="black"],
+main#app .fullscreen-svg g.node.rf-hover-in path[fill="black"],
+main#app .fullscreen-svg g.node.rf-hover-out path[fill="black"] {
+  fill: var(--graph-hover-on);
+}
