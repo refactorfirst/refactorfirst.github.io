@@ -38,7 +38,7 @@ describe('ReportView fetch lifecycle', () => {
   test('aborts pending fetch on unmount and does not touch the DOM afterwards', async () => {
     mockFetch.mockImplementation(hangForever);
     const utils = render(_jsx(ReportView, {
-      username: 'alice', repository: 'one', widgetSettleMs: 25
+      username: 'alice', repository: 'one'
     }));
     // The template fetch must have started with a signal
     const signals = mockFetch.mock.calls.map(c => c[1]?.signal).filter(Boolean);
@@ -56,7 +56,7 @@ describe('ReportView fetch lifecycle', () => {
         ? Promise.resolve({ ok: true, text: () => Promise.resolve('<p>{{project.name}}</p>') })
         : hangForever());
     const utils = render(_jsx(ReportView, {
-      username: 'alice', repository: 'one', widgetSettleMs: 25
+      username: 'alice', repository: 'one'
     }));
     // The report JSON fetch (which hangs) carries the signal to abort
     await waitFor(() => {
@@ -66,7 +66,7 @@ describe('ReportView fetch lifecycle', () => {
       .find(c => String(c[0]).includes('/alice/one/'))[1]?.signal;
 
     utils.rerender(_jsx(ReportView, {
-      username: 'alice', repository: 'two', widgetSettleMs: 25
+      username: 'alice', repository: 'two'
     }));
     expect(firstSignal.aborted).toBe(true);
     // The new effect issues requests for the new repo asynchronously
@@ -79,13 +79,13 @@ describe('ReportView fetch lifecycle', () => {
   test('remount performs a fresh fetch', async () => {
     mockFetch.mockImplementation(hangForever);
     const first = render(_jsx(ReportView, {
-      username: 'alice', repository: 'one', widgetSettleMs: 25
+      username: 'alice', repository: 'one'
     }));
     first.unmount();
     const callsAfterUnmount = mockFetch.mock.calls.length;
 
     render(_jsx(ReportView, {
-      username: 'alice', repository: 'one', widgetSettleMs: 25
+      username: 'alice', repository: 'one'
     }));
     expect(mockFetch.mock.calls.length).toBeGreaterThan(callsAfterUnmount);
   });
@@ -99,7 +99,7 @@ describe('ReportView fetch lifecycle', () => {
       return hangForever();
     });
     const utils = render(_jsx(ReportView, {
-      username: 'alice', repository: 'one', widgetSettleMs: 25
+      username: 'alice', repository: 'one'
     }));
     await waitFor(() => expect(resolveTemplate).toBeTruthy());
     utils.unmount();
@@ -129,7 +129,7 @@ describe('ReportView fetch lifecycle', () => {
       return Promise.resolve({ ok: false, status: 404 });
     });
     const utils = render(_jsx(ReportView, {
-      username: 'alice', repository: 'one', widgetSettleMs: 0,
+      username: 'alice', repository: 'one',
       enhanceReportImpl, enhanceTablesImpl
     }));
 

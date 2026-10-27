@@ -21,6 +21,7 @@ import { render, waitFor, cleanup, installRtlDom } from './rtl';
 import { jsx as _jsx } from 'react/jsx-runtime';
 import ReportView from '../../components/report-view';
 import { markWidgetReady, resetWidgetRegistry } from '../../lib/widget-loader';
+import * as widgetLoader from '../../lib/widget-loader';
 import { BRANCH_RESOLVED_EVENT } from '../../lib/breadcrumbs.js';
 
 installRtlDom();
@@ -56,7 +57,6 @@ async function renderReport(props = {}) {
   const utils = render(_jsx(ReportView, {
     username: 'junit-team',
     repository: 'junit4',
-    widgetSettleMs: 25,
     ...props
   }));
   await waitFor(() => {
@@ -352,76 +352,136 @@ describe('ReportView', () => {
   });
 });
 
-// Widget gate: the render effect races widget readiness against a fallback
-// setTimeout. The fallback handle must be cleared when the race settles and
-// again if the effect is torn down first, instead of keeping the closure
-// (and its references) alive until widgetSettleMs elapses.
-describe('widget settle fallback timer', () => {
-  const SETTLE_MS = 4321; // distinctive delay so the fallback is identifiable
-
-  function trackTimers() {
-    const realSet = globalThis.setTimeout;
-    const realClear = globalThis.clearTimeout;
-    const created = [];
-    const cleared = new Set();
-    globalThis.setTimeout = (fn, delay, ...args) => {
-      const handle = realSet(fn, delay, ...args);
-      created.push({ handle, delay });
-      return handle;
-    };
-    globalThis.clearTimeout = handle => {
-      cleared.add(handle);
-      return realClear(handle);
-    };
-    return {
-      handlesFor: delay => created.filter(t => t.delay === delay).map(t => t.handle),
-      isCleared: handle => cleared.has(handle),
-      restore() {
-        globalThis.setTimeout = realSet;
-        globalThis.clearTimeout = realClear;
-      }
-    };
-  }
-
-  test('clears the fallback timer once the race settles', async () => {
-    const timers = trackTimers();
+// Progressive widget enhancement: the report markup renders as soon as the
+// payload arrives — never delayed on the optional CDN widgets — and the
+// chart/WASM-graph enhancements initialize when (and only when) their widget
+// reports ready. A widget that never loads leaves the static report fully
+// usable, and a payload change retires its still-pending widget callbacks.
+describe('progressive widget enhancement', () => {
+  test('unsubscribes pending widget callbacks on report replacement and unmount', async () => {
+    const subscribe = widgetLoader.onWidgetReady;
+    const cleanups = [];
+    const registration = spyOn(widgetLoader, 'onWidgetReady').mockImplementation((...args) => {
+      const unsubscribe = subscribe(...args);
+      const cleanup = mock(() => unsubscribe?.());
+      cleanups.push(cleanup);
+      return cleanup;
+    });
+    let utils;
     try {
-      // Widgets already ready, so waitForWidget resolves synchronously and
-      // creates no timers; the only SETTLE_MS timer is the race fallback.
-      markWidgetReady('chart');
-      markWidgetReady('vizdom');
       respondJsonFor(sampleJson);
-      await renderReport({ widgetSettleMs: SETTLE_MS });
+      utils = await renderReport();
+      expect(cleanups).toHaveLength(2);
+      const initialCleanups = [...cleanups];
 
-      const handles = timers.handlesFor(SETTLE_MS);
-      expect(handles).toHaveLength(1);
-      expect(timers.isCleared(handles[0])).toBe(true);
+      utils.rerender(_jsx(ReportView, {
+        username: 'junit-team', repository: 'junit4', branch: 'develop'
+      }));
+      await waitFor(() => {
+        expect(utils.container.querySelector('[data-resolved-branch="develop"]')).not.toBeNull();
+      });
+      for (const cleanup of initialCleanups) expect(cleanup).toHaveBeenCalledTimes(1);
+      for (const cleanup of cleanups.slice(-2)) expect(cleanup).not.toHaveBeenCalled();
+
+      utils.unmount();
+      for (const cleanup of cleanups) expect(cleanup).toHaveBeenCalledTimes(1);
     } finally {
-      timers.restore();
+      utils?.unmount();
+      registration.mockRestore();
     }
   });
 
-  test('clears a still-pending fallback timer when the effect is torn down', async () => {
-    const timers = trackTimers();
-    try {
-      respondJsonFor(sampleJson); // widgets never become ready
-      const utils = render(_jsx(ReportView, {
-        username: 'junit-team',
-        repository: 'junit4',
-        widgetSettleMs: SETTLE_MS
-      }));
-      // waitForWidget timers (chart, vizdom) + the race fallback, in order.
-      await waitFor(() => {
-        expect(timers.handlesFor(SETTLE_MS).length).toBeGreaterThanOrEqual(3);
-      });
-      const fallbackTimer = timers.handlesFor(SETTLE_MS).at(-1);
-      expect(timers.isCleared(fallbackTimer)).toBe(false);
+  test('renders the report without waiting for widgets to become ready', async () => {
+    respondJsonFor(sampleJson); // widgets are never marked ready
+    const utils = render(_jsx(ReportView, {
+      username: 'junit-team',
+      repository: 'junit4'
+    }));
+    // Tight timeout: the markup must appear as soon as the payload does —
+    // not after a multi-second widget-settle window.
+    await waitFor(() => {
+      expect(utils.container.querySelector('.rf-report h1')).not.toBeNull();
+    }, { timeout: 1000 });
+  });
 
-      utils.unmount();
-      expect(timers.isCleared(fallbackTimer)).toBe(true);
-    } finally {
-      timers.restore();
-    }
+  test('builds charts once the chart widget reports ready after the render', async () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    // The report rendered with the widget still pending: no charts yet.
+    expect(created.length).toBe(0);
+
+    markWidgetReady('chart');
+    await waitFor(() => {
+      expect(created.length).toBeGreaterThan(0);
+    });
+    expect(utils.container.querySelector('canvas#chart_GOD')).not.toBeNull();
+  });
+
+  test('renders inline graphs once vizdom reports ready after the render', async () => {
+    const renderedSvgs = [];
+    window.Vizdom = {
+      DotParser: class {
+        parse() {
+          return {
+            to_directed: () => ({
+              layout: () => ({
+                to_svg: () => ({
+                  to_string: () => { renderedSvgs.push(true); return '<svg><g/></svg>'; }
+                })
+              })
+            })
+          };
+        }
+      }
+    };
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    expect(renderedSvgs.length).toBe(0);
+
+    markWidgetReady('vizdom');
+    await waitFor(() => {
+      expect(renderedSvgs.length).toBeGreaterThan(0);
+    });
+    expect(utils.container.querySelector('#classGraph svg')).not.toBeNull();
+  });
+
+  test('a payload change retires its still-pending widget callbacks', async () => {
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    expect(created.length).toBe(0);
+
+    // Branch switch: the payload-1 chart callback must not fire into the
+    // replacement report; the fresh payload registers its own callback, so
+    // marking the widget ready builds exactly one chart per live canvas.
+    const secondJson = JSON.parse(JSON.stringify(sampleJson));
+    secondJson.project.name = 'JUnit (develop)';
+    mockFetch.mockImplementation(requested => {
+      const url = String(requested);
+      if (url.endsWith(TEMPLATE_URL)) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(reportTemplate) });
+      }
+      if (url.endsWith('/develop/.refactorfirst/refactor-first.json')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(secondJson) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+    utils.rerender(_jsx(ReportView, {
+      username: 'junit-team', repository: 'junit4', branch: 'develop'
+    }));
+    await waitFor(() => {
+      expect(utils.container.textContent).toContain('JUnit (develop)');
+    });
+
+    markWidgetReady('chart');
+    await waitFor(() => {
+      expect(created.length).toBeGreaterThan(0);
+    });
+    const liveCanvases = utils.container.querySelectorAll('canvas[id^="chart_"]').length;
+    expect(created.length).toBe(liveCanvases);
   });
 });
 
@@ -767,8 +827,7 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
     utils.rerender(_jsx(ReportView, {
       username: 'junit-team',
       repository: 'junit4',
-      branch: 'develop',
-      widgetSettleMs: 25
+      branch: 'develop'
     }));
     // The rerender passes through loading/graft phases that reuse or drop
     // the old canvas node; the destroys happen up front at the fetch
@@ -842,8 +901,7 @@ describe('enhanced report tables: stateful widgets survive interactions', () => 
     utils.rerender(_jsx(ReportView, {
       username: 'junit-team',
       repository: 'junit4',
-      branch: 'develop',
-      widgetSettleMs: 25
+      branch: 'develop'
     }));
     expect(instances.every(c => c.destroyed)).toBe(true);
   });

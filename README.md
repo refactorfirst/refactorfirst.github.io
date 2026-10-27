@@ -56,7 +56,7 @@ lib/                          # Shared logic consumed by client components and
 public/                       # Published verbatim: repositories.txt, assets/
                               # (mustache template, logo), templates/
                               # (workflow samples), widgets/ (WASM + ESM
-                              # bridges for vizdom, three-spritetext, Sentry)
+                              # bridges for vizdom, force-graph, Sentry)
 repositories.txt              # Listed repositories, one "user/repo" per line
 ci/process-submissions.sh     # Shared submission validator used by GitHub
                               # Actions, GitLab CI and Bitbucket Pipelines
@@ -436,7 +436,7 @@ in
 | URL routes                                      | `lib/routes.js` (+ `tests/unit/routes.test.js`)                                                                                                                                                                                                     |
 | Raw fetching / branch fallback (platform-aware) | `lib/fetcher.js`                                                                                                                                                                                                                                    |
 | Mustache rendering                              | `lib/renderer.js`, `public/assets/refactor-first-report.mustache` (port of the RefactorFirst viewer template)                                                                                                                                       |
-| Interactive report widgets                      | `lib/report-view.js` + CDN widgets loaded via `next/script` in `components/report-view.jsx` (Chart.js, sigma/graphology, graphlib-dot, svg-pan-zoom, 3d-force-graph) and the ES-module bridges in `public/widgets/` (vizdom WASM, three-spritetext) |
+| Interactive report widgets                      | `lib/report-view.js` + CDN widgets loaded via `next/script` in `components/report-view.jsx` (Chart.js, sigma/graphology, graphlib-dot, svg-pan-zoom) and the ES-module bridges in `public/widgets/` (vizdom WASM; force-graph: 3D graph + sprite labels sharing one pinned Three.js build) |
 | Search / type-ahead                             | `lib/search.js` + `components/{search-combobox,hero-search,menu-search}.jsx`                                                                                                                                                                        |
 | Submission flow                                 | `lib/repo-submission.js`, `components/repo-submission-form.jsx`                                                                                                                                                                                     |
 | Submission validation (CI)                      | `ci/process-submissions.sh`, `.github/workflows/add-repository.yml`, `.gitlab-ci.yml`, `bitbucket-pipelines.yml`                                                                                                                                    |

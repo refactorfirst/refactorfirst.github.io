@@ -2381,6 +2381,53 @@ describe('enhanceReport', () => {
     delete window.Chart;
   });
 
+  it('skips chart and graph initialization when their widgets are not ready', async () => {
+    document.body.innerHTML = `
+      <main id="app">
+        <div class="overlay" id="overlay" style="display:none"></div>
+        <div class="popup" id="popup-classGraph" style="display:none">
+          <div id="graph-container-classGraph"></div>
+        </div>
+        <div id="classGraph"></div>
+        <canvas id="chart_GOD"></canvas>
+      </main>`;
+    delete window.matchMedia;
+    const created = [];
+    window.Chart = function (ctx, config) { created.push(config); };
+    const parsed = [];
+    window.Vizdom = {
+      DotParser: class {
+        parse() {
+          parsed.push(true);
+          return {
+            to_directed: () => ({
+              layout: () => ({
+                to_svg: () => ({ to_string: () => '<svg><g/></svg>' })
+              })
+            })
+          };
+        }
+      }
+    };
+    const data = {
+      project: { name: 'Demo' },
+      classMap: { hierarchy: classHierarchy, dotThresholdExceeded: false },
+      disharmonies: [
+        { anchorId: 'GOD', title: 'God Classes', chart: { bubbles: [{ x: 1, y: 1, r: 3 }] } }
+      ]
+    };
+    // The report shell renders before the CDN widgets arrive: charts and
+    // graphs are deferred to their widget-readiness callbacks, so a
+    // not-ready widget must not trigger (or warn about) initialization.
+    await enhanceReport(document.getElementById('app'), data, { charts: false, graphs: false });
+    expect(created.length).toBe(0);
+    expect(parsed.length).toBe(0);
+    // The shell work still runs: popup globals and the synthesized DOT.
+    expect(typeof window.showPopup).toBe('function');
+    expect(window.classGraph_dot).toBe(lightDot(classHierarchy));
+    delete window.Chart;
+  });
+
   it('binds section menu links and scrolls to the initial URL hash', async () => {
     const originalScrollIntoView = window.Element.prototype.scrollIntoView;
     const scrolledTo = [];

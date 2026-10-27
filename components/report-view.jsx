@@ -1,12 +1,20 @@
 'use client';
 
 // Report page client component. Fetches the bundled Mustache template and
-// the repository's refactor-first.json once, then re-renders through
-// prepareReportData whenever per-table UI state (page/sort/search) changes.
-// lib/table-enhancer.js binds controls in the rendered DOM and reports table
-// actions back here; copy feedback surfaces through the toast region.
-// Widget scripts are loaded via next/script and report readiness through
-// lib/widget-loader.js.
+// the repository's refactor-first.json once (in parallel), then re-renders
+// through prepareReportData whenever per-table UI state (page/sort/search)
+// changes. lib/table-enhancer.js binds controls in the rendered DOM and
+// reports table actions back here; copy feedback surfaces through the toast
+// region. Widget scripts load via next/script and report readiness through
+// lib/widget-loader.js — the report markup renders as soon as the data
+// arrives and never waits on them; charts and WASM graphs enhance the page
+// when (and only when) their widget becomes ready.
+//
+// The initial loading placeholder lives inside #report-container in this
+// component's JSX and in the report page shells' Suspense fallback, and
+// app/globals.css reserves most of the viewport for the container, so the
+// report's late arrival grows the page below the fold instead of shoving
+// the footer (and CLS) down the screen.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -18,6 +26,8 @@ import { announceResolvedBranch } from '../lib/breadcrumbs.js';
 import { renderTemplate, prepareReportData } from '../lib/renderer';
 import {
   enhanceReport,
+  initDisharmonyCharts,
+  initWasmGraphs,
   bindPopupHandlers,
   stashStatefulDom,
   graftStatefulDom,
@@ -25,7 +35,7 @@ import {
 } from '../lib/report-view';
 import { enhanceTables } from '../lib/table-enhancer';
 import { renderErrorPage, logError } from '../lib/error-handler';
-import { markWidgetReady, waitForWidget } from '../lib/widget-loader';
+import { isWidgetReady, markWidgetReady, onWidgetReady } from '../lib/widget-loader';
 import ToastRegion, { useToastNotifications } from './toast-notification';
 import { TABLE_CONFIG } from '../lib/table-operations';
 
@@ -34,17 +44,14 @@ const CLASSIC_WIDGETS = [
   { name: 'svg-pan-zoom', src: 'https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js' },
   { name: 'sigma', src: 'https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js' },
   { name: 'graphology', src: 'https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js' },
-  { name: 'graphlib-dot', src: 'https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.4/dist/graphlib-dot.min.js' },
-  { name: '3d-force-graph', src: 'https://cdn.jsdelivr.net/npm/3d-force-graph' }
+  { name: 'graphlib-dot', src: 'https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.4/dist/graphlib-dot.min.js' }
 ];
 
 // Module bridges (CSP 'script-src self' — vendored files) report readiness
-// themselves via window.__rfMarkWidgetReady.
-const BRIDGE_WIDGETS = ['/widgets/vizdom-bridge.js', '/widgets/three-spritetext-bridge.js'];
-
-// Widgets that enhanceReport consumes synchronously; all others degrade
-// gracefully at popup-open time.
-const ENHANCE_WIDGETS = ['chart', 'vizdom'];
+// themselves via window.__rfMarkWidgetReady. The force-graph bridge loads
+// the 3D graph and its sprite labels as ES modules pinned to one shared
+// three build (the UMD used to ship a second, bundled three).
+const BRIDGE_WIDGETS = ['/widgets/vizdom-bridge.js', '/widgets/force-graph-bridge.js'];
 
 /**
  * Fetches and renders a repository report with interactive table controls.
@@ -58,7 +65,6 @@ export default function ReportView({
   branch: branchProp,
   environment: environmentProp,
   platformBaseUrl: platformBaseUrlProp,
-  widgetSettleMs = 5000,
   toastDurationMs = TABLE_CONFIG.copy.toastDuration,
   // Test seams (bun's mock.module leaks across test files, so lifecycle
   // tests inject Deferred/spying implementations instead of module mocks).
@@ -70,7 +76,6 @@ export default function ReportView({
   const [attempt, setAttempt] = useState(0);
   const [payload, setPayload] = useState(null);
   const [tableStates, setTableStates] = useState({});
-  const widgetsSettledRef = useRef(false);
   const pendingFocusRef = useRef(null);
   // The last payload that went through the full (expensive) enhanceReport
   // pipeline; table-state-only re-renders skip it and graft the live chart
@@ -97,15 +102,16 @@ export default function ReportView({
   }, [showToast]);
 
   // Fetch the template + report JSON once per report (no refetch on table
-  // interactions).
+  // interactions). Both requests start together — the cross-origin report
+  // JSON is the slow one and must not queue behind the same-origin template.
   useEffect(() => {
     const controller = new AbortController();
     const container = containerRef.current;
 
     // Every fetch cycle replaces the report markup — loading placeholder,
     // then the fresh render — so release the previous cycle's Chart.js
-    // instances before any of that happens; enhanceReport builds new charts
-    // for the new canvases once the payload arrives.
+    // instances before any of that happens; the chart widgets rebuild them
+    // for the new canvases once the payload renders.
     destroyBubbleCharts();
 
     /** Fetches the trusted template and the selected repository report. */
@@ -115,31 +121,35 @@ export default function ReportView({
       try {
         // The bundled template is authoritative — repository-provided
         // templates are untrusted and intentionally never fetched.
-        const templateResponse = await fetch(
+        const templatePromise = fetch(
           withBasePath('/assets/refactor-first-report.mustache'),
           { signal: controller.signal }
-        );
-        if (!templateResponse.ok) {
-          const error = new Error('Report template could not be loaded');
-          error.status = 500;
-          throw error;
-        }
-        const template = await templateResponse.text();
+        ).then(response => {
+          if (!response.ok) {
+            const error = new Error('Report template could not be loaded');
+            error.status = 500;
+            throw error;
+          }
+          return response.text();
+        });
 
         const environment = environmentProp ?? detectHostingEnvironment(window.location.hostname);
         const platformBaseUrl = platformBaseUrlProp ?? getPlatformBaseUrl(readMetaTag);
-        const { data, branch: resolvedBranch } = await fetchReport(username, repository, branch, {
-          environment,
-          baseUrl: platformBaseUrl,
-          signal: controller.signal
-        });
+        const [template, report] = await Promise.all([
+          templatePromise,
+          fetchReport(username, repository, branch, {
+            environment,
+            baseUrl: platformBaseUrl,
+            signal: controller.signal
+          })
+        ]);
 
         if (controller.signal.aborted) return;
         // Tell the breadcrumb trail which branch actually loaded (a main
         // 404 falls back to master) so its label matches the report shown.
-        announceResolvedBranch(window, { username, repository, branch: resolvedBranch });
+        announceResolvedBranch(window, { username, repository, branch: report.branch });
         setTableStates({});
-        setPayload({ template, data, resolvedBranch });
+        setPayload({ template, data: report.data, resolvedBranch: report.branch });
       } catch (error) {
         if (controller.signal.aborted || error.name === 'AbortError') return;
         logError(error, { route: 'report', username, repository, branch });
@@ -158,7 +168,9 @@ export default function ReportView({
   }, [username, repository, branch, environmentProp, platformBaseUrlProp, attempt]);
 
   // Render effect: re-renders the report whenever the payload arrives or the
-  // per-table UI state changes. Widgets only gate the first render. The
+  // per-table UI state changes. The markup never waits on widgets: ones that
+  // are ready enhance synchronously inside enhanceReport, and ones that are
+  // still loading enhance through the widget-readiness effect below. The
   // enhanceReport pipeline (Chart.js charts, WASM DOT layout) runs once per
   // payload; table-state re-renders carry the live stateful nodes over to
   // the fresh DOM and only re-bind the cheap popup/table handlers.
@@ -166,26 +178,10 @@ export default function ReportView({
     if (!payload) return undefined;
     let cancelled = false;
     const container = containerRef.current;
-    let widgetSettleTimer;
 
     /** Renders the current table state and restores stateful report widgets. */
     async function run() {
       try {
-        if (!widgetsSettledRef.current) {
-          // Give the widgets that enhanceReport uses synchronously a moment
-          // to arrive; everything else degrades gracefully when missing.
-          await Promise.race([
-            Promise.all(ENHANCE_WIDGETS.map(name => waitForWidget(name, { timeoutMs: widgetSettleMs }))),
-            new Promise(resolve => {
-              widgetSettleTimer = setTimeout(resolve, widgetSettleMs);
-            })
-          ]);
-          // The race is settled — the fallback no longer needs to fire, so
-          // release its handle (and the closure it retains) early.
-          clearTimeout(widgetSettleTimer);
-          widgetSettleTimer = undefined;
-          widgetsSettledRef.current = true;
-        }
         if (cancelled) return;
 
         const payloadChanged = lastEnhancedPayloadRef.current !== payload;
@@ -201,7 +197,13 @@ export default function ReportView({
         container.dataset.resolvedBranch = payload.resolvedBranch;
 
         if (payloadChanged) {
-          await enhanceReportImpl(container, payload.data);
+          // Widgets that are already ready enhance now; the still-loading
+          // ones are deferred (and skipped here) so a slow CDN script or the
+          // multi-megabyte vizdom wasm can never hold back the render.
+          await enhanceReportImpl(container, payload.data, {
+            charts: isWidgetReady('chart'),
+            graphs: isWidgetReady('vizdom')
+          });
           if (cancelled) return;
           lastEnhancedPayloadRef.current = payload;
         } else {
@@ -242,16 +244,58 @@ export default function ReportView({
     run();
     return () => {
       cancelled = true;
-      // Cancel a still-pending settle fallback so its timer cannot fire after
-      // the effect is torn down. (No-op once the race has settled.)
-      clearTimeout(widgetSettleTimer);
     };
-  }, [payload, tableStates, widgetSettleMs, username, repository, branch,
+  }, [payload, tableStates, username, repository, branch,
     handleTableAction, handleCopy, enhanceReportImpl, enhanceTablesImpl]);
+
+  // Widget-readiness effect: keys on the payload only (not the table UI
+  // state), so a registration survives table re-renders and is retired
+  // exactly when the payload changes or the component unmounts. Widgets
+  // already covered by the synchronous enhanceReport call above are not
+  // registered again.
+  useEffect(() => {
+    if (!payload) return undefined;
+    let cancelled = false;
+    const unsubscribers = [];
+
+    /**
+     * Runs the enhancement once the named widget reports ready.
+     *
+     * @param {string} name - Widget name in the readiness registry.
+     * @param {Function} enhance - Enhancement bound to the current payload.
+     * @returns {void}
+     */
+    const whenReady = (name, enhance) => {
+      if (isWidgetReady(name)) return;
+      unsubscribers.push(onWidgetReady(name, () => {
+        if (cancelled) return;
+        try {
+          enhance();
+        } catch (error) {
+          console.warn(`report ${name} enhancement failed:`, error); // eslint-disable-line no-console
+        }
+      }));
+    };
+
+    whenReady('chart', () => initDisharmonyCharts(
+      payload.data.disharmonies,
+      payload.data.project && payload.data.project.repoUrl
+    ));
+    whenReady('vizdom', () => {
+      initWasmGraphs(payload.data);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach(unsubscribe => unsubscribe());
+    };
+  }, [payload, username, repository, branch]);
 
   return (
     <>
-      <div ref={containerRef} id="report-container" />
+      <div ref={containerRef} id="report-container">
+        <p className="loading" role="status">Loading report&hellip;</p>
+      </div>
       <ToastRegion toasts={toasts} onDismiss={dismissToast} />
       {CLASSIC_WIDGETS.map(widget => (
         <Script

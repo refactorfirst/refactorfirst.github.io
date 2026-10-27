@@ -134,7 +134,9 @@ public/                     # static files copied verbatim into out/:
   repositories.txt          #   synced from the repo root (sync-repositories.mjs)
   assets/                   #   mustache template, logo
   templates/                #   workflow-sample-*.html fragments
-  widgets/                  #   module bridges: vizdom WASM, three-spritetext,
+  widgets/                  #   module bridges: vizdom WASM, force-graph
+                            #   (3D graph + sprite labels sharing one
+                            #   three build),
                             #   sentry (runtime CDN imports cannot be bundled)
 templates/                  # user CI samples (user-refactorfirst-*.yml) for the docs
 ci/process-submissions.sh   # shared submission validator for GH/Gl/BB CI
@@ -256,14 +258,30 @@ coverage there when introducing new markup patterns.
   lib/renderer.js applies **filter → sort → paginate** per table and injects
   `tableUi` blocks the mustache template renders; `enhanceTables` in
   lib/table-enhancer.js binds the controls and reports state changes back to
-  components/report-view.jsx, which re-renders (widgets only gate the first
-  render; the search input's focus/caret is restored after each re-render).
-  The expensive `enhanceReport` pipeline (Chart.js charts, WASM DOT layout)
-  runs only when the payload changes — table-state re-renders stash the live
-  chart canvases / graph containers before the innerHTML swap and graft them
-  back into the fresh DOM (`statefulElementIds`/`stashStatefulDom`/
-  `graftStatefulDom` in lib/report-view.js), re-binding only the cheap popup
-  handlers.
+  components/report-view.jsx, which re-renders (widgets never gate the
+  render — charts/graphs enhance progressively via `onWidgetReady`
+  callbacks when their widget reports ready; the search input's focus/caret
+  is restored after each re-render). The expensive `enhanceReport` pipeline
+  (Chart.js charts, WASM DOT layout) runs only when the payload changes —
+  it receives `{charts, graphs}` readiness flags so still-loading widgets
+  are skipped and picked up by the widget-readiness effect instead — and
+  table-state re-renders stash the live chart canvases / graph containers
+  before the innerHTML swap and graft them back into the fresh DOM
+  (`statefulElementIds`/`stashStatefulDom`/`graftStatefulDom` in
+  lib/report-view.js), re-binding only the cheap popup handlers.
+- Initial render performance (LCP/CLS): the report markup renders as soon
+  as the parallel template + report-JSON fetches resolve, never waiting on
+  the CDN widgets or the ~4.8MB vizdom wasm. The report page shells
+  (`[username]/[repository]/page.jsx` + `[branch]/page.jsx`) preconnect to
+  raw.githubusercontent.com (the report JSON host; CORS fetch) and
+  cdnjs.cloudflare.com (classic widget scripts) and render the loading
+  placeholder inside `#report-container` — the same id the hydrated
+  ReportView renders — with a full-viewport `min-height: 100svh` (vh
+  fallback) in app/globals.css, so the footer starts below the fold and
+  the report's arrival causes no layout shift. The vizdom bridge
+  (`public/widgets/vizdom-bridge.js`) serves the wasm from Cache Storage
+  (versioned cache name) so repeat visits never re-download it regardless
+  of the host's HTTP cache headers.
 - Search `<input>`s are injected by table-enhancer — `<input>` is FORBID in
   the renderer's sanitization allow-list, so it must never appear in the
   mustache template.
