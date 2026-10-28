@@ -165,7 +165,18 @@ test('report page loads CDN widgets lazily (after window load)', async ({ page }
     route.fulfill({ status: 404 }));
 
   let loadFired = false;
-  page.on('load', () => { loadFired = true; });
+  // Firefox also fires a `load` event for the initial about:blank, which
+  // would mark every response after-load before the report document even
+  // starts; arm the flag only once its own response is on the wire (its
+  // load event cannot precede that).
+  const documentResponse = new Promise(resolve => {
+    page.on('response', response => {
+      if (response.request().resourceType() === 'document') resolve(response);
+    });
+  });
+  documentResponse.then(() => {
+    page.on('load', () => { loadFired = true; });
+  });
   const widgetRequests = [];
   page.on('request', request => {
     if (/chart\.js|sigma\.js|graphology|3d-force-graph|svg-pan-zoom/.test(request.url())) {
@@ -414,7 +425,18 @@ function warmResourceKey(url) {
 
 test('landing page warms the report rendering libraries during idle time', async ({ page }) => {
   let loadFired = false;
-  page.on('load', () => { loadFired = true; });
+  // Firefox also fires a `load` event for the initial about:blank, which
+  // would mark every response after-load before the landing document even
+  // starts; arm the flag only once its own response is on the wire (its
+  // load event cannot precede that).
+  const documentResponse = new Promise(resolve => {
+    page.on('response', response => {
+      if (response.request().resourceType() === 'document') resolve(response);
+    });
+  });
+  documentResponse.then(() => {
+    page.on('load', () => { loadFired = true; });
+  });
   const warm = { wasm: 0, chart: 0, panZoom: 0, template: 0, reportData: 0 };
   const timing = [];
   const downloads = [];
