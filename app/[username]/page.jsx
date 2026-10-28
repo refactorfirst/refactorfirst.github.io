@@ -9,6 +9,7 @@ import { userStaticParams } from '../../lib/static-params';
 import { reposForUser } from '../../lib/utils';
 import { isValidGitHubName } from '../../lib/routes';
 import RepoList from '../../components/repo-list';
+import ReportWarmup from '../../components/report-warmup';
 
 export const dynamicParams = false;
 
@@ -30,6 +31,11 @@ export default async function UserPage({ params }) {
   return (
     <Suspense fallback={<p className="loading" role="status">Loading&hellip;</p>}>
       <RepoList username={username} initialRepositories={repositories} />
+      {/* Directory page: warm the shared report rendering libraries during
+          idle time (vizdom wasm, Chart.js, svg-pan-zoom, the template —
+          never report data) so the first report a visitor opens renders
+          from local caches. */}
+      <ReportWarmup />
     </Suspense>
   );
 }

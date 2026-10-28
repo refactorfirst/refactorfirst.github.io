@@ -1,7 +1,7 @@
 // Phase 3: landing page (RSC output) — hero, hero search, Add My Repo CTA,
 // featured repositories. Ported from tests/integration/search-flow.test.js
 // landing cases; fixtures replace the repositories.txt fetch.
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mock } from 'bun:test';
 
 import { sharedNextNavigationMock } from './next-navigation-stub';
@@ -12,7 +12,7 @@ mock.module('next/navigation', () => sharedNextNavigationMock({
 }));
 
 import Landing from '../../components/landing';
-import { render, screen, fireEvent, installRtlDom } from './rtl';
+import { render, screen, fireEvent, installRtlDom, cleanup } from './rtl';
 import { jsx as _jsx } from 'react/jsx-runtime';
 
 installRtlDom();
@@ -28,7 +28,21 @@ const REPOS = [
 ];
 
 describe('Landing page', () => {
-  beforeEach(() => { pushed.length = 0; });
+  // The landing now mounts the ReportWarmup client component (idle-time
+  // report rendering-library warming). jsdom has no requestIdleCallback, so
+  // its warm would run on a setTimeout fallback — spy on fetch so these
+  // tests never reach the network and cleanup cancels the pending warm.
+  let mockFetch;
+
+  beforeEach(() => {
+    pushed.length = 0;
+    mockFetch = spyOn(global, 'fetch')
+      .mockImplementation(() => Promise.resolve({ ok: true }));
+  });
+  afterEach(() => {
+    mockFetch.mockRestore();
+    cleanup();
+  });
 
   test('renders hero, search input and Add My Repo call-to-action', () => {
     render(_jsx(Landing, { repositories: REPOS }));

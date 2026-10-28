@@ -47,7 +47,8 @@ app/                          # Next.js App Router (static export): layout
 components/                   # Client components (search combobox, hero/menu
                               # search, menu toggle, workflow sample, user
                               # listing, report view, submission form,
-                              # platform-config context, sentry provider)
+                              # platform-config context, sentry provider,
+                              # report warm-up for directory pages)
 lib/                          # Shared logic consumed by client components and
                               # RSC alike (routes, fetcher, renderer, search,
                               # repo-submission, error-handler, rate-limiter,
