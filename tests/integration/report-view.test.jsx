@@ -406,12 +406,12 @@ describe('progressive widget enhancement', () => {
 
   test('builds charts once the chart widget reports ready after the render', async () => {
     const created = [];
-    window.Chart = function (ctx, config) { created.push(config); };
     respondJsonFor(sampleJson);
     const utils = await renderReport();
     // The report rendered with the widget still pending: no charts yet.
     expect(created.length).toBe(0);
 
+    window.Chart = function (ctx, config) { created.push(config); };
     markWidgetReady('chart');
     await waitFor(() => {
       expect(created.length).toBeGreaterThan(0);
@@ -420,6 +420,41 @@ describe('progressive widget enhancement', () => {
   });
 
   test('renders inline graphs once vizdom reports ready after the render', async () => {
+    const renderedSvgs = [];
+    respondJsonFor(sampleJson);
+    const utils = await renderReport();
+    expect(renderedSvgs.length).toBe(0);
+
+    window.Vizdom = {
+      DotParser: class {
+        parse() {
+          return {
+            to_directed: () => ({
+              layout: () => ({
+                to_svg: () => ({
+                  to_string: () => { renderedSvgs.push(true); return '<svg><g/></svg>'; }
+                })
+              })
+            })
+          };
+        }
+      }
+    };
+    markWidgetReady('vizdom');
+    await waitFor(() => {
+      expect(renderedSvgs.length).toBeGreaterThan(0);
+    });
+    expect(utils.container.querySelector('#classGraph svg')).not.toBeNull();
+  });
+
+  test('renders inline graphs when the vizdom module already materialized before the report mounted', async () => {
+    // Regression: a visitor who first lands on a directory page and opens a
+    // report afterwards (client-side navigation) warms the vizdom wasm during
+    // idle time; the module evaluates then (window.Vizdom set) but its mark
+    // lands in a widget registry that only exists on report pages, so the
+    // registry here has never seen it. The graph enhancement must key off
+    // the already-materialized global instead of waiting for a mark that
+    // cannot fire again — otherwise the class/package graphs stay empty.
     const renderedSvgs = [];
     window.Vizdom = {
       DotParser: class {
@@ -437,23 +472,20 @@ describe('progressive widget enhancement', () => {
       }
     };
     respondJsonFor(sampleJson);
-    const utils = await renderReport();
-    expect(renderedSvgs.length).toBe(0);
-
-    markWidgetReady('vizdom');
+    const { container } = await renderReport();
     await waitFor(() => {
       expect(renderedSvgs.length).toBeGreaterThan(0);
     });
-    expect(utils.container.querySelector('#classGraph svg')).not.toBeNull();
+    expect(container.querySelector('#classGraph svg')).not.toBeNull();
   });
 
   test('a payload change retires its still-pending widget callbacks', async () => {
     const created = [];
-    window.Chart = function (ctx, config) { created.push(config); };
     respondJsonFor(sampleJson);
     const utils = await renderReport();
     expect(created.length).toBe(0);
 
+    window.Chart = function (ctx, config) { created.push(config); };
     // Branch switch: the payload-1 chart callback must not fire into the
     // replacement report; the fresh payload registers its own callback, so
     // marking the widget ready builds exactly one chart per live canvas.

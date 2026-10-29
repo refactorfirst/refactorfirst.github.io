@@ -9,7 +9,14 @@ import {
 } from '../../lib/widget-loader.js';
 
 describe('widget-loader', () => {
-  beforeEach(() => resetWidgetRegistry());
+  beforeEach(() => {
+    resetWidgetRegistry();
+    // Readiness may also resolve from a materialized widget global (the idle
+    // warm-up case); keep every probed global clean so each test starts from
+    // the same unready baseline regardless of file execution order.
+    delete window.Vizdom;
+    delete window.Chart;
+  });
 
   it('fires callbacks registered before the mark', () => {
     const calls = [];
@@ -55,6 +62,35 @@ describe('widget-loader', () => {
     markWidgetReady('Chart');
     expect(isWidgetReady('Chart')).toBe(true);
     expect(isWidgetReady('vizdom')).toBe(false);
+  });
+
+  it('treats an already-materialized bridge global as ready', () => {
+    // The idle warm-up on a directory page can materialize a bridge module
+    // (window.Vizdom after the WASM initializes) before the widget registry
+    // has ever been instantiated on that page — so the mark that follows is
+    // lost, and a later report page must still recognize the widget as
+    // ready from the materialized global alone.
+    expect(isWidgetReady('vizdom')).toBe(false);
+    window.Vizdom = { DotParser: class {} };
+    expect(isWidgetReady('vizdom')).toBe(true);
+    // No mark reached this registry (idle warm-up fired into a lost one), so a
+    // fresh registration against the materialized global must fire immediately.
+    const calls = [];
+    const unsubscribe = onWidgetReady('vizdom', () => calls.push('synced'));
+    expect(calls).toEqual(['synced']);
+    expect(unsubscribe).toBeTypeOf('function');
+    unsubscribe();
+    delete window.Vizdom;
+    expect(isWidgetReady('vizdom')).toBe(false);
+  });
+
+  it('treats an already-materialized CDN global as ready', () => {
+    expect(isWidgetReady('chart')).toBe(false);
+    window.Chart = function Chart() {};
+    expect(isWidgetReady('chart')).toBe(true);
+    expect(isWidgetReady('Chart')).toBe(true);
+    delete window.Chart;
+    expect(isWidgetReady('chart')).toBe(false);
   });
 
   it('marks a widget only once (duplicate marks are ignored)', () => {

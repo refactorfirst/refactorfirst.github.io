@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import HeroSearch from './hero-search';
+import ReportWarmup from './report-warmup';
 import { buildRepositoryListUrl } from '../lib/routes.js';
 
 export const FEATURED_COUNT = 6;
@@ -30,6 +31,11 @@ export default function Landing({ repositories }) {
           </ul>
         </div>
       </section>
+      {/* Directory page: warm the shared report rendering libraries during
+          idle time (vizdom wasm, Chart.js, svg-pan-zoom, the template —
+          never report data) so the first report a visitor opens renders
+          from local caches. Renders nothing; never delays this page. */}
+      <ReportWarmup />
     </>
   );
 }

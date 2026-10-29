@@ -116,7 +116,9 @@ components/                 # client components: report-view, repo-list,
                             # hero-search, menu-search, menu-toggle, breadcrumbs
                             # (route trail under the menu), workflow-sample,
                             # platform-config, sentry-provider,
-                            # toast-notification (copy feedback live region)
+                            # toast-notification (copy feedback live region),
+                            # report-warmup (idle-time rendering-library
+                            # warming on directory pages)
 lib/                        # shared logic (client + RSC): routes, fetcher,
                             # renderer, search, utils, host, rate-limiter,
                             # cache-manager, error-handler, repo-submission,
@@ -281,7 +283,15 @@ coverage there when introducing new markup patterns.
   the report's arrival causes no layout shift. The vizdom bridge
   (`public/widgets/vizdom-bridge.js`) serves the wasm from Cache Storage
   (versioned cache name) so repeat visits never re-download it regardless
-  of the host's HTTP cache headers.
+  of the host's HTTP cache headers. Directory pages (landing + user
+  listing) mount `components/report-warmup.jsx`, which — after window
+  load, at main-thread idle — warms the shared report rendering libraries
+  only (the vizdom bridge module/wasm, Chart.js + svg-pan-zoom no-cors
+  into the HTTP cache, the bundled template), never report data (listings
+  can hold thousands of repositories), so the first report a visitor opens
+  renders from local caches. The landing bundle budget e2e measures
+  through the window load event for this reason: post-load prefetches and
+  warm-up fetches never delay the landing's own first paint.
 - Search `<input>`s are injected by table-enhancer — `<input>` is FORBID in
   the renderer's sanitization allow-list, so it must never appear in the
   mustache template.
