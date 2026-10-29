@@ -73,6 +73,13 @@ describe('widget-loader', () => {
     expect(isWidgetReady('vizdom')).toBe(false);
     window.Vizdom = { DotParser: class {} };
     expect(isWidgetReady('vizdom')).toBe(true);
+    // No mark reached this registry (idle warm-up fired into a lost one), so a
+    // fresh registration against the materialized global must fire immediately.
+    const calls = [];
+    const unsubscribe = onWidgetReady('vizdom', () => calls.push('synced'));
+    expect(calls).toEqual(['synced']);
+    expect(unsubscribe).toBeTypeOf('function');
+    unsubscribe();
     delete window.Vizdom;
     expect(isWidgetReady('vizdom')).toBe(false);
   });
