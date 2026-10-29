@@ -156,11 +156,9 @@ describe('ReportWarmup', () => {
     expect(document.querySelector('script[type="module"]')).toBeNull();
   });
 
-  test('idle-time widget marks reach the shared widget readiness registry', () => {
-    // The warm-up loads the vizdom bridge module on directory pages; the
-    // module (via lib/widget-loader) installs the mark bridge and the bridge
-    // reports through it once the wasm has warmed — a later client-side-
-    // navigated report must observe the warmed widget as ready.
+  test('window.__rfMarkWidgetReady marks the widget ready in the shared registry', () => {
+    // Directly mark vizdom through the global bridge and check that
+    // isWidgetReady observes the mark in the shared registry.
     resetWidgetRegistry();
     window.__rfMarkWidgetReady('vizdom');
     expect(isWidgetReady('vizdom')).toBe(true);
