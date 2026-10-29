@@ -123,6 +123,10 @@ describe('ReportWarmup', () => {
     render(_jsx(ReportWarmup, {}));
     idleCallbacks.forEach(entry => entry.callback());
     expect(document.querySelectorAll('script[type="module"]').length).toBe(1);
+    // The pre-existing script is fixture DOM appended by hand (outside
+    // React's knowledge) — tear it down here rather than relying on the
+    // suite-level cleanup so it cannot leak into later tests.
+    existing.remove();
   });
 
   test('a rejected warm fetch never surfaces an error', async () => {
