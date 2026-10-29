@@ -31,8 +31,8 @@ describe('ReportWarmup', () => {
     // idle deterministically. The real scheduling paths (load + idle, the
     // setTimeout fallback) are covered by the e2e warm-up tests.
     idleCallbacks = [];
-    window.requestIdleCallback = callback => {
-      idleCallbacks.push(callback);
+    window.requestIdleCallback = (callback, options) => {
+      idleCallbacks.push({ callback, options });
       return idleCallbacks.length;
     };
     window.cancelIdleCallback = () => {};
@@ -58,9 +58,18 @@ describe('ReportWarmup', () => {
     expect(document.querySelector('script[type="module"]')).toBeNull();
   });
 
+  test('registers the idle callback without a forced timeout', () => {
+    render(_jsx(ReportWarmup, {}));
+    expect(idleCallbacks).toHaveLength(1);
+    // The warm must run only during idle time: the callback is registered
+    // without a forced timeout so the browser fires it strictly at an idle
+    // opportunity instead of on a timer while the page may still be busy.
+    expect(idleCallbacks[0].options).toBeUndefined();
+  });
+
   test('warms the rendering libraries once idle fires', () => {
     render(_jsx(ReportWarmup, {}));
-    idleCallbacks.forEach(callback => callback());
+    idleCallbacks.forEach(entry => entry.callback());
 
     // The shared vizdom bridge module runs and fills Cache Storage with the
     // wasm binary; the report page's own bridge import then resolves it
@@ -84,9 +93,20 @@ describe('ReportWarmup', () => {
     expect(urls).toContain('/assets/refactor-first-report.mustache');
   });
 
+  test('unmount removes the bridge script the warm appended', () => {
+    const utils = render(_jsx(ReportWarmup, {}));
+    idleCallbacks.forEach(entry => entry.callback());
+    expect(document.querySelector('script[type="module"]')).not.toBeNull();
+    // The bridge script is appended straight to <body> (outside React's
+    // knowledge); unmount — the cleanup the suite runs after each test —
+    // must drop it again.
+    utils.unmount();
+    expect(document.querySelector('script[type="module"]')).toBeNull();
+  });
+
   test('never fetches report data, however many repositories are listed', () => {
     render(_jsx(ReportWarmup, {}));
-    idleCallbacks.forEach(callback => callback());
+    idleCallbacks.forEach(entry => entry.callback());
     const urls = fetchedUrls(mockFetch);
     expect(urls.filter(url => url.includes('refactor-first.json'))).toEqual([]);
     expect(urls.filter(url => url.includes('raw.githubusercontent.com'))).toEqual([]);
@@ -101,14 +121,14 @@ describe('ReportWarmup', () => {
     document.body.appendChild(existing);
 
     render(_jsx(ReportWarmup, {}));
-    idleCallbacks.forEach(callback => callback());
+    idleCallbacks.forEach(entry => entry.callback());
     expect(document.querySelectorAll('script[type="module"]').length).toBe(1);
   });
 
   test('a rejected warm fetch never surfaces an error', async () => {
     mockFetch.mockImplementation(() => Promise.reject(new Error('offline')));
     render(_jsx(ReportWarmup, {}));
-    idleCallbacks.forEach(callback => callback());
+    idleCallbacks.forEach(entry => entry.callback());
     // Let the rejections settle: any unhandled rejection fails the suite.
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(mockFetch.mock.calls.length).toBeGreaterThan(0);

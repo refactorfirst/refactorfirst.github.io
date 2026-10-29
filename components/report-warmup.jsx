@@ -60,6 +60,7 @@ export default function ReportWarmup({ fallbackDelayMs = 1500 }) {
     if (warmedRef.current) return undefined;
     let cancelled = false;
     let cancelIdle = () => {};
+    let bridgeScript = null;
 
     /** Runs each warm step exactly once, best-effort. */
     const warm = () => {
@@ -77,6 +78,7 @@ export default function ReportWarmup({ fallbackDelayMs = 1500 }) {
         script.type = 'module';
         script.src = bridgeSrc;
         document.body.appendChild(script);
+        bridgeScript = script;
       }
 
       // 2. Classic widget scripts into the HTTP cache (no-cors matches the
@@ -87,11 +89,17 @@ export default function ReportWarmup({ fallbackDelayMs = 1500 }) {
       warmFetch(withBasePath('/assets/refactor-first-report.mustache'));
     };
 
-    /** Schedules the warm at the first idle moment after the page loads. */
+    /**
+     * Schedules the warm at the first idle moment after the page loads. The
+     * idle callback is registered without a forced timeout, so the browser
+     * fires it strictly at an idle opportunity rather than on a timer while
+     * the page may still be busy; engines without requestIdleCallback wait
+     * out an idle window (the fallback delay) before the warm starts.
+     */
     const scheduleAtIdle = () => {
       if (cancelled) return;
       if (typeof window.requestIdleCallback === 'function') {
-        const handle = window.requestIdleCallback(warm, { timeout: 3000 });
+        const handle = window.requestIdleCallback(warm);
         cancelIdle = () => window.cancelIdleCallback?.(handle);
       } else {
         const timer = setTimeout(warm, fallbackDelayMs);
@@ -108,6 +116,10 @@ export default function ReportWarmup({ fallbackDelayMs = 1500 }) {
       cancelled = true;
       window.removeEventListener('load', scheduleAtIdle);
       cancelIdle();
+      // The bridge script is appended straight to <body> (outside React's
+      // knowledge); drop it again on unmount so a navigating-away page leaves
+      // no script behind.
+      if (bridgeScript) bridgeScript.remove();
     };
   }, [fallbackDelayMs]);
 
